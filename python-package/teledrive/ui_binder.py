@@ -69,6 +69,13 @@ class UIBinder:
 
     # ---- component factory ----
 
+    def is_ready(self, action_id: str) -> bool:
+        spec = action_registry.get(action_id)
+        if spec is None:
+            raise UnknownActionError(f"undeclared action_id: {action_id!r}")
+        return spec.ready
+
+
     def button(self, gr, action_id: str, **kwargs):
         """Create a Gradio button for a declared action.
 
