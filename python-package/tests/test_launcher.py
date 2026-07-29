@@ -52,7 +52,7 @@ def test_launch_uses_the_single_context_and_never_shares_by_default(monkeypatch)
     calls: dict[str, object] = {}
     contexts: list[object] = []
 
-    def fake_launch(ctx=None, share=False, inline=True):
+    def fake_launch(ctx=None, share=False, inline=True, blocking=False):
         calls["share"] = share
         calls["ctx"] = ctx
         contexts.append(ctx)
@@ -71,7 +71,7 @@ def test_share_is_explicit_opt_in(monkeypatch):
     monkeypatch.setattr(
         module,
         "launch",
-        lambda ctx=None, share=False, inline=True: seen.update(share=share),
+        lambda ctx=None, share=False, inline=True, blocking=False: seen.update(share=share),
     )
     module.main(["--share"])
     assert seen["share"] is True
