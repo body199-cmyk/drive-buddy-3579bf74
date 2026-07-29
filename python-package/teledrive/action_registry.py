@@ -266,7 +266,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.resume",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_resume_clears_the_pause_gate_on_the_owned_manager",
     ),
     ActionSpec(
         action_id="queue.stop",
@@ -275,7 +276,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.stop",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_stop_sets_the_manager_stop_flag_and_reports_stopped",
     ),
     ActionSpec(
         action_id="queue.retry_failed",
@@ -295,7 +297,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.clear_completed",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_clear_completed_removes_finished_rows_only",
     ),
     ActionSpec(
         action_id="queue.refresh",
@@ -304,7 +307,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.refresh",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_refresh_snapshot_reports_live_counts",
     ),
     ActionSpec(
         action_id="queue.pause_item",
@@ -313,7 +317,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.pause_item",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_pause_item_marks_an_in_flight_item_paused",
     ),
     ActionSpec(
         action_id="queue.resume_item",
@@ -322,7 +327,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.resume_item",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_pause_item_and_resume_item_only_touch_that_item",
     ),
     ActionSpec(
         action_id="queue.stop_item",
@@ -331,7 +337,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.stop_item",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_stop_item_is_permanent_for_that_item",
     ),
     ActionSpec(
         action_id="queue.retry_item",
@@ -340,7 +347,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.retry_item",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_retry_item_returns_a_failed_item_to_pending",
     ),
 
     # ---- Dashboard ----
