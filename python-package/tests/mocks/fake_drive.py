@@ -1,0 +1,76 @@
+import os
+import uuid
+
+
+class FakeDrive:
+    def __init__(self, limit: int = 10 * 1024**3):
+        self.files: dict[str, dict] = {}
+        self.folders: dict[str, str] = {}
+        self.limit = limit
+        self.usage = 0
+        self._authed = True
+
+    def storage_quota(self):
+        return {"limit": self.limit, "usage": self.usage}
+
+    def find_folder(self, name, parent=None):
+        for fid, meta in self.folders.items():
+            if meta == name:
+                return fid
+        return None
+
+    def create_folder(self, name, parent=None):
+        fid = f"fld_{uuid.uuid4().hex[:8]}"
+        self.folders[fid] = name
+        return fid
+
+    def ensure_folder(self, name, parent=None):
+        return self.find_folder(name) or self.create_folder(name)
+
+    def list_folders(self, parent=None):
+        return [{"id": k, "name": v} for k, v in self.folders.items()]
+
+    def find_by_source_key(self, sk):
+        for fid, meta in self.files.items():
+            if meta.get("appProperties", {}).get("source_key") == sk:
+                return {"id": fid, "name": meta["name"], "size": str(meta["size"]),
+                        "appProperties": meta["appProperties"]}
+        return None
+
+    def upload_resumable(self, file_path, drive_name, parent_id, source_key,
+                          progress_cb=None, mime_type=None):
+        size = os.path.getsize(file_path)
+        if self.usage + size > self.limit:
+            raise RuntimeError("insufficient storage")
+        fid = f"file_{uuid.uuid4().hex[:8]}"
+        self.files[fid] = {
+            "name": drive_name, "size": size, "parent": parent_id,
+            "appProperties": {"source_key": source_key},
+        }
+        self.usage += size
+        if progress_cb:
+            progress_cb(size, size)
+        return {"id": fid, "name": drive_name, "size": str(size),
+                "appProperties": {"source_key": source_key}}
+
+    def upload_bytes(self, name, data, parent_id):
+        fid = f"json_{uuid.uuid4().hex[:8]}"
+        self.files[fid] = {"name": name, "size": len(data), "parent": parent_id,
+                           "appProperties": {}, "_bytes": data}
+        return fid
+
+    def download_bytes(self, file_id):
+        return self.files[file_id].get("_bytes", b"")
+
+    def list_children(self, parent_id):
+        out = []
+        for fid, meta in self.files.items():
+            if meta.get("parent") == parent_id:
+                out.append({"id": fid, "name": meta["name"],
+                            "size": str(meta["size"]),
+                            "modifiedTime": "2026-01-01T00:00:00Z",
+                            "appProperties": meta.get("appProperties", {})})
+        return out
+
+    def revoke(self):
+        self._authed = False
