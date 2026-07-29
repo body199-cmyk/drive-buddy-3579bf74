@@ -7,27 +7,33 @@ Read this file, the constitution, `docs/AUDIT.md`, the newest phase report,
 ## Status
 
 - Phase 0: COMPLETE (docs, requirements.lock, spec_version/version 3.1.0).
-- Phase 1: COMPLETE — see `python-package/docs/PHASE_REPORTS/PHASE_1.md`.
-  - `teledrive/async_runtime.py`, `teledrive/app_context.py`,
-    `tests/test_no_ad_hoc_loops.py`, `tests/test_app_context.py` exist.
-  - `bootstrap.run()` returns the one `ApplicationContext`; `app.launch()` and
-    `ui.build(ctx)` use it. Zero ad-hoc loops left in `teledrive/`.
-- Phase 2: NOT STARTED. No `action_registry.py`, `handlers.py`, `ui_binder.py`.
-- Phases 3–9: NOT STARTED. Telegram v3.1 state machine, native Colab Drive auth,
-  scoped analysis/selection, queue/recovery hardening, UI/theme/export, notebook
-  cells, CI — all still missing.
+- Phase 1: COMPLETE — one `ApplicationContext`, one asyncio loop, no ad-hoc loops.
+- Phases 2–8: COMPLETE — action registry, handlers, ui_binder, v3.1 Telegram
+  state machine, native Colab Drive auth (`drive_auth.adopt_service`), scoped
+  analysis/selection, queue/recovery, UI/theme/export, 7-cell notebook, CI.
+- Phase 9 (Colab readiness repair): COMPLETE in code — see
+  `python-package/docs/PHASE_REPORTS/PHASE_9.md`.
+  - Cell 4 is non-blocking (`launch(..., blocking=False)` →
+    `prevent_thread_lock=True`); cells 5–7 run while the UI serves; the handle
+    lives on `ctx.ui` and `ctx.shutdown()` closes it.
+  - `requirements.lock` is the ONE dependency source; no notebook cell or
+    `colab_cells.json` entry may hold a `package==version` literal (test-guarded).
+  - CI runs pytest, `--check` binding, notebook sync, `bun run lint`, `bun run build`.
 
 ## Not verified (never claim otherwise)
 
 - Real Telegram login: NOT verified.
-- Real Drive authorization: NOT verified.
-- Gradio 6.20.0 pin: NOT verified (gradio not installed in the build sandbox).
+- Real Drive authorization and a real upload/transfer: NOT verified.
+- Gradio 6.20.0 pin and its `prevent_thread_lock` behaviour: NOT verified
+  (gradio is not installed in the build sandbox).
+- A real end-to-end Colab run of cells 1–7: NOT verified. It needs an
+  interactive Colab runtime, Google consent and live Telegram credentials, so
+  the operator must run it and record the redacted output in PHASE_9.md.
 
 ## Frontend
 
-`src/` is intact and is a reference/download landing page only. It must never become
-the Telegram/Drive runtime. Its copy is still stale (says v2, old OAuth flow, claims
-buttons are connected) and is corrected in Phase 7, not before.
+`src/` is a reference/download landing page only. It must never become the
+Telegram/Drive runtime.
 
 ## Protocol per session
 

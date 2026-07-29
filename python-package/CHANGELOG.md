@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.1.0-phase9 — 2026-07-29 (audit repair)
+
+- `app.launch()` gained `blocking` (default False) and now passes
+  `prevent_thread_lock` to Gradio; the handle is kept on `ctx.ui` and closed by
+  `ctx.shutdown()`. Notebook cell 4 no longer blocks cells 5-7.
+- `teledrive_launcher.py` launches with `blocking=True` (process must stay alive).
+- `requirements.lock` is the single dependency source: notebook cells (and the
+  generated `colab_cells.json`) may not contain any `package==version` literal.
+- CI runs `bun run lint` before `bun run build`.
+- Tests: 177 passed. Real Telegram/Drive Colab run still NOT verified.
+
 ## v3.1.0-phase1 — 2026-07-29
 
 - Added `teledrive/async_runtime.py`: the single background event loop for the process.

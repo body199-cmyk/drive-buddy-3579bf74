@@ -84,8 +84,10 @@ PACKAGE_DIR = next(p for p in LOCAL_ROOT.glob("teledrive-v3.1*") if p.is_dir())
 os.chdir(PACKAGE_DIR)
 sys.path.insert(0, str(PACKAGE_DIR))
 
-# Exact pins, straight from the archive - no floating versions.
+# Exact pins, straight from the archive - requirements.lock is the ONE source of
+# dependency truth. No version is ever hard-coded in this notebook.
 !pip -q install -r "{PACKAGE_DIR}/requirements.lock"
+print("dependency source:", PACKAGE_DIR / "requirements.lock")
 
 print("package root:", PACKAGE_DIR)
 print("runtime root (local, not Drive):", os.environ.setdefault(
@@ -143,7 +145,11 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 
 # share=False: the UI is reachable inside this runtime only. A public link is an
 # explicit opt-in (pass share to launch yourself) and is never the default.
-launch(ctx, share=False, inline=True)
+# blocking=False: the cell returns immediately, so cells 5-7 (handoff, tests,
+# maintenance) stay runnable while the interface keeps serving. The launch
+# handle lives on ctx.ui and is closed by ctx.shutdown() in cell 7.
+launch(ctx, share=False, inline=True, blocking=False)
+print("ui running (non-blocking); cells 5-7 can be run while it serves")
 '''
 
 CELL_5 = '''# ==== Cell 5: redacted handoff snapshot ====
@@ -181,7 +187,7 @@ report = storage_manager.cleanup_verified_temp()
 print("deleted verified temp files:", report["deleted"])
 print("quarantined unknown/incomplete files:", report["quarantined"])
 
-ctx.shutdown()      # stops the async runtime and closes SQLite cleanly
+ctx.shutdown()      # closes the UI handle, stops the async runtime, closes SQLite
 print("runtime closed")
 '''
 
@@ -194,6 +200,33 @@ CELLS: tuple[dict[str, str], ...] = (
     {"title": "Run the packaged test suite", "code": CELL_6},
     {"title": "Safe maintenance and clean shutdown", "code": CELL_7},
 )
+
+REQUIREMENTS_LOCK = PACKAGE_ROOT / "requirements.lock"
+
+
+def lock_pins() -> dict[str, str]:
+    """Return {package: version} parsed from requirements.lock (one source of truth)."""
+    pins: dict[str, str] = {}
+    if not REQUIREMENTS_LOCK.exists():  # pragma: no cover - lock always shipped
+        return pins
+    for raw in REQUIREMENTS_LOCK.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "==" not in line:
+            continue
+        name, _, version = line.partition("==")
+        pins[name.strip().lower()] = version.strip()
+    return pins
+
+
+def hardcoded_pins_in_cells() -> list[str]:
+    """Every ``package==version`` literal duplicated inside the notebook cells."""
+    import re
+
+    found: list[str] = []
+    for cell in CELLS:
+        found.extend(re.findall(r"[A-Za-z0-9_.\-]+==\d[\w.]*", cell["code"]))
+    return found
+
 
 REQUIRED_CELL_COUNT = 7
 

@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             ctx.shutdown()
 
-    launch(ctx, share=args.share)
+    launch(ctx, share=args.share, blocking=True)
     return 0
 
 
