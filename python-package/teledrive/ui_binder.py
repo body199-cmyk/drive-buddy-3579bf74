@@ -4,6 +4,12 @@ Constitution Section 4: `wire()` refuses undeclared actions (`UnknownActionError
 and not-ready actions (`DeadControlError`), resolves the service_path against the
 live context at build time, and `assert_complete()` fails the build when a ready
 action was never wired.
+
+Constitution 4A.1 rule 6 (orphan controls): every component created through
+`button()` is registered. A registered component whose spec is ready but which
+was never passed to `wire()` fails the build. A component whose spec is NOT
+ready renders hidden + disabled with the neutral `common.unavailable` label and
+is never wired — no dead button ever reaches the user.
 """
 from __future__ import annotations
 
@@ -12,6 +18,7 @@ from typing import Any, Callable, Sequence
 
 from . import action_registry
 from .errors import DeadControlError, IncompleteBindingError, UnknownActionError
+from .i18n import t
 from .logging_config import get_logger
 
 _log = get_logger("teledrive.binder")
@@ -33,6 +40,10 @@ class UIBinder:
         self.ctx = ctx
         self.handlers = handlers
         self.wired: dict[str, WireRecord] = {}
+        # action_id -> component, for every control created through button()
+        self.rendered: dict[str, Any] = {}
+        # action_ids rendered as hidden+disabled because the spec is not ready
+        self.disabled: list[str] = []
 
     # ---- validation ----
 
@@ -55,6 +66,41 @@ class UIBinder:
         # Raises ServicePathError when the path does not resolve on the live context.
         self.ctx.resolve(spec.service_path)
         return spec, handler
+
+    # ---- component factory ----
+
+    def button(self, gr, action_id: str, **kwargs):
+        """Create a Gradio button for a declared action.
+
+        Ready spec  -> normal, localized button (the caller must still wire it).
+        Unready spec-> hidden, non-interactive `common.unavailable` placeholder
+                       that is never passed to wire().
+        """
+        spec = action_registry.get(action_id)
+        if spec is None:
+            raise UnknownActionError(f"undeclared action_id: {action_id!r}")
+        if spec.ready:
+            kwargs.setdefault("value", t(spec.label_key))
+            component = gr.Button(**kwargs)
+        else:
+            kwargs.pop("value", None)
+            kwargs["interactive"] = False
+            kwargs["visible"] = False
+            component = gr.Button(value=t("common.unavailable"), **kwargs)
+            self.disabled.append(action_id)
+            _log.info(
+                "control hidden (not ready) action=%s implemented=%s tested=%s",
+                action_id, spec.implemented, spec.tested,
+            )
+        self.rendered[action_id] = component
+        return component
+
+    def register(self, component: Any, action_id: str) -> Any:
+        """Register a non-button component (radio, dropdown, timer) for orphan checks."""
+        if action_registry.get(action_id) is None:
+            raise UnknownActionError(f"undeclared action_id: {action_id!r}")
+        self.rendered[action_id] = component
+        return component
 
     # ---- wiring ----
 
@@ -83,26 +129,51 @@ class UIBinder:
         _log.info("wired action=%s event=%s service=%s", action_id, event, spec.service_path)
         return handler
 
-    def load(self, block: Any, action_id: str, outputs: Sequence[Any] | None = None):
-        """Wire a page-load refresh for a read-only action."""
-        spec, handler = self.validate(action_id)
-        block.load(handler, [], list(outputs or []))
-        self.wired.setdefault(
-            action_id,
-            WireRecord(action_id, spec.handler_name, spec.service_path, "load", "Blocks"),
-        )
-        return handler
+    def wire_if_ready(
+        self,
+        component: Any,
+        action_id: str,
+        inputs: Sequence[Any] | None = None,
+        outputs: Sequence[Any] | None = None,
+        event: str = "click",
+    ):
+        """Wire a ready action; silently skip a declared-but-unready one.
+
+        Unknown action ids still raise — skipping is only ever allowed for a
+        control whose spec exists and honestly says it is not ready yet.
+        """
+        spec = action_registry.get(action_id)
+        if spec is None:
+            raise UnknownActionError(f"undeclared action_id: {action_id!r}")
+        if not spec.ready:
+            return None
+        return self.wire(component, action_id, inputs, outputs, event)
 
     # ---- completeness ----
 
     def missing(self) -> list[str]:
         return [s.action_id for s in action_registry.ready_specs() if s.action_id not in self.wired]
 
+    def orphans(self) -> list[str]:
+        return [
+            action_id
+            for action_id in self.rendered
+            if action_id not in self.wired and action_id not in self.disabled
+        ]
+
     def assert_complete(self) -> None:
         missing = self.missing()
         if missing:
             raise IncompleteBindingError("ready but unwired actions: " + ", ".join(sorted(missing)))
-        _log.info("binder complete: %d actions wired", len(self.wired))
+        orphans = self.orphans()
+        if orphans:
+            raise IncompleteBindingError(
+                "rendered but never wired controls: " + ", ".join(sorted(orphans))
+            )
+        _log.info(
+            "binder complete: %d actions wired, %d controls hidden as not ready",
+            len(self.wired), len(self.disabled),
+        )
 
     def inventory(self) -> list[dict[str, str]]:
         return [vars(record) for record in self.wired.values()]
