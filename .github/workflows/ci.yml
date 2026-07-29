@@ -37,6 +37,12 @@ jobs:
       - name: Byte-compile the package
         run: python -m compileall teledrive
 
+      - name: Print the resolved runtime root and database path
+        run: |
+          python -c "from teledrive.config import ROOT, DB_PATH; print(ROOT); print(DB_PATH)"
+          python -c "from teledrive.config import ROOT; assert not str(ROOT).startswith('/content'), ROOT"
+
+
       - name: Run test suite
         run: python -m pytest -q tests
 
