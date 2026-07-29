@@ -65,3 +65,13 @@ class CooldownError(TeleDriveError):
 
 class NothingSelectedError(TeleDriveError):
     message_key = "err.nothing_selected"
+
+
+class CheckpointError(TeleDriveError):
+    """Durable checkpoint export failed. Temp files MUST be kept."""
+    message_key = "err.checkpoint_failed"
+
+
+class VerificationError(TeleDriveError):
+    """Drive-side verification of an uploaded file failed."""
+    message_key = "err.verify_failed"
