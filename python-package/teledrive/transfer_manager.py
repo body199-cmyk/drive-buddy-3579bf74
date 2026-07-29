@@ -15,7 +15,7 @@ from .error_handler import classify
 from .logging_config import get_logger
 from .models import MediaItem
 from .progress_tracker import PROGRESS
-from .queue_manager import QUEUE
+from .queue_manager import QueueManager
 from .retry_policy import should_retry, sleep_for_error
 from .storage_manager import cleanup_item, preflight as storage_preflight, temp_path_for
 from .utils import sanitize_filename
@@ -24,10 +24,17 @@ _log = get_logger("teledrive.transfer")
 
 
 class TransferManager:
-    def __init__(self, telegram, drive, drive_folder_id: str):
+    #: how often the drain loop looks for newly enqueued work
+    DRAIN_INTERVAL = 0.05
+
+    def __init__(self, telegram, drive, drive_folder_id: str, queue=None,
+                 item_ids=None):
         self.telegram = telegram
         self.drive = drive
         self.drive_folder_id = drive_folder_id
+        # The queue is INJECTED. There is no module singleton (Phase C).
+        self._queue = queue if queue is not None else QueueManager()
+        self._scope: Optional[set[str]] = set(item_ids) if item_ids else None
         self._sema: Optional[asyncio.Semaphore] = None
         self._paused = asyncio.Event()
         self._paused.set()  # not paused
@@ -36,6 +43,19 @@ class TransferManager:
         self._workers: Optional[int] = None
         self._paused_items: set[str] = set()
         self._stopped_items: set[str] = set()
+
+    @property
+    def queue(self):
+        return self._queue
+
+    def set_scope(self, item_ids) -> set[str]:
+        """Restrict this run to the selected items only."""
+        self._scope = {str(i) for i in item_ids} if item_ids else None
+        return set(self._scope or set())
+
+    def in_scope(self, item_id: str) -> bool:
+        return self._scope is None or item_id in self._scope
+
 
     def _semaphore(self) -> asyncio.Semaphore:
         if self._sema is None:
@@ -90,22 +110,59 @@ class TransferManager:
         self._stop.set()
         self._paused.set()  # unblock waits
 
+    def _claimable(self, seen: set[str]) -> list[MediaItem]:
+        return [
+            i for i in self._queue.pending()
+            if i.id not in seen and self.in_scope(i.id)
+        ]
+
     async def run(self) -> None:
-        pending = QUEUE.pending()
-        total_bytes = sum(p.size_bytes for p in pending)
-        PROGRESS.register_totals(len(pending), total_bytes)
-        self._tasks = [asyncio.create_task(self._process(item)) for item in pending]
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+        """Drain the queue: keep picking up newly enqueued work until empty.
+
+        A single snapshot is never taken; items enqueued while the run is in
+        flight are picked up on the next drain tick.
+        """
+        seen: set[str] = set()
+        tasks: list[asyncio.Task] = []
+        self._tasks = tasks
+        total_items = 0
+        total_bytes = 0
+
+        while not self._stop.is_set():
+            batch = self._claimable(seen)
+            if batch:
+                for item in batch:
+                    seen.add(item.id)
+                total_items += len(batch)
+                total_bytes += sum(int(i.size_bytes or 0) for i in batch)
+                PROGRESS.register_totals(total_items, total_bytes)
+                tasks.extend(asyncio.create_task(self._process(i)) for i in batch)
+
+            active = [t for t in tasks if not t.done()]
+            if active:
+                await asyncio.wait(active, timeout=self.DRAIN_INTERVAL,
+                                   return_when=asyncio.FIRST_COMPLETED)
+                continue
+            if batch:
+                continue
+            # No work in flight and nothing claimable: one last look for a
+            # late enqueue, then the run is finished.
+            await asyncio.sleep(self.DRAIN_INTERVAL)
+            if not self._claimable(seen):
+                break
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
 
     async def _process(self, item: MediaItem) -> None:
         async with self._semaphore():
             if self._stop.is_set() or self.item_stopped(item.id):
-                QUEUE.try_transition(item.id, "Stopped")
+                self._queue.try_transition(item.id, "Stopped")
                 return
             await self._paused.wait()
             if not await self._wait_item(item.id):
-                QUEUE.try_transition(item.id, "Stopped")
+                self._queue.try_transition(item.id, "Stopped")
                 return
             try:
                 await self._do_item(item)
@@ -114,21 +171,21 @@ class TransferManager:
                 item.last_error_code = err.code
                 item.last_error_msg = err.raw[:400]
                 db.upsert_item(item)
-                QUEUE.try_transition(item.id, "Failed", reason=err.code)
+                self._queue.try_transition(item.id, "Failed", reason=err.code)
                 PROGRESS.finish_item(item.id, ok=False)
 
     async def _do_item(self, item: MediaItem) -> None:
         # Duplicate check
         rep = dup_check(self.drive, item.source_key, item.size_bytes)
         if rep.is_duplicate:
-            QUEUE.try_transition(item.id, "Skipped", reason="duplicate", drive_file_id=rep.drive_file_id or "")
+            self._queue.try_transition(item.id, "Skipped", reason="duplicate", drive_file_id=rep.drive_file_id or "")
             PROGRESS.finish_item(item.id, ok=True, skipped=True)
             return
 
         # Preflights
         ok_disk, free = storage_preflight(item.size_bytes)
         if not ok_disk:
-            QUEUE.try_transition(item.id, "Failed", reason="disk_full",
+            self._queue.try_transition(item.id, "Failed", reason="disk_full",
                                  last_error_code="DISK_FULL",
                                  last_error_msg=f"free={free} need={item.size_bytes}")
             PROGRESS.finish_item(item.id, ok=False)
@@ -136,7 +193,7 @@ class TransferManager:
         try:
             preflight_or_raise(self.drive, item.size_bytes)
         except Exception as e:
-            QUEUE.try_transition(item.id, "Failed", reason="drive_quota",
+            self._queue.try_transition(item.id, "Failed", reason="drive_quota",
                                  last_error_code="DRIVE_QUOTA", last_error_msg=str(e)[:400])
             PROGRESS.finish_item(item.id, ok=False)
             return
@@ -146,7 +203,7 @@ class TransferManager:
             attempt += 1
             await self._paused.wait()
             if self._stop.is_set() or not await self._wait_item(item.id):
-                QUEUE.try_transition(item.id, "Stopped")
+                self._queue.try_transition(item.id, "Stopped")
                 return
             try:
                 await self._run_once(item)
@@ -159,12 +216,12 @@ class TransferManager:
                 db.add_event(item.id, "error", err.code, {"attempt": attempt, "cat": err.category})
                 if not should_retry(err, attempt):
                     to = "Failed" if err.category != "reauth" else "Failed"
-                    QUEUE.try_transition(item.id, to, reason=err.code)
+                    self._queue.try_transition(item.id, to, reason=err.code)
                     PROGRESS.finish_item(item.id, ok=False)
                     return
-                QUEUE.try_transition(item.id, "NeedsRetry", reason=err.code)
+                self._queue.try_transition(item.id, "NeedsRetry", reason=err.code)
                 await sleep_for_error(err, attempt)
-                QUEUE.try_transition(item.id, "Pending", reason="retry")
+                self._queue.try_transition(item.id, "Pending", reason="retry")
 
     async def _run_once(self, item: MediaItem) -> None:
         safe = sanitize_filename(item.safe_name or item.original_name or f"{item.id}.{item.extension}")
@@ -173,7 +230,7 @@ class TransferManager:
         db.upsert_item(item)
 
         # DOWNLOAD
-        QUEUE.transition(item.id, "Downloading")
+        self._queue.transition(item.id, "Downloading")
         PROGRESS.start_item(item.id, safe, item.size_bytes, phase="download")
 
         def dl_cb(current: int, total: int) -> None:
@@ -195,10 +252,10 @@ class TransferManager:
                 raise RuntimeError(f"size mismatch download: expected {item.size_bytes}, got {got}")
             item.size_bytes = got
 
-        QUEUE.transition(item.id, "Downloaded")
+        self._queue.transition(item.id, "Downloaded")
 
         # UPLOAD
-        QUEUE.transition(item.id, "Uploading")
+        self._queue.transition(item.id, "Uploading")
 
         def up_cb(current: int, total: int) -> None:
             PROGRESS.update(item.id, current, phase="upload")
@@ -219,12 +276,12 @@ class TransferManager:
         file_id = result["id"]
 
         # VERIFY — Drive must prove id + size + parent + source key + not trashed.
-        QUEUE.transition(item.id, "Verifying", drive_file_id=file_id)
+        self._queue.transition(item.id, "Verifying", drive_file_id=file_id)
         try:
             self._verify(file_id, item)
         except Exception as exc:
             # Do NOT delete temp — mark failed for user review.
-            QUEUE.transition(item.id, "Failed",
+            self._queue.transition(item.id, "Failed",
                              reason="verify_failed",
                              last_error_code="VERIFY_FAILED",
                              last_error_msg=str(exc)[:400])
@@ -234,7 +291,7 @@ class TransferManager:
             return
 
         # DURABLE CHECKPOINT before the temp file is allowed to disappear.
-        QUEUE.transition(item.id, "UploadedPendingCheckpoint",
+        self._queue.transition(item.id, "UploadedPendingCheckpoint",
                          drive_file_id=file_id,
                          drive_folder_id=self.drive_folder_id)
         try:
@@ -248,7 +305,7 @@ class TransferManager:
             PROGRESS.finish_item(item.id, ok=False)
             return
 
-        QUEUE.transition(item.id, "Uploaded", upload_pct=100.0)
+        self._queue.transition(item.id, "Uploaded", upload_pct=100.0)
         db.add_event(item.id, "checkpoint", "durable", {"checkpoint_file_id": checkpoint_id})
         cleanup_item(item.id)
         PROGRESS.finish_item(item.id, ok=True)

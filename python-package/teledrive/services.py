@@ -351,7 +351,7 @@ class CheckpointService:
         if not snapshot:
             return {"imported": 0, "reconciled": {}, "message_key": "msg.recovery_none"}
         imported = checkpoint_manager.apply_snapshot(snapshot)
-        reconciled = checkpoint_manager.reconcile_with_drive(drive)
+        reconciled = checkpoint_manager.reconcile_with_drive(drive, self.ctx.queue_manager)
         return {"imported": imported, "reconciled": reconciled, "message_key": "msg.recovery_ok"}
 
 

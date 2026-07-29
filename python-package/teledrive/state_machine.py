@@ -17,7 +17,9 @@ LEGAL: dict[str, set[str]] = {
     "NeedsRetry":  {"Pending", "Downloading", "Uploading", "Failed", "Stopped"},
     "Failed":      {"NeedsRetry", "Stopped", "Deleted"},
     "Skipped":     {"Pending", "Deleted"},
-    "Stopped":     {"Pending", "Deleted"},
+    # Stopped is FINAL (Phase C). A stopped item is never silently resurrected;
+    # the operator must re-analyze/enqueue it to try again.
+    "Stopped":     {"Deleted"},
     "Deleted":     set(),
 }
 

@@ -236,8 +236,9 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ),
 
     # ---- Transfers ----
-    # transfer_manager has no test at all today (audit P0-2), so every control
-    # that drives it is tested=False until PHASE B lands.
+    # PHASE B proved the transfer pipeline (tests/test_transfer_manager.py) and
+    # PHASE C proved the queue contract (tests/test_phase_c.py). Controls that
+    # still lack a named proof stay tested=False.
     ActionSpec(
         action_id="queue.start_selected",
         handler_name="h_queue_start_selected",
@@ -245,7 +246,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.start",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_c.py::test_start_selected_never_processes_the_whole_table",
     ),
     ActionSpec(
         action_id="queue.pause",
@@ -254,7 +256,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.pause",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_c.py::test_pause_exports_a_checkpoint_before_reporting_paused",
     ),
     ActionSpec(
         action_id="queue.resume",
@@ -281,8 +284,10 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.retry_failed",
         section="transfers",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_phase_c.py::test_retry_failed_never_revives_a_stopped_item",
     ),
+
     ActionSpec(
         action_id="queue.clear_completed",
         handler_name="h_queue_clear_completed",

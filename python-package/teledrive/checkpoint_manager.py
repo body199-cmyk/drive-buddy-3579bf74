@@ -141,19 +141,23 @@ def apply_snapshot(snap: dict[str, Any]) -> int:
     return n
 
 
-def reconcile_with_drive(drive) -> dict[str, int]:
+def reconcile_with_drive(drive, queue=None) -> dict[str, int]:
     """Reconcile in-flight items against Drive.
 
-    State is NEVER written here: every change goes through QueueManager, the
-    only owner of transitions (Constitution Section 9).
+    State is NEVER written here: every change goes through the INJECTED
+    QueueManager, the only owner of transitions (Constitution Section 9).
+    There is no module-level queue singleton (Phase C).
     """
-    from .queue_manager import QUEUE
+    from .queue_manager import QueueManager
+
+    q = queue if queue is not None else QueueManager()
 
     result = {"marked_uploaded": 0, "marked_needsretry": 0, "checked": 0}
     in_flight = ["Downloading", "Uploading", "Downloaded", "Verifying",
                  "UploadedPendingCheckpoint"]
     for item in db.items_in_states(in_flight):
         result["checked"] += 1
+
         try:
             existing = drive.find_by_source_key(item.source_key)
             found = (
@@ -162,20 +166,20 @@ def reconcile_with_drive(drive) -> dict[str, int]:
                 and int(existing.get("size") or 0) == item.size_bytes
             )
             if found:
-                moved = QUEUE.try_transition(
+                moved = q.try_transition(
                     item.id, "Uploaded",
                     drive_file_id=existing["id"], upload_pct=100.0,
                 )
                 if moved is None and item.state == "Uploading":
-                    QUEUE.try_transition(item.id, "Verifying")
-                    QUEUE.try_transition(item.id, "UploadedPendingCheckpoint",
+                    q.try_transition(item.id, "Verifying")
+                    q.try_transition(item.id, "UploadedPendingCheckpoint",
                                          drive_file_id=existing["id"])
-                    moved = QUEUE.try_transition(item.id, "Uploaded", upload_pct=100.0)
+                    moved = q.try_transition(item.id, "Uploaded", upload_pct=100.0)
                 if moved is not None:
                     db.add_event(item.id, "reconcile", "found_on_drive")
                     result["marked_uploaded"] += 1
                     continue
-            if QUEUE.try_transition(item.id, "NeedsRetry") is not None:
+            if q.try_transition(item.id, "NeedsRetry") is not None:
                 db.add_event(item.id, "reconcile", "not_found_on_drive")
                 result["marked_needsretry"] += 1
 

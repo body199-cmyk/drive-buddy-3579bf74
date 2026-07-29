@@ -15,7 +15,9 @@ from teledrive import checkpoint_manager, database as db
 from teledrive.errors import CheckpointError, VerificationError
 from teledrive.models import MediaItem
 from teledrive import storage_manager
-from teledrive.queue_manager import QUEUE
+from teledrive.queue_manager import QueueManager
+
+QUEUE = QueueManager()
 from teledrive.transfer_manager import TransferManager
 
 from .mocks.fake_drive import FakeDrive
@@ -44,7 +46,7 @@ def _telegram(mid: int = 7, size: int = SIZE) -> FakeTelegram:
 
 
 def _manager(drive: FakeDrive, tg: FakeTelegram, folder: str = "fld_target") -> TransferManager:
-    return TransferManager(tg, drive, folder)
+    return TransferManager(tg, drive, folder, queue=QUEUE)
 
 
 def _run(mgr: TransferManager) -> None:
