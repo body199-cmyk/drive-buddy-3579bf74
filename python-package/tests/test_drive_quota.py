@@ -1,5 +1,10 @@
 from teledrive.drive_quota import evaluate
 
+# Actions proven by this module (see teledrive/action_registry.proof_test):
+PROVES = (
+    "drive.refresh_quota",
+)
+
 
 def test_ok():
     r = evaluate({"limit": 100, "usage": 10}, required_bytes=50)

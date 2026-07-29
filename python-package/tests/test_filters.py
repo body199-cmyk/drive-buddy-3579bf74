@@ -1,6 +1,11 @@
 from teledrive.filters import FilterSet, apply
 from teledrive.models import MediaItem
 
+# Actions proven by this module (see teledrive/action_registry.proof_test):
+PROVES = (
+    "analyze.apply_filters",
+)
+
 
 def _mk(**kw):
     base = dict(source_key=f"tg:1:{kw.get('message_id',1)}:u", chat_id=1, message_id=1,

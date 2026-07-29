@@ -2,6 +2,11 @@ from teledrive.queue_manager import QUEUE
 from teledrive.models import MediaItem
 from teledrive import database as db
 
+# Actions proven by this module (see teledrive/action_registry.proof_test):
+PROVES = (
+    "analyze.enqueue_selected",
+)
+
 
 def _mk(sk, name="a.bin", size=100):
     return MediaItem(source_key=sk, chat_id=1, message_id=1, file_unique_id="u",

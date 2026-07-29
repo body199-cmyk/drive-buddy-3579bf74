@@ -45,6 +45,8 @@
   "col.size": "الحجم",
   "col.state": "الحالة",
   "col.type": "النوع",
+  "common.busy": "جارٍ التنفيذ…",
+  "common.unavailable": "غير متاح — لم يُنفَّذ ويُختبر بعد",
   "dash.avg_speed": "متوسط السرعة",
   "dash.colab_space": "مساحة Colab",
   "dash.current": "الملف الحالي",

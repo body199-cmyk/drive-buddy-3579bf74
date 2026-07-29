@@ -45,6 +45,8 @@
   "col.size": "Size",
   "col.state": "State",
   "col.type": "Type",
+  "common.busy": "Working…",
+  "common.unavailable": "Unavailable — not implemented and tested yet",
   "dash.avg_speed": "Average speed",
   "dash.colab_space": "Colab space",
   "dash.current": "Current file",
