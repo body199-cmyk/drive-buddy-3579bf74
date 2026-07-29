@@ -216,19 +216,51 @@ class TransferManager:
             progress_cb=up_cb,
             mime_type=mime,
         )
-        remote_size = int(result.get("size") or 0)
-        if remote_size and item.size_bytes and remote_size != item.size_bytes:
+        file_id = result["id"]
+
+        # VERIFY — Drive must prove id + size + parent + source key + not trashed.
+        QUEUE.transition(item.id, "Verifying", drive_file_id=file_id)
+        try:
+            self._verify(file_id, item)
+        except Exception as exc:
             # Do NOT delete temp — mark failed for user review.
             QUEUE.transition(item.id, "Failed",
-                             reason="upload_size_mismatch",
-                             last_error_code="UPLOAD_SIZE_MISMATCH",
-                             last_error_msg=f"remote={remote_size} local={item.size_bytes}")
+                             reason="verify_failed",
+                             last_error_code="VERIFY_FAILED",
+                             last_error_msg=str(exc)[:400])
+            db.add_event(item.id, "RECOVERY", "verification failed, temp kept",
+                         {"drive_file_id": file_id})
             PROGRESS.finish_item(item.id, ok=False)
             return
 
-        QUEUE.transition(item.id, "Uploaded",
-                         drive_file_id=result["id"],
+        # DURABLE CHECKPOINT before the temp file is allowed to disappear.
+        QUEUE.transition(item.id, "UploadedPendingCheckpoint",
+                         drive_file_id=file_id,
                          drive_folder_id=self.drive_folder_id)
-        checkpoint_manager.persist(self.drive)
+        try:
+            checkpoint_id = checkpoint_manager.persist_durable(self.drive)
+        except Exception as exc:
+            db.add_event(item.id, "RECOVERY",
+                         "durable checkpoint failed, temp kept and state left "
+                         "UploadedPendingCheckpoint",
+                         {"error": str(exc)[:400], "drive_file_id": file_id})
+            _log.warning("durable checkpoint failed for %s: %s", item.id, exc)
+            PROGRESS.finish_item(item.id, ok=False)
+            return
+
+        QUEUE.transition(item.id, "Uploaded", upload_pct=100.0)
+        db.add_event(item.id, "checkpoint", "durable", {"checkpoint_file_id": checkpoint_id})
         cleanup_item(item.id)
         PROGRESS.finish_item(item.id, ok=True)
+
+    def _verify(self, file_id: str, item: MediaItem) -> None:
+        from .drive_client import verify_metadata
+
+        verifier = getattr(self.drive, "verify_uploaded", None)
+        if callable(verifier):
+            verifier(file_id, item.size_bytes, self.drive_folder_id, item.source_key)
+            return
+        getter = getattr(self.drive, "get_file", None)
+        meta = getter(file_id) if callable(getter) else None
+        verify_metadata(meta, item.size_bytes, self.drive_folder_id, item.source_key)
+

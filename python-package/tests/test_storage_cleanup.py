@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 from teledrive import database as db, storage_manager
-from teledrive.config import TEMP_DIR
 from teledrive.models import MediaItem
 
 
 def _temp_file(item_id: str, name: str = "file.part"):
-    d = TEMP_DIR / item_id
+    d = storage_manager.temp_root() / item_id
     d.mkdir(parents=True, exist_ok=True)
     path = d / name
     path.write_bytes(b"x")
@@ -29,9 +28,9 @@ def test_only_verified_uploaded_temp_is_deleted():
 
     assert report["deleted"] == ["itm-ok"]
     assert sorted(report["quarantined"]) == ["itm-pending", "itm-unknown"]
-    assert not (TEMP_DIR / "itm-ok").exists()
-    assert (storage_manager.QUARANTINE / "itm-pending").exists()
-    assert (storage_manager.QUARANTINE / "itm-unknown").exists()
+    assert not (storage_manager.temp_root() / "itm-ok").exists()
+    assert (storage_manager.quarantine_dir() / "itm-pending").exists()
+    assert (storage_manager.quarantine_dir() / "itm-unknown").exists()
 
 
 def test_uploaded_without_drive_file_id_is_quarantined_not_deleted():
@@ -55,4 +54,4 @@ def test_no_blind_rmtree_of_temp_root():
     code = "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith(("#", "*"))
     )
-    assert "rmtree(TEMP_DIR)" not in code
+    assert "rmtree(storage_manager.temp_root())" not in code

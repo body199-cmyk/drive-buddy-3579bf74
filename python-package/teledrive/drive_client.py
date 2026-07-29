@@ -116,10 +116,14 @@ class DriveService:
         body = {
             "name": drive_name,
             "parents": [parent_id],
-            "appProperties": {"source_key": source_key},
+            "appProperties": {
+                "source_key": source_key,
+                "teledrive_source_key": source_key,
+            },
         }
         request = self.service.files().create(
-            body=body, media_body=media, fields="id,name,size,appProperties"
+            body=body, media_body=media,
+            fields="id,name,size,parents,appProperties,trashed"
         )
         response = None
         total = os.path.getsize(file_path) or 1
@@ -165,3 +169,49 @@ class DriveService:
             pageSize=1000,
         ).execute()
         return r.get("files", [])
+
+    # ---------- Post-upload verification ----------
+
+    def get_file(self, file_id: str) -> dict[str, Any]:
+        assert self.service
+        return self.service.files().get(
+            fileId=file_id, fields="id,name,size,parents,appProperties,trashed"
+        ).execute()
+
+    def verify_uploaded(
+        self, file_id: str, expected_size: int, parent_id: str, source_key: str
+    ) -> dict[str, Any]:
+        """Prove the remote file really exists as we intended.
+
+        Checks id, size, parents, appProperties.teledrive_source_key and
+        trashed=False. Raises VerificationError on the first mismatch.
+        """
+        from .errors import VerificationError
+
+        meta = self.get_file(file_id)
+        return verify_metadata(meta, expected_size, parent_id, source_key)
+
+
+def verify_metadata(
+    meta: dict[str, Any] | None, expected_size: int, parent_id: str, source_key: str
+) -> dict[str, Any]:
+    """Pure verification of a Drive file resource. Shared by client and tests."""
+    from .errors import VerificationError
+
+    if not meta or not meta.get("id"):
+        raise VerificationError("verify: file not found on Drive")
+    if meta.get("trashed"):
+        raise VerificationError("verify: file is trashed")
+    remote_size = int(meta.get("size") or 0)
+    if expected_size and remote_size != expected_size:
+        raise VerificationError(
+            f"verify: size mismatch remote={remote_size} local={expected_size}"
+        )
+    parents = list(meta.get("parents") or [])
+    if parent_id and parent_id not in parents:
+        raise VerificationError(f"verify: parent mismatch expected={parent_id} got={parents}")
+    props = meta.get("appProperties") or {}
+    got_key = props.get("teledrive_source_key") or props.get("source_key") or ""
+    if source_key and got_key != source_key:
+        raise VerificationError("verify: appProperties.teledrive_source_key mismatch")
+    return meta

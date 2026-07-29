@@ -13,6 +13,8 @@ STATES = (
     "Downloading",
     "Downloaded",
     "Uploading",
+    "Verifying",
+    "UploadedPendingCheckpoint",
     "Uploaded",
     "Paused",
     "Failed",

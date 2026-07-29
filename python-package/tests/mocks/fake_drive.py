@@ -9,6 +9,8 @@ class FakeDrive:
         self.limit = limit
         self.usage = 0
         self._authed = True
+        self.fail_checkpoint = False
+        self.checkpoints: list[str] = []
 
     def storage_quota(self):
         return {"limit": self.limit, "usage": self.usage}
@@ -45,15 +47,34 @@ class FakeDrive:
         fid = f"file_{uuid.uuid4().hex[:8]}"
         self.files[fid] = {
             "name": drive_name, "size": size, "parent": parent_id,
-            "appProperties": {"source_key": source_key},
+            "parents": [parent_id],
+            "trashed": False,
+            "appProperties": {"source_key": source_key,
+                              "teledrive_source_key": source_key},
         }
         self.usage += size
         if progress_cb:
             progress_cb(size, size)
-        return {"id": fid, "name": drive_name, "size": str(size),
-                "appProperties": {"source_key": source_key}}
+        return self.get_file(fid)
+
+    def get_file(self, file_id):
+        meta = self.files.get(file_id)
+        if not meta:
+            return None
+        return {"id": file_id, "name": meta["name"], "size": str(meta["size"]),
+                "parents": list(meta.get("parents") or []),
+                "trashed": bool(meta.get("trashed")),
+                "appProperties": meta.get("appProperties", {})}
+
+    def verify_uploaded(self, file_id, expected_size, parent_id, source_key):
+        from teledrive.drive_client import verify_metadata
+        return verify_metadata(self.get_file(file_id), expected_size, parent_id, source_key)
 
     def upload_bytes(self, name, data, parent_id):
+        if self.fail_checkpoint and name.startswith("teledrive_checkpoint_"):
+            raise RuntimeError("simulated checkpoint upload failure")
+        if name.startswith("teledrive_checkpoint_"):
+            self.checkpoints.append(name)
         fid = f"json_{uuid.uuid4().hex[:8]}"
         self.files[fid] = {"name": name, "size": len(data), "parent": parent_id,
                            "appProperties": {}, "_bytes": data}
