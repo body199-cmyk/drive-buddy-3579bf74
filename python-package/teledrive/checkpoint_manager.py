@@ -49,7 +49,7 @@ def persist_local() -> Path:
 
 
 def persist(drive=None) -> Optional[str]:
-    """Write local checkpoint AND upload to Drive appdata folder if drive provided."""
+    """Best-effort checkpoint. Never used as a durability guarantee."""
     path = persist_local()
     if drive is None:
         return None
@@ -61,6 +61,44 @@ def persist(drive=None) -> Optional[str]:
     except Exception as e:
         _log.warning("checkpoint drive upload failed: %s", e)
         return None
+
+
+def persist_durable(drive) -> str:
+    """Export a checkpoint that is PROVEN to be on Drive.
+
+    Any failure raises :class:`CheckpointError`; it never returns ``None``
+    silently, because the caller deletes temp files on success only.
+    """
+    from .errors import CheckpointError
+    from .redaction import scan_for_secrets
+
+    if drive is None:
+        raise CheckpointError("durable checkpoint requires a Drive service")
+
+    snap = make_snapshot()
+    payload = json.dumps(snap, ensure_ascii=False, indent=2)
+    hits = scan_for_secrets(payload)
+    if hits:
+        raise CheckpointError(f"checkpoint refused: {len(hits)} secret pattern(s) matched")
+
+    CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = CHECKPOINTS_DIR / f"{CHECKPOINT_PREFIX}{snap['generated'].replace(':', '-')}.json"
+    atomic_write_bytes(path, payload.encode("utf-8"))
+    for old in sorted(CHECKPOINTS_DIR.glob(f"{CHECKPOINT_PREFIX}*.json"))[:-10]:
+        try:
+            old.unlink()
+        except Exception:
+            pass
+
+    try:
+        folder_id = drive.ensure_folder(DRIVE_APPDATA_FOLDER)
+        file_id = drive.upload_bytes(path.name, payload.encode("utf-8"), folder_id)
+    except Exception as exc:
+        raise CheckpointError(f"checkpoint upload failed: {exc}") from exc
+    if not file_id:
+        raise CheckpointError("checkpoint upload returned no file id")
+    return file_id
+
 
 
 def latest_local() -> Optional[Path]:
