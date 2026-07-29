@@ -146,8 +146,9 @@ function Index() {
 
         <section className="mb-8 rounded-lg border border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold">
-            وظائف الباك-اند (كلها مربوطة بأزرار الواجهة)
+            وظائف الباك-اند (11 من 41 إجراءً مربوطة ومُثبتة باختبار؛ الباقي مخفي/معطّل)
           </h2>
+
           <ul className="list-disc space-y-1 pr-6 text-sm leading-relaxed">
             <li>سياق تشغيل واحد: حلقة async واحدة، عميل تيليجرام واحد، خدمة Drive واحدة.</li>
             <li>تسجيل دخول تيليجرام حقيقي (Telethon + phone/code/2FA).</li>
