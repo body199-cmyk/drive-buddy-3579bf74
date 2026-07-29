@@ -2,11 +2,28 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-ROOT = Path(os.environ.get("TELEDRIVE_ROOT", "/content/teledrive_runtime")).resolve()
+def _default_root() -> Path:
+    """Colab's ``/content`` when it is usable, otherwise a local fallback.
+
+    CI runners and desktops have no ``/content`` and cannot create one (it sits
+    at the filesystem root), so the default must degrade instead of raising.
+    """
+    explicit = os.environ.get("TELEDRIVE_ROOT")
+    if explicit:
+        return Path(explicit)
+    content = Path("/content")
+    if content.is_dir() and os.access(content, os.W_OK):
+        return content / "teledrive_runtime"
+    return Path(tempfile.gettempdir()) / "teledrive_runtime"
+
+
+ROOT = _default_root().resolve()
+
 
 DATA_DIR = ROOT / "data"
 LOGS_DIR = ROOT / "logs"

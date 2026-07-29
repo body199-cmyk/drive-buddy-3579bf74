@@ -10,9 +10,14 @@ jobs:
   python:
     name: Python package (tests + Colab contract)
     runs-on: ubuntu-latest
+    env:
+      # CI runners have no writable /content (Colab's root). Pin the runtime
+      # root explicitly so bootstrap never tries to create a directory at /.
+      TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
     defaults:
       run:
         working-directory: python-package
+
     steps:
       - uses: actions/checkout@v4
 
