@@ -6,6 +6,17 @@ import pytest
 from teledrive import telegram_auth as ta
 from teledrive.errors import AuthStateError, CooldownError, TeleDriveError
 
+# Actions proven by this module (see teledrive/action_registry.proof_test):
+PROVES = (
+    "telegram.set_credentials",
+    "telegram.send_code",
+    "telegram.resend_code",
+    "telegram.verify_code",
+    "telegram.verify_password",
+    "telegram.logout",
+    "telegram.status",
+)
+
 
 class SessionPasswordNeededError(Exception):
     pass
