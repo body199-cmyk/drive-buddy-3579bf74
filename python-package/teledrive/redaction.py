@@ -72,3 +72,24 @@ def mask_phone(phone: str) -> str:
     if len(digits) < 4:
         return PLACEHOLDER
     return f"+{digits[:3]}••••{digits[-2:]}"
+
+
+def scan_for_secrets(text: str) -> list[str]:
+    """Return the secret shapes found in ``text``.
+
+    The single gate used before ANY durable export (checkpoint, handoff, ZIP).
+    An empty list means the payload is safe to leave the process.
+    """
+    if not text:
+        return []
+    hits: list[str] = []
+    for pattern, _ in _PATTERNS:
+        if pattern.search(str(text)):
+            hits.append(pattern.pattern)
+    return hits
+
+
+def assert_no_secrets(text: str, where: str = "payload") -> None:
+    hits = scan_for_secrets(text)
+    if hits:
+        raise ValueError(f"{where}: refused, {len(hits)} secret pattern(s) matched")
