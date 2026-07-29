@@ -93,6 +93,7 @@ class ApplicationContext:
         self.binder = UIBinder(self, self.handlers)
 
         self.queue_manager.bind_context(self)
+        self.ui: Any = None          # Gradio launch handle (set by app.launch)
         self.transfer_manager: Any = None
         self.drive_client: Any = None
         self.bootstrap_info: dict = {}
@@ -104,6 +105,12 @@ class ApplicationContext:
         return self
 
     def shutdown(self) -> None:
+        if self.ui is not None:
+            try:
+                self.ui.close()
+            except Exception:  # pragma: no cover - defensive
+                _log.warning("ui close failed during shutdown")
+            self.ui = None
         self.aio.stop()
         try:
             self.db.close()
