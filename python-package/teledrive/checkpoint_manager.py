@@ -142,28 +142,43 @@ def apply_snapshot(snap: dict[str, Any]) -> int:
 
 
 def reconcile_with_drive(drive) -> dict[str, int]:
-    """For every Downloading/Uploading item, query Drive; if found+size match -> Uploaded.
-       Else -> NeedsRetry. Returns counts."""
-    from .state_machine import can_transition
+    """Reconcile in-flight items against Drive.
+
+    State is NEVER written here: every change goes through QueueManager, the
+    only owner of transitions (Constitution Section 9).
+    """
+    from .queue_manager import QUEUE
+
     result = {"marked_uploaded": 0, "marked_needsretry": 0, "checked": 0}
-    for item in db.items_in_states(["Downloading", "Uploading", "Downloaded"]):
+    in_flight = ["Downloading", "Uploading", "Downloaded", "Verifying",
+                 "UploadedPendingCheckpoint"]
+    for item in db.items_in_states(in_flight):
         result["checked"] += 1
         try:
             existing = drive.find_by_source_key(item.source_key)
-            if existing and int(existing.get("size") or 0) == item.size_bytes and item.size_bytes > 0:
-                if can_transition(item.state, "Uploaded"):
-                    item.state = "Uploaded"
-                    item.drive_file_id = existing["id"]
-                    item.upload_pct = 100.0
-                    db.upsert_item(item)
+            found = (
+                existing
+                and item.size_bytes > 0
+                and int(existing.get("size") or 0) == item.size_bytes
+            )
+            if found:
+                moved = QUEUE.try_transition(
+                    item.id, "Uploaded",
+                    drive_file_id=existing["id"], upload_pct=100.0,
+                )
+                if moved is None and item.state == "Uploading":
+                    QUEUE.try_transition(item.id, "Verifying")
+                    QUEUE.try_transition(item.id, "UploadedPendingCheckpoint",
+                                         drive_file_id=existing["id"])
+                    moved = QUEUE.try_transition(item.id, "Uploaded", upload_pct=100.0)
+                if moved is not None:
                     db.add_event(item.id, "reconcile", "found_on_drive")
                     result["marked_uploaded"] += 1
                     continue
-            if can_transition(item.state, "NeedsRetry"):
-                item.state = "NeedsRetry"
-                db.upsert_item(item)
+            if QUEUE.try_transition(item.id, "NeedsRetry") is not None:
                 db.add_event(item.id, "reconcile", "not_found_on_drive")
                 result["marked_needsretry"] += 1
+
         except Exception as e:
             _log.warning("reconcile failed for %s: %s", item.id, e)
     return result
