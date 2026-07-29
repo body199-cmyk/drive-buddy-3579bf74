@@ -243,8 +243,10 @@ def test_interrupted_download_restarts_without_duplicating():
 
 
 def test_transfer_and_checkpoint_modules_never_write_state_directly():
+    import re
+
     root = Path(__file__).resolve().parents[1] / "teledrive"
+    assign = re.compile(r"\.state\s*=(?!=)")
     for name in ("transfer_manager.py", "checkpoint_manager.py"):
         text = (root / name).read_text(encoding="utf-8")
-        assert "item.state =" not in text, f"{name} must not assign item.state"
-        assert ".state =" not in text.replace("item.state =", ""), name
+        assert not assign.search(text), f"{name} must not assign .state directly"
