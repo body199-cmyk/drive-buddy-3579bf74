@@ -6,7 +6,9 @@ import pytest
 
 from teledrive import database as db, checkpoint_manager
 from teledrive.models import MediaItem
-from teledrive.queue_manager import QUEUE
+from teledrive.queue_manager import QueueManager
+
+QUEUE = QueueManager()
 from teledrive.state_machine import can_transition
 from tests.mocks.fake_drive import FakeDrive
 
@@ -27,7 +29,7 @@ def test_reconcile_marks_uploaded_when_found(tmp_path):
     f = tmp_path / "a.bin"; f.write_bytes(b"y" * 100)
     drive.upload_resumable(str(f), "a.bin", folder, "tg:1:1:u")
 
-    result = checkpoint_manager.reconcile_with_drive(drive)
+    result = checkpoint_manager.reconcile_with_drive(drive, QUEUE)
     assert result["marked_uploaded"] == 1
     assert db.get_item(item.id).state == "Uploaded"
     # Exactly one drive file with this source_key
@@ -46,6 +48,6 @@ def test_reconcile_marks_needsretry_when_missing():
 
     drive = FakeDrive()
     drive.ensure_folder("TeleDrive_Transfers")
-    result = checkpoint_manager.reconcile_with_drive(drive)
+    result = checkpoint_manager.reconcile_with_drive(drive, QUEUE)
     assert result["marked_needsretry"] == 1
     assert db.get_item(item.id).state == "NeedsRetry"

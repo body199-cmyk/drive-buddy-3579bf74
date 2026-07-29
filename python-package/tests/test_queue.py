@@ -1,4 +1,6 @@
-from teledrive.queue_manager import QUEUE
+from teledrive.queue_manager import QueueManager
+
+QUEUE = QueueManager()
 from teledrive.models import MediaItem
 from teledrive import database as db
 

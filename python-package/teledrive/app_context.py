@@ -66,8 +66,9 @@ class ApplicationContext:
         self.aio: AsyncRuntime = AsyncRuntime()
         self.db = db
         self.auth: AuthManager = AuthManager()
-        self.queue_manager: QueueManager = QueueManager()
+        self.queue_manager: QueueManager = QueueManager(self)
         self.progress: ProgressTracker = ProgressTracker()
+
         self.ui_state: UIState = UIState(language=self.config.language)
 
         # Auth owners (Phases 3-4): the ONLY holders of a Telegram client and
@@ -98,11 +99,42 @@ class ApplicationContext:
         self.drive_client: Any = None
         self.bootstrap_info: dict = {}
 
+    # ---- owned singletons (one per context, Phase C) ----
+
+    def ensure_drive_client(self):
+        """The ONE Drive client for this context."""
+        if self.drive_client is None:
+            from .drive_client import DriveService
+
+            self.drive_client = DriveService.from_auth(self.drive_auth)
+        return self.drive_client
+
+    def ensure_transfer_manager(self, drive_folder_id: Optional[str] = None):
+        """The ONE TransferManager for this context; reused on every Start."""
+        from .transfer_manager import TransferManager
+
+        drive = self.ensure_drive_client()
+        if self.transfer_manager is None:
+            self.transfer_manager = TransferManager(
+                self.telegram_auth.client if self.telegram_auth else None,
+                drive,
+                drive_folder_id or "",
+                queue=self.queue_manager,
+            )
+        else:
+            self.transfer_manager.drive = drive
+            if self.telegram_auth is not None:
+                self.transfer_manager.telegram = self.telegram_auth.client
+            if drive_folder_id:
+                self.transfer_manager.drive_folder_id = drive_folder_id
+        return self.transfer_manager
+
     # ---- lifecycle ----
 
     def start(self) -> "ApplicationContext":
         self.aio.start()
         return self
+
 
     def shutdown(self) -> None:
         if self.ui is not None:

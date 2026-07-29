@@ -28,7 +28,10 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # t.me private invite links
     (re.compile(r"https?://t\.me/(?:joinchat/|\+)[A-Za-z0-9_\-]+"), PLACEHOLDER),
     # Telethon StringSession blobs
-    (re.compile(r"\b1[A-Za-z0-9+/=_\-]{80,}\b"), PLACEHOLDER),
+    # Telethon StringSession: "1" + URL-safe base64 (no "/" or "+"). Excluding
+    # those two characters keeps long filesystem paths from false-positiving.
+    (re.compile(r"\b1[A-Za-z0-9=_\-]{80,}\b"), PLACEHOLDER),
+
 )
 
 
