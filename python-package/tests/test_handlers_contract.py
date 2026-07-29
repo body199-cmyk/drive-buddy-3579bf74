@@ -59,3 +59,34 @@ def test_handler_never_raises_to_the_ui(ctx, monkeypatch, spec):
     text = str(result)
     assert "SECRET123" not in text
     assert "Traceback" not in text
+
+
+class ServiceSpy:
+    """Records that the declared service method itself was invoked."""
+
+    def __init__(self):
+        self.hits = 0
+
+    def __call__(self, *args, **kwargs):
+        self.hits += 1
+        raise _Stop("service reached")
+
+
+@pytest.mark.parametrize("spec", action_registry.ACTION_SPECS, ids=lambda s: s.action_id)
+def test_handler_reaches_the_real_service_object(ctx, monkeypatch, spec):
+    """End-to-end spy: no stubbing of Handlers.call, patch the service itself.
+
+    This proves the declared service_path resolves on the live context AND that
+    the handler dispatches through it, closing the gap left by the
+    Handlers.call-level spy above.
+    """
+    service_name, _, method_name = spec.service_path.partition(".")
+    service = getattr(ctx, service_name)
+    assert service is not None, f"{spec.action_id}: service {service_name!r} is None"
+    assert hasattr(service, method_name), f"{spec.action_id}: {spec.service_path} missing"
+
+    spy = ServiceSpy()
+    monkeypatch.setattr(service, method_name, spy)
+    handler = getattr(ctx.handlers, spec.handler_name)
+    handler(*ARGS.get(spec.action_id, ()))
+    assert spy.hits == 1, f"{spec.action_id} never reached {spec.service_path}"
