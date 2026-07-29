@@ -180,12 +180,27 @@ def test_pause_item_and_resume_item_only_touch_that_item(ctx):
     ctx.queue_manager.pause_item(one.id)
     assert manager.item_paused(one.id)
     assert not manager.item_paused(other.id)
-    assert db.get_item(one.id).state == "Paused"
-    assert db.get_item(other.id).state == "Pending"
+    # A Pending item is not in flight, so the row stays Pending by design
+    # (state_machine has no Pending -> Paused edge); the manager flag is what
+    # holds the item back.
+    assert db.get_item(one.id).state == "Pending"
 
     ctx.queue_manager.resume_item(one.id)
     assert not manager.item_paused(one.id)
     assert db.get_item(one.id).state == "Pending"
+
+
+def test_pause_item_marks_an_in_flight_item_paused(ctx):
+    ctx.drive_client = FakeDrive()
+    manager = ctx.ensure_transfer_manager("fld")
+    item = _item(ctx.queue_manager, 40)
+    ctx.queue_manager.try_transition(item.id, "Downloading")
+    ctx.queue_manager.pause_item(item.id)
+    assert manager.item_paused(item.id)
+    assert db.get_item(item.id).state == "Paused"
+    ctx.queue_manager.resume_item(item.id)
+    assert db.get_item(item.id).state == "Pending"
+
 
 
 def test_stop_item_is_permanent_for_that_item(ctx):
