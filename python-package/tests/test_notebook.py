@@ -99,3 +99,24 @@ def test_colab_cells_export_matches_the_notebook_source():
     assert payload["version"] == notebook_cells.NOTEBOOK_VERSION
     assert len(payload["cells"]) == notebook_cells.REQUIRED_CELL_COUNT
     assert [c["code"] for c in payload["cells"]] == [c["code"] for c in notebook_cells.CELLS]
+
+
+def test_cell_4_is_non_blocking_so_cells_5_to_7_stay_runnable():
+    cell4 = notebook_cells.CELLS[3]["code"]
+    assert "blocking=False" in cell4
+    assert "non-blocking" in cell4
+
+
+def test_requirements_lock_is_the_only_dependency_source():
+    assert notebook_cells.hardcoded_pins_in_cells() == [], (
+        "notebook cells must not duplicate versions; edit requirements.lock instead"
+    )
+    assert "requirements.lock" in notebook_cells.CELLS[0]["code"]
+    pins = notebook_cells.lock_pins()
+    assert pins and "gradio" in pins
+
+
+def test_colab_cells_json_carries_no_dependency_versions():
+    payload = notebook_cells.CELLS_JSON.read_text(encoding="utf-8")
+    for name, version in notebook_cells.lock_pins().items():
+        assert f"{name}=={version}" not in payload

@@ -101,3 +101,45 @@ def test_app_launch_does_not_create_a_second_context(monkeypatch):
 def test_parser_accepts_documented_flags(flag):
     module = _load_launcher()
     assert module.build_parser().parse_args([flag]) is not None
+
+
+def test_launch_defaults_to_non_blocking_and_stores_the_handle(monkeypatch):
+    from teledrive import app
+
+    ctx = app_context.create_context()
+
+    class FakeDemo:
+        def __init__(self):
+            self.kwargs = {}
+            self.closed = False
+
+        def launch(self, **kwargs):
+            self.kwargs = kwargs
+
+        def close(self):
+            self.closed = True
+
+    demo = FakeDemo()
+    monkeypatch.setattr(app, "build", lambda c: demo)
+
+    app.launch(ctx)
+    assert demo.kwargs["prevent_thread_lock"] is True
+    assert ctx.ui is demo
+
+    app.launch(ctx, blocking=True)
+    assert demo.kwargs["prevent_thread_lock"] is False
+    ctx.ui = None
+
+
+def test_cli_launcher_blocks_so_the_process_stays_alive(monkeypatch):
+    module = _load_launcher()
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        module,
+        "launch",
+        lambda ctx=None, share=False, inline=True, blocking=False: seen.update(
+            blocking=blocking
+        ),
+    )
+    module.main([])
+    assert seen["blocking"] is True
