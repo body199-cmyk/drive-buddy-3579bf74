@@ -15,7 +15,7 @@ RESERVE_BYTES = 200 * 1024 * 1024  # keep 200 MB headroom
 
 def temp_root() -> Path:
     """Always read the CURRENT config value (tests re-root the runtime)."""
-    return config.temp_root()
+    return config.TEMP_DIR
 
 
 def quarantine_dir() -> Path:
