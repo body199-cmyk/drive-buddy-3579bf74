@@ -7,7 +7,7 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Iterable, Optional
 
-from .config import DB_PATH
+from .config import DB_PATH, assert_local_path
 from .models import MediaItem
 from .utils import now_iso, new_id
 
@@ -19,6 +19,7 @@ _conn: sqlite3.Connection | None = None
 def _connect() -> sqlite3.Connection:
     global _conn
     if _conn is None:
+        assert_local_path(DB_PATH, what="SQLite database")
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         _conn = sqlite3.connect(str(DB_PATH), check_same_thread=False, isolation_level=None)
         _conn.row_factory = sqlite3.Row
