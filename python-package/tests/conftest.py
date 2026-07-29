@@ -14,8 +14,9 @@ def isolated_root(tmp_path, monkeypatch):
     from teledrive import config, database
     importlib.reload(config)
     importlib.reload(database)
-    from teledrive import migrations
+    from teledrive import migrations, storage_manager
     importlib.reload(migrations)
+    importlib.reload(storage_manager)
     migrations.apply()
     yield root
     database.close()

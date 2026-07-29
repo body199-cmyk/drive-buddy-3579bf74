@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from teledrive import checkpoint_manager, database as db
-from teledrive.config import TEMP_DIR
+from teledrive.storage_manager import TEMP_DIR
 from teledrive.errors import CheckpointError, VerificationError
 from teledrive.models import MediaItem
 from teledrive.queue_manager import QUEUE
