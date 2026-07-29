@@ -132,7 +132,9 @@ CONFIG = RuntimeConfig()
 
 
 def all_dirs() -> list[Path]:
-    return [DATA_DIR, LOGS_DIR, TEMP_DIR, CHECKPOINTS_DIR, SESSION_DIR]
+    """Every directory bootstrap creates, quarantine included."""
+    return list(RUNTIME_DIRS)
+
 
 
 def redact(text: str) -> str:
