@@ -7,19 +7,57 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-def _default_root() -> Path:
-    """Colab's ``/content`` when it is usable, otherwise a local fallback.
+# Mounted Google Drive / FUSE roots. SQLite on a FUSE mount corrupts under WAL,
+# so the runtime refuses to place a database (or its runtime root) inside one.
+MOUNTED_PREFIXES = (
+    "/content/drive",
+    "/content/gdrive",
+    "/gdrive",
+    "/mnt/gdrive",
+    "/mnt/google_drive",
+)
 
-    CI runners and desktops have no ``/content`` and cannot create one (it sits
-    at the filesystem root), so the default must degrade instead of raising.
+
+class MountedRootError(RuntimeError):
+    """Raised when a runtime path resolves inside a mounted Drive/FUSE tree."""
+
+
+def is_mounted_drive(path: "str | Path") -> bool:
+    p = str(Path(path)).rstrip("/")
+    return any(p == pre or p.startswith(pre + "/") for pre in MOUNTED_PREFIXES)
+
+
+def assert_local_path(path: "str | Path", *, what: str = "runtime path") -> Path:
+    """Reject any path inside a mounted Drive/FUSE tree."""
+    p = Path(path)
+    if is_mounted_drive(p):
+        raise MountedRootError(
+            f"{what} must stay on local disk: {p} is inside a mounted Drive/FUSE tree "
+            f"({', '.join(MOUNTED_PREFIXES)}). SQLite/WAL is unsafe there."
+        )
+    return p
+
+
+def _fallback_root() -> Path:
+    return Path(tempfile.gettempdir()) / "teledrive_runtime"
+
+
+def _default_root(env: "dict[str, str] | None" = None) -> Path:
+    """Resolve the runtime root without any import side effects.
+
+    Order: explicit ``TELEDRIVE_ROOT`` -> writable ``/content`` (Colab) ->
+    ``tempfile.gettempdir()/teledrive_runtime``. CI runners and desktops have no
+    writable ``/content``, so the default degrades instead of raising. Mounted
+    Drive is never selected automatically and is rejected when requested.
     """
-    explicit = os.environ.get("TELEDRIVE_ROOT")
+    environ = os.environ if env is None else env
+    explicit = environ.get("TELEDRIVE_ROOT")
     if explicit:
-        return Path(explicit)
+        return assert_local_path(explicit, what="TELEDRIVE_ROOT")
     content = Path("/content")
     if content.is_dir() and os.access(content, os.W_OK):
         return content / "teledrive_runtime"
-    return Path(tempfile.gettempdir()) / "teledrive_runtime"
+    return _fallback_root()
 
 
 ROOT = _default_root().resolve()
@@ -30,10 +68,14 @@ LOGS_DIR = ROOT / "logs"
 TEMP_DIR = ROOT / "temp"
 CHECKPOINTS_DIR = ROOT / "checkpoints"
 SESSION_DIR = ROOT / "session"
+QUARANTINE_DIR = TEMP_DIR / "_quarantine"
 
-DB_PATH = DATA_DIR / "teledrive.db"
+RUNTIME_DIRS = (DATA_DIR, LOGS_DIR, TEMP_DIR, CHECKPOINTS_DIR, SESSION_DIR, QUARANTINE_DIR)
+
+DB_PATH = assert_local_path(DATA_DIR / "teledrive.db", what="SQLite database")
 LOG_PATH = LOGS_DIR / "teledrive.log"
 TELEGRAM_SESSION = SESSION_DIR / "telegram.session"
+
 # No Drive token file: Colab-native auth only (Constitution Section 6).
 
 DRIVE_APPDATA_FOLDER = "TeleDrive_AppData"
