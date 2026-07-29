@@ -8,7 +8,11 @@
 - `teledrive_launcher.py` launches with `blocking=True` (process must stay alive).
 - `requirements.lock` is the single dependency source: notebook cells (and the
   generated `colab_cells.json`) may not contain any `package==version` literal.
-- CI runs `bun run lint` before `bun run build`.
+- CI runs `python -m compileall teledrive` first and `bun run lint` before
+  `bun run build`; no step uses `continue-on-error`.
+- PHASE_9.md now records the real command output, the verified commit SHA and
+  the final file tree.
+- Status: code-complete candidate — real integrations unverified.
 - Tests: 177 passed. Real Telegram/Drive Colab run still NOT verified.
 
 ## v3.1.0-phase1 — 2026-07-29

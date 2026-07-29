@@ -27,6 +27,9 @@ jobs:
           pip install -r requirements.lock
           pip install pytest
 
+      - name: Byte-compile the package
+        run: python -m compileall teledrive
+
       - name: Run test suite
         run: python -m pytest -q tests
 
