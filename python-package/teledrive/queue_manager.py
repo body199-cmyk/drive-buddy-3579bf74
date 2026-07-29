@@ -96,10 +96,15 @@ class QueueManager:
         return self._status
 
     def apply_concurrency(self, workers: int) -> int:
+        """Clamp to 1..HARD_CONCURRENCY_CAP and forward the clamped value."""
+        from .config import HARD_CONCURRENCY_CAP
+
+        clamped = max(1, min(int(workers), HARD_CONCURRENCY_CAP))
         manager = getattr(self._require_ctx(), "transfer_manager", None)
         if manager is not None and hasattr(manager, "set_workers"):
-            manager.set_workers(workers)
-        return workers
+            manager.set_workers(clamped)
+        return clamped
+
 
     def running(self) -> bool:
         return self._future is not None and not self._future.done()
