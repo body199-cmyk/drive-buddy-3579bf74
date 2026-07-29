@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 from teledrive import checkpoint_manager, database as db
-from teledrive.storage_manager import TEMP_DIR
 from teledrive.errors import CheckpointError, VerificationError
 from teledrive.models import MediaItem
+from teledrive import storage_manager
 from teledrive.queue_manager import QUEUE
 from teledrive.transfer_manager import TransferManager
 
@@ -52,7 +52,7 @@ def _run(mgr: TransferManager) -> None:
 
 
 def _temp_exists(item_id: str) -> bool:
-    return (TEMP_DIR / item_id).exists()
+    return (storage_manager.temp_root() / item_id).exists()
 
 
 def _events(item_id: str, kind: str) -> list[dict]:
@@ -190,7 +190,7 @@ def test_trashed_remote_file_fails_verification():
 
 
 def _write_temp() -> Path:
-    p = TEMP_DIR / "probe" / "a.bin"
+    p = storage_manager.temp_root() / "probe" / "a.bin"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b"x" * SIZE)
     return p
