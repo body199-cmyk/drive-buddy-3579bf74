@@ -1,0 +1,13 @@
+.env
+*.session
+*.session-journal
+client_secret*.json
+token*.json
+data/
+logs/
+temp/
+checkpoints/
+*.db
+__pycache__/
+*.pyc
+.pytest_cache/

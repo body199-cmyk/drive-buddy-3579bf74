@@ -1,0 +1,131 @@
+"""Atomic checkpoint export + reconcile with Drive.
+
+Local SQLite is runtime state. Durable state is a JSON snapshot uploaded to
+Drive folder DRIVE_APPDATA_FOLDER after every completed transfer.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Optional
+
+from . import database as db
+from .config import CHECKPOINTS_DIR, DRIVE_APPDATA_FOLDER
+from .logging_config import get_logger
+from .models import MediaItem
+from .utils import atomic_write_bytes, now_iso
+
+_log = get_logger("teledrive.checkpoint")
+
+CHECKPOINT_PREFIX = "teledrive_checkpoint_"
+
+
+def _snapshot_items() -> list[dict[str, Any]]:
+    return [i.to_dict() for i in db.list_items(limit=10_000)]
+
+
+def make_snapshot() -> dict[str, Any]:
+    return {
+        "generated": now_iso(),
+        "counts": db.counts_by_state(),
+        "items": _snapshot_items(),
+    }
+
+
+def persist_local() -> Path:
+    CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+    snap = make_snapshot()
+    path = CHECKPOINTS_DIR / f"{CHECKPOINT_PREFIX}{snap['generated'].replace(':', '-')}.json"
+    atomic_write_bytes(path, json.dumps(snap, ensure_ascii=False, indent=2).encode("utf-8"))
+    # prune older than 10
+    files = sorted(CHECKPOINTS_DIR.glob(f"{CHECKPOINT_PREFIX}*.json"))
+    for old in files[:-10]:
+        try:
+            old.unlink()
+        except Exception:
+            pass
+    return path
+
+
+def persist(drive=None) -> Optional[str]:
+    """Write local checkpoint AND upload to Drive appdata folder if drive provided."""
+    path = persist_local()
+    if drive is None:
+        return None
+    try:
+        folder_id = drive.ensure_folder(DRIVE_APPDATA_FOLDER)
+        data = path.read_bytes()
+        file_id = drive.upload_bytes(path.name, data, folder_id)
+        return file_id
+    except Exception as e:
+        _log.warning("checkpoint drive upload failed: %s", e)
+        return None
+
+
+def latest_local() -> Optional[Path]:
+    if not CHECKPOINTS_DIR.exists():
+        return None
+    files = sorted(CHECKPOINTS_DIR.glob(f"{CHECKPOINT_PREFIX}*.json"))
+    return files[-1] if files else None
+
+
+def restore_from_drive(drive) -> Optional[dict[str, Any]]:
+    """Pull newest checkpoint from Drive, return parsed dict."""
+    try:
+        folder_id = drive.find_folder(DRIVE_APPDATA_FOLDER)
+        if not folder_id:
+            return None
+        children = drive.list_children(folder_id)
+        candidates = [c for c in children if c["name"].startswith(CHECKPOINT_PREFIX)]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: x.get("modifiedTime", ""), reverse=True)
+        data = drive.download_bytes(candidates[0]["id"])
+        return json.loads(data.decode("utf-8"))
+    except Exception as e:
+        _log.warning("checkpoint restore failed: %s", e)
+        return None
+
+
+def apply_snapshot(snap: dict[str, Any]) -> int:
+    """Import checkpoint items into SQLite (if not present)."""
+    n = 0
+    for row in snap.get("items", []):
+        try:
+            item = MediaItem(**{k: v for k, v in row.items() if k in MediaItem.__dataclass_fields__})
+            if db.get_item(item.id):
+                continue
+            db.upsert_item(item)
+            n += 1
+        except Exception:
+            continue
+    return n
+
+
+def reconcile_with_drive(drive) -> dict[str, int]:
+    """For every Downloading/Uploading item, query Drive; if found+size match -> Uploaded.
+       Else -> NeedsRetry. Returns counts."""
+    from .state_machine import can_transition
+    result = {"marked_uploaded": 0, "marked_needsretry": 0, "checked": 0}
+    for item in db.items_in_states(["Downloading", "Uploading", "Downloaded"]):
+        result["checked"] += 1
+        try:
+            existing = drive.find_by_source_key(item.source_key)
+            if existing and int(existing.get("size") or 0) == item.size_bytes and item.size_bytes > 0:
+                if can_transition(item.state, "Uploaded"):
+                    item.state = "Uploaded"
+                    item.drive_file_id = existing["id"]
+                    item.upload_pct = 100.0
+                    db.upsert_item(item)
+                    db.add_event(item.id, "reconcile", "found_on_drive")
+                    result["marked_uploaded"] += 1
+                    continue
+            if can_transition(item.state, "NeedsRetry"):
+                item.state = "NeedsRetry"
+                db.upsert_item(item)
+                db.add_event(item.id, "reconcile", "not_found_on_drive")
+                result["marked_needsretry"] += 1
+        except Exception as e:
+            _log.warning("reconcile failed for %s: %s", item.id, e)
+    return result
