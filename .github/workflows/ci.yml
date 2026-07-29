@@ -13,7 +13,9 @@ jobs:
     env:
       # CI runners have no writable /content (Colab's root). Pin the runtime
       # root explicitly so bootstrap never tries to create a directory at /.
-      TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
+      TELEDRIVE_ROOT: ${{ runner.temp }}/teledrive_runtime
+      TELEDRIVE_LANG: en
+
     defaults:
       run:
         working-directory: python-package
