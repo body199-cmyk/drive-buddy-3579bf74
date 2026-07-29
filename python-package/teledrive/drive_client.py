@@ -116,10 +116,14 @@ class DriveService:
         body = {
             "name": drive_name,
             "parents": [parent_id],
-            "appProperties": {"source_key": source_key},
+            "appProperties": {
+                "source_key": source_key,
+                "teledrive_source_key": source_key,
+            },
         }
         request = self.service.files().create(
-            body=body, media_body=media, fields="id,name,size,appProperties"
+            body=body, media_body=media,
+            fields="id,name,size,parents,appProperties,trashed"
         )
         response = None
         total = os.path.getsize(file_path) or 1
