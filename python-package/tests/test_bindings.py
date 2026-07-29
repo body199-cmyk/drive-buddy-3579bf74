@@ -134,3 +134,15 @@ def test_ui_module_wires_exactly_the_ready_actions():
     declared = {s.action_id for s in action_registry.ACTION_SPECS}
     assert wired == declared, "every declared action must go through wire_if_ready"
     assert "binder.wire(" not in text.replace("binder.wire_if_ready(", "")
+
+
+def test_wire_rejects_an_unresolvable_service_path(ctx, monkeypatch):
+    """A ready spec whose service vanished must fail the build, not render."""
+    from teledrive.errors import ServicePathError
+
+    spec = next(iter(action_registry.ready_specs()))
+    service_name = spec.service_path.partition(".")[0]
+    monkeypatch.setattr(ctx, service_name, None, raising=False)
+    binder = UIBinder(ctx, ctx.handlers)
+    with pytest.raises(ServicePathError):
+        binder.wire(FakeComponent(), spec.action_id)
