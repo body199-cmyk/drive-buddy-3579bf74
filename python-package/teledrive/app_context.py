@@ -42,8 +42,8 @@ from .ui_binder import UIBinder
 _log = get_logger("teledrive.context")
 
 
-class ServicePathError(RuntimeError):
-    """Raised when a service_path cannot be resolved to a callable."""
+from .errors import ServicePathError  # single canonical class (was a duplicate here)
+
 
 
 @dataclass
