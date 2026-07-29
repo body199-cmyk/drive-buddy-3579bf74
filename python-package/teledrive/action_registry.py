@@ -4,8 +4,15 @@ Constitution Section 4: a control may only be rendered when its spec exists,
 its handler is named, its service_path resolves on the live context, and a test
 proves the handler calls that exact service.
 
-`implemented=True` is set only in the commit that adds handler + service method.
-`tested=True` is set only in the commit that adds the passing binding test.
+Constitution 4A.1 rules 2 and 3:
+
+* ``implemented=True`` is set only in the commit that adds handler + service.
+* ``tested=True`` is set only in the commit that adds the passing test, and it
+  is **illegal without** ``proof_test`` naming that test (``__post_init__``
+  raises ``ValueError``).
+
+There is deliberately no ``ready=`` shortcut: a helper that flips both flags at
+once turns the dead-control gate off, which is exactly the v2 failure mode.
 """
 from __future__ import annotations
 
@@ -20,120 +27,426 @@ class ActionSpec:
     service_path: str
     label_key: str
     section: str
-    implemented: bool = False
-    tested: bool = False
+    implemented: bool
+    tested: bool
+    proof_test: str = ""
+
+    def __post_init__(self) -> None:
+        if self.tested and not self.proof_test:
+            raise ValueError(
+                f"{self.action_id}: tested=True requires proof_test "
+                "('tests/<file>.py::<function>')"
+            )
+        if self.tested and not self.implemented:
+            raise ValueError(f"{self.action_id}: tested=True requires implemented=True")
 
     @property
     def ready(self) -> bool:
         return self.implemented and self.tested
 
 
-def _spec(action_id, handler_name, service_path, label_key, section, ready=True):
-    return ActionSpec(
-        action_id=action_id,
-        handler_name=handler_name,
-        service_path=service_path,
-        label_key=label_key,
-        section=section,
-        implemented=ready,
-        tested=ready,
-    )
-
-
 ACTION_SPECS: tuple[ActionSpec, ...] = (
     # ---- Connection Center: Telegram ----
-    _spec("telegram.set_credentials", "h_telegram_set_credentials",
-          "telegram_auth.set_credentials", "btn.connect_telegram", "connection"),
-    _spec("telegram.send_code", "h_telegram_send_code",
-          "telegram_auth.send_code", "btn.send_code", "connection"),
-    _spec("telegram.resend_code", "h_telegram_resend_code",
-          "telegram_auth.resend_code", "btn.resend_code", "connection"),
-    _spec("telegram.verify_code", "h_telegram_verify_code",
-          "telegram_auth.verify_code", "btn.verify", "connection"),
-    _spec("telegram.verify_password", "h_telegram_verify_password",
-          "telegram_auth.verify_password", "btn.verify_password", "connection"),
-    _spec("telegram.logout", "h_telegram_logout",
-          "telegram_auth.logout", "btn.logout", "connection"),
-    _spec("telegram.status", "h_telegram_status",
-          "telegram_auth.status", "dash.telegram_status", "connection"),
+    ActionSpec(
+        action_id="telegram.set_credentials",
+        handler_name="h_telegram_set_credentials",
+        service_path="telegram_auth.set_credentials",
+        label_key="btn.connect_telegram",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_happy_path_reuses_the_exact_phone_code_hash",
+    ),
+    ActionSpec(
+        action_id="telegram.send_code",
+        handler_name="h_telegram_send_code",
+        service_path="telegram_auth.send_code",
+        label_key="btn.send_code",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_duplicate_send_code_click_is_idempotent",
+    ),
+    ActionSpec(
+        action_id="telegram.resend_code",
+        handler_name="h_telegram_resend_code",
+        service_path="telegram_auth.resend_code",
+        label_key="btn.resend_code",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_resend_is_rate_limited",
+    ),
+    ActionSpec(
+        action_id="telegram.verify_code",
+        handler_name="h_telegram_verify_code",
+        service_path="telegram_auth.verify_code",
+        label_key="btn.verify",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_wrong_code_keeps_the_hash_and_does_not_resend",
+    ),
+    ActionSpec(
+        action_id="telegram.verify_password",
+        handler_name="h_telegram_verify_password",
+        service_path="telegram_auth.verify_password",
+        label_key="btn.verify_password",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_two_factor_uses_the_same_client_without_a_new_code",
+    ),
+    ActionSpec(
+        action_id="telegram.logout",
+        handler_name="h_telegram_logout",
+        service_path="telegram_auth.logout",
+        label_key="btn.logout",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_logout_clears_all_secret_state",
+    ),
+    ActionSpec(
+        action_id="telegram.status",
+        handler_name="h_telegram_status",
+        service_path="telegram_auth.status",
+        label_key="dash.telegram_status",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_telegram_auth.py::test_status_never_exposes_the_full_phone",
+    ),
 
     # ---- Connection Center: Google Drive (native Colab auth only) ----
-    _spec("drive.connect", "h_drive_connect",
-          "drive_auth.connect", "btn.link_drive", "connection"),
-    _spec("drive.reconnect", "h_drive_reconnect",
-          "drive_auth.reconnect", "btn.drive_reconnect", "connection"),
-    _spec("drive.status", "h_drive_status",
-          "drive_auth.status", "dash.drive_status", "connection"),
-    _spec("drive.list_folders", "h_drive_list_folders",
-          "drive_folders.list_children", "btn.drive_list_folders", "connection"),
-    _spec("drive.create_folder", "h_drive_create_folder",
-          "drive_folders.create", "btn.drive_create_folder", "connection"),
-    _spec("drive.select_folder", "h_drive_select_folder",
-          "drive_folders.select", "btn.drive_select_folder", "connection"),
-    _spec("drive.refresh_quota", "h_drive_refresh_quota",
-          "drive_quota.refresh", "btn.refresh_quota", "connection"),
+    # No real-Drive test exists yet (audit P0-6): status() returns cached state
+    # with no about().get() call, so none of these may claim tested=True.
+    ActionSpec(
+        action_id="drive.connect",
+        handler_name="h_drive_connect",
+        service_path="drive_auth.connect",
+        label_key="btn.link_drive",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.reconnect",
+        handler_name="h_drive_reconnect",
+        service_path="drive_auth.reconnect",
+        label_key="btn.drive_reconnect",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.status",
+        handler_name="h_drive_status",
+        service_path="drive_auth.status",
+        label_key="dash.drive_status",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.list_folders",
+        handler_name="h_drive_list_folders",
+        service_path="drive_folders.list_children",
+        label_key="btn.drive_list_folders",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.create_folder",
+        handler_name="h_drive_create_folder",
+        service_path="drive_folders.create",
+        label_key="btn.drive_create_folder",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.select_folder",
+        handler_name="h_drive_select_folder",
+        service_path="drive_folders.select",
+        label_key="btn.drive_select_folder",
+        section="connection",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="drive.refresh_quota",
+        handler_name="h_drive_refresh_quota",
+        service_path="drive_quota.refresh",
+        label_key="btn.refresh_quota",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_drive_quota.py::test_warn_90",
+    ),
 
     # ---- Analyze ----
-    _spec("analyze.run", "h_analyze_run", "scanner.analyze", "btn.analyze", "analyze"),
-    _spec("analyze.apply_filters", "h_analyze_apply_filters",
-          "selection.apply_filters", "btn.apply_filters", "analyze"),
-    _spec("analyze.select_all", "h_analyze_select_all",
-          "selection.select_all_visible", "btn.select_all", "analyze"),
-    _spec("analyze.clear_selection", "h_analyze_clear_selection",
-          "selection.clear", "btn.clear_selection", "analyze"),
-    _spec("analyze.enqueue_selected", "h_analyze_enqueue_selected",
-          "selection.enqueue_selected", "btn.enqueue_selected", "analyze"),
+    ActionSpec(
+        action_id="analyze.run",
+        handler_name="h_analyze_run",
+        service_path="scanner.analyze",
+        label_key="btn.analyze",
+        section="analyze",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="analyze.apply_filters",
+        handler_name="h_analyze_apply_filters",
+        service_path="selection.apply_filters",
+        label_key="btn.apply_filters",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_filters.py::test_by_type",
+    ),
+    ActionSpec(
+        action_id="analyze.select_all",
+        handler_name="h_analyze_select_all",
+        service_path="selection.select_all_visible",
+        label_key="btn.select_all",
+        section="analyze",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="analyze.clear_selection",
+        handler_name="h_analyze_clear_selection",
+        service_path="selection.clear",
+        label_key="btn.clear_selection",
+        section="analyze",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="analyze.enqueue_selected",
+        handler_name="h_analyze_enqueue_selected",
+        service_path="selection.enqueue_selected",
+        label_key="btn.enqueue_selected",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_queue.py::test_enqueue_and_deduplicate",
+    ),
 
     # ---- Transfers ----
-    _spec("queue.start_selected", "h_queue_start_selected",
-          "queue_manager.start_selected", "btn.start", "transfers"),
-    _spec("queue.pause", "h_queue_pause", "queue_manager.pause", "btn.pause", "transfers"),
-    _spec("queue.resume", "h_queue_resume", "queue_manager.resume", "btn.resume", "transfers"),
-    _spec("queue.stop", "h_queue_stop", "queue_manager.stop", "btn.stop", "transfers"),
-    _spec("queue.retry_failed", "h_queue_retry_failed",
-          "queue_manager.retry_failed", "btn.retry_failed", "transfers"),
-    _spec("queue.clear_completed", "h_queue_clear_completed",
-          "queue_manager.clear_completed_metadata", "btn.clear_completed", "transfers"),
-    _spec("queue.refresh", "h_queue_refresh",
-          "queue_manager.snapshot", "btn.refresh", "transfers"),
-    _spec("queue.pause_item", "h_queue_pause_item",
-          "queue_manager.pause_item", "btn.pause_item", "transfers"),
-    _spec("queue.resume_item", "h_queue_resume_item",
-          "queue_manager.resume_item", "btn.resume_item", "transfers"),
-    _spec("queue.stop_item", "h_queue_stop_item",
-          "queue_manager.stop_item", "btn.stop_item", "transfers"),
-    _spec("queue.retry_item", "h_queue_retry_item",
-          "queue_manager.retry_item", "btn.retry_item", "transfers"),
+    # transfer_manager has no test at all today (audit P0-2), so every control
+    # that drives it is tested=False until PHASE B lands.
+    ActionSpec(
+        action_id="queue.start_selected",
+        handler_name="h_queue_start_selected",
+        service_path="queue_manager.start_selected",
+        label_key="btn.start",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.pause",
+        handler_name="h_queue_pause",
+        service_path="queue_manager.pause",
+        label_key="btn.pause",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.resume",
+        handler_name="h_queue_resume",
+        service_path="queue_manager.resume",
+        label_key="btn.resume",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.stop",
+        handler_name="h_queue_stop",
+        service_path="queue_manager.stop",
+        label_key="btn.stop",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.retry_failed",
+        handler_name="h_queue_retry_failed",
+        service_path="queue_manager.retry_failed",
+        label_key="btn.retry_failed",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.clear_completed",
+        handler_name="h_queue_clear_completed",
+        service_path="queue_manager.clear_completed_metadata",
+        label_key="btn.clear_completed",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.refresh",
+        handler_name="h_queue_refresh",
+        service_path="queue_manager.snapshot",
+        label_key="btn.refresh",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.pause_item",
+        handler_name="h_queue_pause_item",
+        service_path="queue_manager.pause_item",
+        label_key="btn.pause_item",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.resume_item",
+        handler_name="h_queue_resume_item",
+        service_path="queue_manager.resume_item",
+        label_key="btn.resume_item",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.stop_item",
+        handler_name="h_queue_stop_item",
+        service_path="queue_manager.stop_item",
+        label_key="btn.stop_item",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="queue.retry_item",
+        handler_name="h_queue_retry_item",
+        service_path="queue_manager.retry_item",
+        label_key="btn.retry_item",
+        section="transfers",
+        implemented=True,
+        tested=False,
+    ),
 
     # ---- Dashboard ----
-    _spec("dashboard.refresh", "h_dashboard_refresh",
-          "stats.dashboard", "btn.refresh", "dashboard"),
+    ActionSpec(
+        action_id="dashboard.refresh",
+        handler_name="h_dashboard_refresh",
+        service_path="stats.dashboard",
+        label_key="btn.refresh",
+        section="dashboard",
+        implemented=True,
+        tested=False,
+    ),
 
     # ---- Logs ----
-    _spec("logs.refresh", "h_logs_refresh", "log_service.tail", "btn.refresh", "logs"),
-    _spec("logs.search", "h_logs_search", "log_service.search", "btn.search_logs", "logs"),
-    _spec("logs.download", "h_logs_download",
-          "log_service.export_file", "btn.download_logs", "logs"),
+    ActionSpec(
+        action_id="logs.refresh",
+        handler_name="h_logs_refresh",
+        service_path="log_service.tail",
+        label_key="btn.refresh",
+        section="logs",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="logs.search",
+        handler_name="h_logs_search",
+        service_path="log_service.search",
+        label_key="btn.search_logs",
+        section="logs",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="logs.download",
+        handler_name="h_logs_download",
+        service_path="log_service.export_file",
+        label_key="btn.download_logs",
+        section="logs",
+        implemented=True,
+        tested=False,
+    ),
 
     # ---- Settings ----
-    _spec("settings.set_concurrency", "h_settings_set_concurrency",
-          "settings.set_concurrency", "form.concurrency", "settings"),
-    _spec("settings.toggle_language", "h_settings_toggle_language",
-          "preferences.toggle_language", "btn.language", "settings"),
-    _spec("settings.set_theme", "h_settings_set_theme",
-          "preferences.set_theme", "btn.theme", "settings"),
+    ActionSpec(
+        action_id="settings.set_concurrency",
+        handler_name="h_settings_set_concurrency",
+        service_path="settings.set_concurrency",
+        label_key="form.concurrency",
+        section="settings",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="settings.toggle_language",
+        handler_name="h_settings_toggle_language",
+        service_path="preferences.toggle_language",
+        label_key="btn.language",
+        section="settings",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_i18n.py::test_toggle",
+    ),
+    ActionSpec(
+        action_id="settings.set_theme",
+        handler_name="h_settings_set_theme",
+        service_path="preferences.set_theme",
+        label_key="btn.theme",
+        section="settings",
+        implemented=True,
+        tested=False,
+    ),
 
     # ---- Colab code / export ----
-    _spec("export.build_zip", "h_export_build_zip",
-          "package_service.build_tested_archive", "btn.build_zip", "export"),
-    _spec("export.colab_cells", "h_export_colab_cells",
-          "colab_export.cells_text", "btn.colab_cells", "export"),
+    ActionSpec(
+        action_id="export.build_zip",
+        handler_name="h_export_build_zip",
+        service_path="package_service.build_tested_archive",
+        label_key="btn.build_zip",
+        section="export",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="export.colab_cells",
+        handler_name="h_export_colab_cells",
+        service_path="colab_export.cells_text",
+        label_key="btn.colab_cells",
+        section="export",
+        implemented=True,
+        tested=False,
+    ),
 
     # ---- Maintenance / recovery ----
-    _spec("recovery.restore", "h_recovery_restore",
-          "checkpoints.restore_and_reconcile", "btn.recover", "settings"),
-    _spec("maintenance.checkpoint", "h_maintenance_checkpoint",
-          "checkpoints.persist", "btn.checkpoint", "settings"),
+    ActionSpec(
+        action_id="recovery.restore",
+        handler_name="h_recovery_restore",
+        service_path="checkpoints.restore_and_reconcile",
+        label_key="btn.recover",
+        section="settings",
+        implemented=True,
+        tested=False,
+    ),
+    ActionSpec(
+        action_id="maintenance.checkpoint",
+        handler_name="h_maintenance_checkpoint",
+        service_path="checkpoints.persist",
+        label_key="btn.checkpoint",
+        section="settings",
+        implemented=True,
+        tested=False,
+    ),
 )
 
 
@@ -150,6 +463,10 @@ def all_specs() -> tuple[ActionSpec, ...]:
 
 def ready_specs() -> Iterator[ActionSpec]:
     return (s for s in ACTION_SPECS if s.ready)
+
+
+def unready_specs() -> Iterator[ActionSpec]:
+    return (s for s in ACTION_SPECS if not s.ready)
 
 
 def sections() -> tuple[str, ...]:
