@@ -4,24 +4,25 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M13-T03 |
-| العنوان | إصلاح `analyze.select_all` و`analyze.clear_selection` مع اختبارات binding حقيقية |
-| الحالة | VERIFIED COMPLETE |
+| TASK ID | M15-T02 |
+| العنوان | إصلاح استيراد حزمة TeleDrive في Colab عند تنزيل GitHub Artifact wrapper |
+| الحالة | VERIFIED COMPLETE — PR #10، CI أخضر (run 31261291379 pull_request + run 31261265446 push): Python ✓ + Frontend ✓ |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
-| Base SHA | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` |
-| الفرع | `arena/019fe024-drive-buddy-3579bf74` |
+| Base SHA | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
+| الفرع | `arena/019fe124-drive-buddy-3579bf74` (الفرع الجانبي الثابت لهذه الجلسة — لا يُنشأ فرع آخر) |
 | فتح بتاريخ (UTC) | 2026-08-08 |
-| النطاق | `python-package/teledrive/action_registry.py`, `python-package/tests/test_selection.py`, `docs/` |
-| خارج النطاق | كود المنتج في `handlers.py` و`services.py` وباقي الحزمة، `.github/workflows/ci.yml`, `docs/CONSTITUTION.md`, `docs/CONSTITUTION_V4.5_ARCHIVE.md`, `docs/PHASE_REPORTS/PHASE_10.md`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock` |
-| النتيجة | إثبات صحة التنفيذ الحالي في كود المنتج، إضافة 5 اختبارات إثبات حقيقية في `test_selection.py`، وترقية إجرائي التحديد إلى `READY` (`24/41` جاهزة في `launcher --check` و `306 passed` في pytest) |
-| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_16.md` + `python teledrive_launcher.py --check` = `24/41` + `306 passed in 8.66s` من البيئة المثبتة |
-| الخطوة التالية | M13-T04 — مجموعة صغيرة أخرى مثبتة الحاجة من الإجراءات المتبقية (`11 NOT_TESTED`) أو الانتقال إلى Colab الحقيقي (M15-T01) |
+| النطاق | `python-package/teledrive/notebook_cells.py`, `python-package/tests/test_restore_package.py`, `python-package/notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `python-package/teledrive/colab_cells.json`, `docs/RUNBOOK.md`, `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`, `docs/PHASE_REPORTS/PHASE_17.md` |
+| خارج النطاق | Telegram/Drive auth/UI/queue/transfer manager، `.github/workflows/**`، Releases، `requirements.lock`/`bun.lock`/`requirements.txt`، الدستور، `docs/PHASE_REPORTS/PHASE_M15_T01.md` (تقرير تاريخي لا يُمس)، أي تعديل Gemini خارج هذه القائمة |
+| النتيجة | Cell 1 تقبل الأرشيف الحقيقي والغلاف الرسمي (وحتى غلافًا مُعاد تسميته) عبر `resolve_package_zip()` — temp مختلف + نقل ذري + رفض traversal + تحقق بنية قبل الاعتماد؛ 16 اختبارًا جديدًا؛ `322 passed` محليًا |
+| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_17.md` + PR [#10](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10) + `pytest` = `322 passed` محليًا و CI أخضر بالوظيفتين |
+| الخطوة التالية | دمج PR #10 بيد المالك، ثم M15-T01 التشغيلي (المرحلة 10 — Colab حقيقي) لإثبات الغلاف ميدانيًا؛ أو M13-T04 |
 
 ## قاعدة الاستخدام
 
-- لا تعدّل flags أو تضف handlers/services/tests خارج نطاق إجرائي التحديد المحددين في M13-T03.
-- لا تعتبر أي إجراء من الـ17 غير الجاهزة جاهزًا بسبب وجود declaration أو generic binding test.
+- لا تعدّل Telegram أو Drive auth أو UI أو queue أو transfer manager.
+- لا تعِد تسمية الغلاف كحل؛ الاكتشاف بالمحتوى + الاستخراج عبر temp هو العقد المثبت.
+- لا تدّعِ `Colab-ready` — التفعيل على Colab حقيقي لم يُختبر بعد.
 - إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD` عند بدء جلسة لاحقة، فالملف متقادم ويجب إعادة التدقيق.
 - الحالة الصادقة للمشروع: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
 - الحالات المسموحة: `PLANNED`, `ACTIVE`, `VERIFIED COMPLETE`, `PARTIALLY COMPLETE`, `FAILED`, `BLOCKED`, `CANCELLED`.
