@@ -16,6 +16,9 @@
 - `docs/RUNBOOK.md`: تعليمات تنزيل واضحة — الغلاف يُرفع كما هو، ممنوع إعادة تسميته، ومصدره Actions artifact.
 - `docs/KNOWN_ISSUES.md`: البند #16 (فخ الغلاف) ✅. `docs/TODO.md`, `docs/ACTIVE_TASK.md`, `docs/AI_HANDOFF.md`, `docs/PHASE_REPORTS/PHASE_17.md`: تحديثات الجلسة.
 
+### Delivery
+- PR [#10](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10) → `main` · fix commit `eb4f5e9` · CI أخضر: run `31261291379` (pull_request: Python ✓ 52s · Frontend ✓ 12s) وrun `31261265446` (push) · الدمج بيد المالك.
+
 ### Not changed — عمدًا
 - لا تعديل على Telegram أو Drive auth أو UI أو queue أو transfer manager، ولا على `.github/workflows`، ولا Releases، ولا `requirements.lock`/`bun.lock`. تقرير M15-T01 (`docs/PHASE_REPORTS/PHASE_M15_T01.md`) لم يُمسّ.
 - `bun run build` محليًا: BLOCKED بيئيًا (خطأ شهادة TLS عند تنزيل tarballs في هذه البيئة؛ `bun run lint` نجح بـ 0 أخطاء/6 تحذيرات) — الإثبات على CI الفعلي. الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
