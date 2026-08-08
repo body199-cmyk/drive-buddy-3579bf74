@@ -2,7 +2,7 @@
 
 **TASK ID:** `M15-T02`
 **العنوان:** إصلاح استيراد حزمة TeleDrive في Colab عند تنزيل GitHub Artifact wrapper
-**الحالة:** `ACTIVE` — بوابات Python المحلية خضراء كلها؛ ينتظر CI الفعلي على الـPR ثم يرتقي إلى `VERIFIED COMPLETE`
+**الحالة:** `VERIFIED COMPLETE` — بوابات محلية خضراء + CI الـPR أخضر (وظيفتان)، بانتظار دمج المالك فقط
 **التاريخ (UTC):** 2026-08-08
 **المستودع:** `https://github.com/body199-cmyk/drive-buddy-3579bf74.git`
 
@@ -77,11 +77,18 @@ CI يبني `teledrive_v4.5.zip` صحيحًا، لكن تنزيل `actions/uploa
 - `bun run build` محليًا لم يكتمل لقيد الشهادة أعلاه؛ يُنتظر CI.
 - تنزيل الـartifact الثنائي عبر API ما زال محجوبًا شبكيًا في هذه البيئة (كما في M15-T01) — الاكتفاء بالبناء المحلي المطابق لخطوة CI حرفيًا.
 
-## 6. التسليم (Git/PR) — تُحدَّث قيمه النهائية بعد الدفع
+## 6. التسليم (Git/PR)
 
-- الفرع: `arena/019fe124-drive-buddy-3579bf74` — **لا فرع آخر أُنشئ أو دُفع** (قيود الجلسة؛ وهو نمط المشروع نفسه: PR #9 جاء من `arena/019fe024-...`).
-- Commits تبدأ بـ `M15-T02:` — لا push إلى `main`، لا force-push/rebase/amend.
-- PR URL / CI run: **يُسجَّلان فور إنشائهما.**
+| الحقل | القيمة |
+|---|---|
+| Fix commit | `eb4f5e9fcce5660f6219fc280bc39b33f1e917c4` — `M15-T02: make Cell 1 auto-unwrap the official teledrive-package.zip artifact wrapper` (12 ملفًا، 721+/104-) |
+| Docs/record commit | commit التسجيل هذا — `M15-T02: record PR #10 delivery and green CI runs` |
+| Push | SUCCESS — `origin/arena/019fe124-drive-buddy-3579bf74` (فرع جديد؛ لا force-push، لا rebase) |
+| PR | [#10](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10) → `main` |
+| CI (pull_request) | Run [`31261291379`](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31261291379) — **success**: Python package (tests + Colab contract) ✓ 52s · Frontend build ✓ 12s |
+| CI (push) | Run [`31261265446`](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31261265446) — **success** (1m19s) |
+| ملاحظة bun المحلي | فشل `bun run build` المحلي كان بيئيًا قصرًا: وظيفة Frontend على CI نفّذت `bun install` + `bun run lint` + `bun run build` ونجحت |
+| خارج الالتزام عمدًا | `docs/PHASE_REPORTS/PHASE_M15_T01.md` (تقرير تاريخي غير مدفوع — لم يُعدَّل ولم يُحذف) |
 
 ## 7. الحالة الصادقة
 

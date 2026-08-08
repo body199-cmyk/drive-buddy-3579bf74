@@ -6,7 +6,7 @@
 |---|---|
 | TASK ID | M15-T02 |
 | العنوان | إصلاح استيراد حزمة TeleDrive في Colab عند تنزيل GitHub Artifact wrapper |
-| الحالة | ACTIVE — بوابات Python المحلية خضراء؛ بانتظار CI الفعلي على الـPR |
+| الحالة | VERIFIED COMPLETE — PR #10، CI أخضر (run 31261291379 pull_request + run 31261265446 push): Python ✓ + Frontend ✓ |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
 | Base SHA | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
@@ -15,8 +15,8 @@
 | النطاق | `python-package/teledrive/notebook_cells.py`, `python-package/tests/test_restore_package.py`, `python-package/notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `python-package/teledrive/colab_cells.json`, `docs/RUNBOOK.md`, `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`, `docs/PHASE_REPORTS/PHASE_17.md` |
 | خارج النطاق | Telegram/Drive auth/UI/queue/transfer manager، `.github/workflows/**`، Releases، `requirements.lock`/`bun.lock`/`requirements.txt`، الدستور، `docs/PHASE_REPORTS/PHASE_M15_T01.md` (تقرير تاريخي لا يُمس)، أي تعديل Gemini خارج هذه القائمة |
 | النتيجة | Cell 1 تقبل الأرشيف الحقيقي والغلاف الرسمي (وحتى غلافًا مُعاد تسميته) عبر `resolve_package_zip()` — temp مختلف + نقل ذري + رفض traversal + تحقق بنية قبل الاعتماد؛ 16 اختبارًا جديدًا؛ `322 passed` محليًا |
-| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_17.md` + `python -m pytest -q tests` = `322 passed in 9.08s` + `notebook_cells --check` in sync + `cmp` IDENTICAL |
-| الخطوة التالية | M15-T01 (المرحلة 10 — Colab حقيقي بيد المالك) بعد إثبات الغلاف على Colab فعلي؛ أو M13-T04 |
+| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_17.md` + PR [#10](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10) + `pytest` = `322 passed` محليًا و CI أخضر بالوظيفتين |
+| الخطوة التالية | دمج PR #10 بيد المالك، ثم M15-T01 التشغيلي (المرحلة 10 — Colab حقيقي) لإثبات الغلاف ميدانيًا؛ أو M13-T04 |
 
 ## قاعدة الاستخدام
 

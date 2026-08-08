@@ -18,7 +18,7 @@
 | HEAD بعد العمل | رأس commit M15-T02؛ يُستخرج بـ `git log -1 --format=%H` بعد commit |
 | Base SHA المعتمد | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
 | سبب اختيار baseline | قاعدة تشخيص M15-T01 نفسها، وآخر CI أخضر عليها Run `31245258992` |
-| الحالة النهائية | `ACTIVE` حتى CI الـPR — إصلاح Cell 1 + 16 اختبار wrapper + إعادة توليد النوتبوكين + تحديث RUNBOOK؛ `322 passed` محليًا |
+| الحالة النهائية | `VERIFIED COMPLETE` — PR #10 مع CI أخضر بالوظيفتين (run `31261291379` pull_request و`31261265446` push)؛ الدمج بيد المالك |
 | آخر SHA أخضر | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` — Run `31245258992` (`success`) |
 | نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` |
 
@@ -48,7 +48,7 @@
 | `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `archive: teledrive_v4.5.zip` |
 | `bun run lint` (الجذر) | PASS | exit 0 — 0 errors / 6 warnings |
 | `bun install --frozen-lockfile` + `bun run build` (الجذر) | BLOCKED بيئيًا | `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR` على tarballs الحزم في بيئة الـsandbox؛ الإثبات على CI الـPR |
-| GitHub Actions CI للـPR | ينتظر | يُسجَّل فور تشغيله |
+| GitHub Actions CI للـPR | PASS | Run `31261291379` (pull_request): Python package ✓ 52s · Frontend build ✓ 12s؛ وRun `31261265446` (push) success |
 
 ## ما لم يُثبَت
 
@@ -68,13 +68,13 @@
 ## Git / التسليم
 
 ```text
-Fix commit: ينتظر — يبدأ بـ "M15-T02:" على arena/019fe124-drive-buddy-3579bf74
-Push: ينتظر
-Pull Request: ينتظر — إلى main
+Fix commit: SUCCESS — eb4f5e9fcce5660f6219fc280bc39b33f1e917c4 (M15-T02: make Cell 1 auto-unwrap …) + record commit لهذا التوثيق
+Push: SUCCESS — origin/arena/019fe124-drive-buddy-3579bf74
+Pull Request: CREATED — #10
 Branch: arena/019fe124-drive-buddy-3579bf74
 Base SHA: 1f60a37d91abeeb3cba5a0279fcdcf78f49d8264
-PR URL: يُسجَّل فور الإنشاء
-Checks: ينتظر
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10
+Checks: PASS — GitHub Actions run 31261291379 (pull_request) و31261265446 (push)
 ```
 
 ---
