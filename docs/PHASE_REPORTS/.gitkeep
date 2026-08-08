@@ -1,0 +1,3 @@
+# PHASE_REPORTS — تقارير المراحل غير القابلة للتعديل بعد الدفع (Constitution §22)
+# النسخ الأصلية الكاملة موجودة في python-package/docs/PHASE_REPORTS/ — هذا المجلد هو البيت القانوني بعد迁移
+# تقرير PHASE_9 موجود في python-package/docs/PHASE_REPORTS/PHASE_9.md وسيتم نسخه هنا عند اكتمال migration
