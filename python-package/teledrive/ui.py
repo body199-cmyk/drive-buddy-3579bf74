@@ -64,10 +64,16 @@ def build(ctx: ApplicationContext | None = None) -> Any:
                 with gr.Row():
                     send_code_btn = binder.button(gr, "telegram.send_code")
                     resend_code_btn = binder.button(gr, "telegram.resend_code")
-                code = gr.Textbox(label=t("form.code"))
-                verify_btn = binder.button(gr, "telegram.verify_code")
-                password = gr.Textbox(label=t("form.password"), type="password")
-                verify_password_btn = binder.button(gr, "telegram.verify_password")
+                # OTP panel — hidden until the state machine really reports
+                # CODE_REQUESTED (handlers._telegram_panels drives visibility).
+                with gr.Column(visible=False) as code_panel:
+                    code = gr.Textbox(label=t("form.code"))
+                    verify_btn = binder.button(gr, "telegram.verify_code")
+                # 2FA panel — hidden until Telegram itself answers
+                # SessionPasswordNeededError -> PASSWORD_REQUIRED.
+                with gr.Column(visible=False) as password_panel:
+                    password = gr.Textbox(label=t("form.password"), type="password")
+                    verify_password_btn = binder.button(gr, "telegram.verify_password")
                 with gr.Row():
                     telegram_logout_btn = binder.button(gr, "telegram.logout")
                     telegram_status_btn = binder.button(gr, "telegram.status")
@@ -176,7 +182,7 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         # wire_if_ready attaches ready actions and skips the ones this repo does
         # not yet prove with a test; those controls were already rendered hidden
         # and disabled by binder.button(), so nothing dead is reachable.
-        telegram_outputs = [telegram_detail, telegram_chip]
+        telegram_outputs = [telegram_detail, telegram_chip, code_panel, password_panel]
         drive_outputs = [drive_detail, drive_chip]
         analyze_outputs = [analyze_message, candidates_table]
         queue_outputs = [queue_status, queue_table]
