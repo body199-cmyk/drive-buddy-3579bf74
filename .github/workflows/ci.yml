@@ -10,10 +10,14 @@ jobs:
   python:
     name: Python package (tests + Colab contract)
     runs-on: ubuntu-latest
+
+    # CI runners have no writable /content (Colab's root). Pin the runtime root
+    # explicitly so bootstrap never tries to create a directory at /.
+    # NOTE: the `runner` context is NOT available in job-level env; only
+    # github/needs/strategy/matrix/vars/secrets/inputs are. Using it here made
+    # the whole workflow invalid and every run failed at startup in 0s.
     env:
-      # CI runners have no writable /content (Colab's root). Pin the runtime
-      # root explicitly so bootstrap never tries to create a directory at /.
-      TELEDRIVE_ROOT: ${{ runner.temp }}/teledrive_runtime
+      TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
       TELEDRIVE_LANG: en
 
     defaults:
@@ -42,7 +46,6 @@ jobs:
           python -c "from teledrive.config import ROOT, DB_PATH; print(ROOT); print(DB_PATH)"
           python -c "from teledrive.config import ROOT; assert not str(ROOT).startswith('/content'), ROOT"
 
-
       - name: Run test suite
         run: python -m pytest -q tests
 
@@ -56,12 +59,12 @@ jobs:
         run: cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb
 
       - name: Build the distributable archive
-        run: python -m teledrive.package_service --build --output teledrive_v3.1.zip
+        run: python -m teledrive.package_service --build --output teledrive_v4.5.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: teledrive-package
-          path: python-package/teledrive_v3.1.zip
+          path: python-package/teledrive_v4.5.zip
           if-no-files-found: error
 
   frontend:
@@ -73,4 +76,3 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run build
-
