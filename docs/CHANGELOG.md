@@ -2,6 +2,23 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M13-T02] — 2026-08-08 — تدقيق Action Registry وتصنيف الإجراءات غير الجاهزة
+
+### Verified
+- `all_specs()` من baseline `61df83e0912debede0e7e41b8bfde5e6bfabcee9` أعاد **41** إجراءً؛ `python teledrive_launcher.py --check` الحالي أعاد `22/41 ready actions resolve`.
+- تدقيق كل صف في `docs/PHASE_REPORTS/PHASE_15.md`: `22 READY`, `6 BLOCKED` بسبب native Colab/Drive live gate، و`13 NOT_TESTED`؛ لا `DEAD_CONTROL` أو `NOT_IMPLEMENTED` أو `NOT_WIRED`.
+- `PATH=/tmp/teledrive-m13-venv/bin:$PATH python -m pytest -q tests`: **299 passed in 8.22s**. الـvenv خارج Git ومبنية من `requirements.lock`.
+
+### Changed — docs only
+- `docs/PHASE_REPORTS/PHASE_15.md`: جدول 41 صفًا، الأدلة file/line/test، مخرجات الأوامر، التصنيف، والحدود الصادقة.
+- `docs/TODO.md`: إغلاق M13-T02 وإضافة M13-T03 كـDOC إصلاحي منفصل لأصغر مجموعة `analyze.select_all` + `analyze.clear_selection`.
+- `docs/KNOWN_ISSUES.md`: إغلاق #10 بعد إثبات التصنيف.
+- `docs/ACTIVE_TASK.md` و`docs/AI_HANDOFF.md`: تحديث baseline/result handoff والحالة والخطوة التالية.
+
+### Not changed — عمدًا
+- لا تغيير في `python-package/**`, `.github/workflows/ci.yml`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock`, أو الدستور.
+- لم تتغير `implemented` أو `tested`، ولم تُضف fake handlers/services/tests. الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M13-T01] — 2026-08-08 — توثيق أول تشغيل CI حقيقي وتحليل البوابات
 
 ### Verified
