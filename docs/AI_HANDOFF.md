@@ -47,7 +47,7 @@
 | `python -m teledrive.notebook_cells --check` من `python-package` (venv) | PASS | `notebooks are in sync`، exit 0 |
 | `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | متطابقان تمامًا، exit 0 |
 | `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `archive: teledrive_v4.5.zip`، exit 0 |
-| GitHub Actions CI للـ PR | PENDING | سيُفحص على GitHub Actions بعد فتح PR #9 |
+| GitHub Actions CI للـ PR | PASS | Run `31245120463` (`success` بوظيفتي `Python package (tests + Colab contract)` و`Frontend build`) |
 
 لإعادة إنتاج الاختبار المحلي المثبت:
 
@@ -79,12 +79,13 @@ PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
 ## Git / التسليم
 
 ```text
-Audit commit: PENDING (سيتم التسجيل بعد commit الفعلي)
-Push: PENDING
-Pull Request: PENDING
+Audit commit: SUCCESS — b63f4d9b82e75c5e41534aebb5fa10da185678a8 (audit & fix commit; this handoff update is a follow-up docs commit)
+Push: SUCCESS — origin/arena/019fe024-drive-buddy-3579bf74
+Pull Request: CREATED — #9
 Branch: arena/019fe024-drive-buddy-3579bf74
 Base SHA: 86005ff6ef5eb55ddfd639f306c85ff17acadc4c
-PR URL: (سيُضاف رابط PR بعد إنشائه)
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/9
+Checks: PASS — GitHub Actions Run 31245120463 (success)
 ```
 
 ---

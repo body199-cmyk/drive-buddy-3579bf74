@@ -138,7 +138,7 @@ TITLE: إصلاح analyze.select_all وanalyze.clear_selection مع اختبار
 STATUS: VERIFIED COMPLETE
 BASE SHA: 86005ff6ef5eb55ddfd639f306c85ff17acadc4c
 ACTUAL START SHA: 86005ff6ef5eb55ddfd639f306c85ff17acadc4c
-RESULT SHA: (سيُسجَّل بعد الـ commit الفعلي في التقرير النهائي)
+RESULT SHA: b63f4d9b82e75c5e41534aebb5fa10da185678a8 (audit & fix commit; this handoff update is a follow-up docs commit)
 BRANCH: arena/019fe024-drive-buddy-3579bf74
 FILES CREATED: python-package/tests/test_selection.py, docs/PHASE_REPORTS/PHASE_16.md
 FILES MODIFIED: python-package/teledrive/action_registry.py, docs/TODO.md, docs/KNOWN_ISSUES.md, docs/AI_HANDOFF.md, docs/ACTIVE_TASK.md, docs/CHANGELOG.md
@@ -147,6 +147,7 @@ CHANGES MADE: إضافة اختبارات إثبات حقيقية لإجرائي
 CONSTITUTION CONFLICTS: none
 UNRELATED CHANGES: none
 SECURITY CHECK: لا credentials أو tokens أو session strings
+GITHUB STATUS: branch pushed successfully; PR #9 is OPEN (GitHub Actions Run 31245120463 success)
 HONEST PROJECT STATUS: Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.
 NEXT SMALLEST STEP: مجموعة صغيرة أخرى مثبتة الحاجة من الإجراءات المتبقية (11 NOT_TESTED)، أو الانتقال إلى Colab الحقيقي (M15-T01).
 ```
