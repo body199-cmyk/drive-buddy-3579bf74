@@ -21,6 +21,9 @@
 - `docs/PHASE_REPORTS/PHASE_18.md`: تقرير المرحلة 18 المفصل بالأدلة ومخرجات بوابات التحقق.
 - `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`: تحديثات الجلسة وتوثيق إغلاق المشكلة #17 و المهمة M15-T03.
 
+### Delivery
+- PR [#11](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/11) → `main` · fix commit `3493c62` · CI أخضر: run `31264818794` (pull_request: Python ✓ 46s · Frontend ✓ 16s) وrun `31264504446` (push) · الدمج بيد المالك.
+
 ### Not changed — عمدًا
 - لم يتم تعديل `telegram_auth.py` أو `telegram_client.py` أو `notebook_cells.py` أو `action_registry.py` أو `TeleDrive.ipynb` أو `.github/workflows/ci.yml` أو الاعتماديات.
 - الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`

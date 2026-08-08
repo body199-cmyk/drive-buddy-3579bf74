@@ -84,6 +84,13 @@
 
 ## 6. التسليم (Git/PR)
 
-- Base SHA: `8fbd18595c3b6d32d20f1c3319d0b551dee4dfa6`
-- Branch: `arena/019fe1f1-drive-buddy-3579bf74`
-- Commit Message: `M15-T03: conditional OTP and 2FA login panels in Colab UI with flow contract tests`
+| الحقل | القيمة |
+|---|---|
+| Fix commit | `3493c629561809eb6d713cfcb38093b416a4d224` — `M15-T03: conditional OTP and 2FA login panels in Colab UI with flow contract tests` |
+| Push | SUCCESS — `origin/arena/019fe1f1-drive-buddy-3579bf74` |
+| PR | [#11](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/11) → `main` |
+| Base SHA | `8fbd18595c3b6d32d20f1c3319d0b551dee4dfa6` |
+| Result SHA | `3493c629561809eb6d713cfcb38093b416a4d224` |
+| CI (pull_request) | Run [`31264818794`](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31264818794) — **success**: Python package (tests + Colab contract) ✓ 46s · Frontend build ✓ 16s |
+| CI (push) | Run [`31264504446`](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31264504446) — **success** (1m9s) |
+| الدمج | بانتظار دمج المالك |

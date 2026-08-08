@@ -63,8 +63,20 @@
 
 ## الخطوة التالية الأصغر
 
+- دمج PR #11 بيد المالك على GitHub.
 - تشغيل Colab الحقيقي (المرحلة 10): تسجيل الدخول برقم هاتف وOTP و2FA (إن وُجد) ثم Google Drive ونقل ملف تجريبي (M15-T01 التشغيلي، بيد المالك).
 - أو `M13-T04` (الإجراءات `11 NOT_TESTED` المتبقية).
 
----
+## Git / التسليم
+
+```text
+Fix commit: SUCCESS — 3493c629561809eb6d713cfcb38093b416a4d224 (M15-T03: conditional OTP and 2FA login panels in Colab UI with flow contract tests)
+Push: SUCCESS — origin/arena/019fe1f1-drive-buddy-3579bf74
+Pull Request: CREATED — #11
+Branch: arena/019fe1f1-drive-buddy-3579bf74
+Base SHA: 8fbd18595c3b6d32d20f1c3319d0b551dee4dfa6
+Result SHA: 3493c629561809eb6d713cfcb38093b416a4d224
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/11
+Checks: PASS — GitHub Actions run 31264818794 (pull_request) و31264504446 (push)
+```
 **تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_18.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـ Base SHA والـ Result SHA المسجلين في تقرير التسليم قبل أي ادعاء.
