@@ -2,6 +2,32 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M12-T01] — 2026-08-08 — مصالحة الحوكمة v5.0
+
+### Blocked by platform (مجهَّز ومتحقق محليًا، الدفع مُنع)
+- `.github/workflows/ci.yml`: سطران لبناء ورفع `teledrive_v4.5.zip` بدل `teledrive_v3.1.zip` — مُستعدّان بأمر `sed` موثَّق في PHASE_12. دفعهما مُنع لأن GitHub App بلا صلاحية `workflows`؛ يُدفَعان بعد إعادة ربط GitHub أو يدويًا بيد المالك.
+- `.github/workflows/ci.yml` سطر 16: `TELEDRIVE_ROOT` من `${{ runner.temp }}` إلى `${{ github.workspace }}` — إصلاح إضافي مكتشف بعد أول دفعة: CI لا يبدأ منذ 2cc5747 على أي فرع بما فيها main (`Unrecognized named-value: 'runner'` في job-env؛ KNOWN_ISSUES #13، الدليل في PHASE_12).
+
+### Fixed
+- `docs/BOOTSTRAP_PROMPT.md`: ترقيم أقسام v5.0، وإزالة Lovable كمرجع تشغيلي.
+
+### Added
+- `docs/ACTIVE_TASK.md`، `docs/MIGRATION.md`، `docs/REPOSITORY_REGISTRY.md` (ملفات §7 الإلزامية الناقصة).
+- `docs/CONSTITUTION_V4.5_ARCHIVE.md`: استرجاع byte-exact لدستور v4.5 المحذوف في PR #4 (blob c281a5cd).
+- `docs/decisions/ADR-002-v5-governance-promotion.md`.
+- `docs/PHASE_REPORTS/PHASE_10.md`: قالب فارغ لتشغيل Colab الحقيقي.
+
+### Changed
+- `docs/TeleDrive-v5.md`: صار مؤشرًا بدل نسخة مكررة من الدستور.
+- `docs/TODO.md`: TASK IDs بصيغة §6، وإعادة فتح M10-T02.
+- `docs/KNOWN_ISSUES.md`: بنود 8–11 جديدة بأدلتها.
+- `docs/AI_HANDOFF.md`: الحقول الإلزامية كاملة بنص §7.
+
+### Not changed (عمدًا)
+- `docs/CONSTITUTION.md` — لا تعديل على الدستور النافذ.
+- `.github/workflows/ci.yml` — بقي كما هو في هذه الدفعة بسبب العائق أعلاه (وليس قرارًا تصميميًا).
+- كل كود المنتج والنوت‌بوك والاعتماديات والواجهة.
+
 ## v4.5.0-identity-1 — 2026-08-08 (توحيد هوية v4.5.0 + إنهاء مؤشرات ADR-001)
 
 - **توحيد أرقام وإصدارات الحزمة بالكامل إلى 4.5.0:**
