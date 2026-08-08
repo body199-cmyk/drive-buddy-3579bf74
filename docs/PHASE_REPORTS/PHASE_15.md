@@ -240,22 +240,22 @@ TITLE: تدقيق Action Registry وتصنيف الإجراءات غير الج�
 STATUS: VERIFIED COMPLETE
 BASE SHA: 61df83e0912debede0e7e41b8bfde5e6bfabcee9
 ACTUAL START SHA: 61df83e0912debede0e7e41b8bfde5e6bfabcee9
-RESULT SHA: يُسجّل في التقرير الختامي بعد commit؛ لا يمكن تضمين SHA داخل commit نفسه دون self-reference
+RESULT SHA: fd660804694ad26ddcfae33028d76b74191908eb (audit commit; this handoff update is a follow-up docs commit)
 BRANCH: arena/019fe010-drive-buddy-3579bf74
 FILES CREATED: docs/PHASE_REPORTS/PHASE_15.md
 FILES MODIFIED: docs/TODO.md, docs/KNOWN_ISSUES.md, docs/AI_HANDOFF.md, docs/ACTIVE_TASK.md, docs/CHANGELOG.md
 FILES DELETED: none
-CHANGES MADE: تدقيق 41 صفًا وتصنيف 6 BLOCKED و13 NOT_TESTED، دون إصلاح كود
+CHANGES MADE: تدقيق 41 صفًا وتصنيف 6 BLOCKED و13 NOT_TESTED، دون إصلاح كود؛ ثم توثيق push وPR #8
 CONSTITUTION CONFLICTS: none
 UNRELATED CHANGES: none
 SECURITY CHECK: لا credentials أو tokens أو session strings؛ output منقح
-GITHUB STATUS: الفرع الجانبي الحالي؛ push/PR بعد commit
-Commit: PENDING
-Push: PENDING
-Pull Request: PENDING
+GITHUB STATUS: branch pushed successfully; PR #8 is OPEN
+Audit commit: SUCCESS — fd660804694ad26ddcfae33028d76b74191908eb
+Push: SUCCESS — origin/arena/019fe010-drive-buddy-3579bf74
+Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/8
 ROLLBACK POINT: قبل الدمج إغلاق PR؛ بعد الدمج git revert -m 1 <merge SHA>
 HONEST PROJECT STATUS: Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.
-NEXT SMALLEST STEP: DOC إصلاحي منفصل لـ analyze.select_all + analyze.clear_selection؛ لا إصلاح جماعي للـ19
+NEXT SMALLEST STEP: متابعة checks في PR #8 ثم DOC إصلاحي منفصل لـ analyze.select_all + analyze.clear_selection؛ لا إصلاح جماعي للـ19
 ```
 
 ## 10. القرار والخطوة التالية

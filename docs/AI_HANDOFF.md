@@ -77,13 +77,13 @@ PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
 ## Git / التسليم
 
 ```text
-Commit: PENDING داخل هذا handoff حتى تنفيذ commit
-Push: PENDING
-Pull Request: PENDING
+Audit commit: SUCCESS — fd660804694ad26ddcfae33028d76b74191908eb
+Push: SUCCESS — origin/arena/019fe010-drive-buddy-3579bf74
+Pull Request: CREATED — #8
 Branch: arena/019fe010-drive-buddy-3579bf74
 Base SHA: 61df83e0912debede0e7e41b8bfde5e6bfabcee9
-Result SHA: يُستخرج بعد commit بـ git log -1 --format=%H؛ لا يمكن تضمين self-SHA داخل شجرته
-PR URL: يُسجّل بعد gh pr create
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/8
+Checks: IN_PROGRESS at handoff update; verify on GitHub
 ```
 
 ---
