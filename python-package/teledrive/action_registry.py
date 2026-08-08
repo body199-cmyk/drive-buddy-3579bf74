@@ -213,7 +213,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.select_all",
         section="analyze",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_selection.py::test_select_all_visible_only",
     ),
     ActionSpec(
         action_id="analyze.clear_selection",
@@ -222,7 +223,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.clear_selection",
         section="analyze",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_selection.py::test_clear_selection_preserves_items_and_visible_rows",
     ),
     ActionSpec(
         action_id="analyze.enqueue_selected",
