@@ -8,12 +8,16 @@
 - Telegram API ID/Hash (من https://my.telegram.org)
 - حساب Google مع Drive
 - الحزمة المختبرة `teledrive_v4.5.zip` (يُبنى من `package_service`)
+  - مصدرها: آخر تشغيل CI أخضر → Actions → Artifacts → `teledrive-package` (يتطلب صلاحية على المستودع).
+  - **تنبيه:** التنزيل من GitHub يعطي غلافًا خارجيًا باسم `teledrive-package.zip` يحتوي الملف الحقيقي بداخله. ارفع الغلاف **كما هو** إلى `/content/` (أو إلى `MyDrive/TeleDrive/`) — Cell 1 تكتشفه وتستخرج الملف الداخلي تلقائيًا. **لا تُعِد تسميته** أبدًا.
 
 ## تشغيل 7 خلايا (العقد القانوني)
 
 ### Cell 1: Restore + install pinned
-- يجلب ZIP من `/content/drive/MyDrive/TeleDrive/` إن وجد، وإلا من `/content/`
-- يفك الضغط في `/content`، يضيف للحزمة `sys.path`
+- `resolve_package_zip()` يقبل الأشكال الثلاثة: الأرشيف الحقيقي `teledrive_v4.5.zip` (في `/content/` أو Drive)، والغلاف الرسمي `teledrive-package.zip` (في أي منهما)، وحتى غلافًا أُعيدت تسميته خطأً إلى `teledrive_v4.5.zip` (يكتشفه بالمحتوى ولا يعامله كأرشيف حقيقي).
+- استخراج الغلاف يتم عبر ملف مؤقت مختلف ثم نقل ذري (`tempfile` + `os.replace`) — لا قراءة وكتابة على الملف نفسه، فلا `EOFError`؛ ومسارات الأعضاء غير الآمنة (traversal) مرفوضة، ويُتحقق من بنية الأرشيف الداخلي (`teledrive-v4.5/` + `requirements.lock`) قبل اعتماده.
+- عدم وجود أي من الملفين يبقي رسالة الخطأ الواضحة نفسها مع تلميح أن الغلاف مقبول كما هو.
+- بعد حل المسار: يفك الضغط في `/content`، يضيف للحزمة `sys.path`
 - `!pip -q install -r requirements.lock` — هذا هو المصدر الوحيد، لا `package==version` في الخلايا.
 - يطبع `dependency source: .../requirements.lock` + `runtime root (local, not Drive)`
 

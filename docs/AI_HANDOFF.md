@@ -7,66 +7,54 @@
 
 | الحقل | القيمة |
 |---|---|
-| التاريخ (UTC) | 2026-08-08T07:05:00Z |
-| نوع الجلسة | Fix and proof tests for select_all and clear_selection (M13-T03) |
-| تصنيف الاستئناف | `RESUME_VERIFIED` |
-| TASK ID | `M13-T03` |
-| العنوان | إصلاح `analyze.select_all` و`analyze.clear_selection` مع اختبارات binding حقيقية |
+| التاريخ (UTC) | 2026-08-08T14:05:00Z |
+| نوع الجلسة | Colab package-import fix (M15-T02) — auto-unwrap `teledrive-package.zip` in Cell 1 |
+| تصنيف الاستئناف | `RESUME_VERIFIED` (HEAD = قاعدة M15-T01 المعتمدة؛ لا تعديلات Gemini) |
+| TASK ID | `M15-T02` |
+| العنوان | إصلاح استيراد حزمة TeleDrive في Colab عند تنزيل GitHub Artifact wrapper |
 | المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| الفرع | `arena/019fe024-drive-buddy-3579bf74` |
-| HEAD قبل العمل | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` |
-| HEAD بعد العمل | رأس commit M13-T03؛ يُستخرج بـ `git log -1 --format=%H` بعد commit |
-| Base SHA المعتمد | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` |
-| سبب اختيار baseline | PR #8 مدموج فعليًا إلى `main`، وHEAD المحلي هو merge SHA؛ Run `31244752412` أخضر بعد الدمج |
-| الحالة النهائية | `VERIFIED COMPLETE` — إثبات صحة كود المنتج الحالي لإجرائي التحديد، إضافة 5 اختبارات في `test_selection.py`، وترقية الإجرائين إلى `READY` (`24/41` جاهزة) |
-| آخر SHA أخضر | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` — Run `31244752412` (`success`) |
+| الفرع | `arena/019fe124-drive-buddy-3579bf74` (فرع الجلسة الثابت؛ وظيفتها فرع M15-T02 الجانبي) |
+| HEAD قبل العمل | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
+| HEAD بعد العمل | رأس commit M15-T02؛ يُستخرج بـ `git log -1 --format=%H` بعد commit |
+| Base SHA المعتمد | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
+| سبب اختيار baseline | قاعدة تشخيص M15-T01 نفسها، وآخر CI أخضر عليها Run `31245258992` |
+| الحالة النهائية | `ACTIVE` حتى CI الـPR — إصلاح Cell 1 + 16 اختبار wrapper + إعادة توليد النوتبوكين + تحديث RUNBOOK؛ `322 passed` محليًا |
+| آخر SHA أخضر | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` — Run `31245258992` (`success`) |
 | نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` |
 
 ## تحقق baseline السابق
 
-- PR السابق: [#8](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/8)، الحالة `MERGED`، merge SHA `86005ff`.
-- الملفات التي دخلت PR #8: `docs/ACTIVE_TASK.md`, `docs/AI_HANDOFF.md`, `docs/CHANGELOG.md`, `docs/KNOWN_ISSUES.md`, `docs/PHASE_REPORTS/PHASE_15.md`, `docs/TODO.md`.
-- Run `31244752412`: `success` على `86005ff`، بوظيفتي `Python package (tests + Colab contract)` و`Frontend build`.
-- لا يوجد اختلاف غير مفسر بين baseline وذاكرة M13-T02: الخطوة التالية المعلنة كانت M13-T03.
+- تشخيص M15-T01 (`docs/PHASE_REPORTS/PHASE_M15_T01.md`) موثق محليًا على `main @ 1f60a37`؛ لم يُدفَع ولم يُعدَّل — ملف تاريخي بحكم M15-T02.
+- run `31245258992` أخضر على main بعد دمج PR #9 (`1f60a37` merge SHA)؛ artifact `teledrive-package` موجود وغير منتهٍ.
+- لا فروع Gemini ولا تعديلات غير مفسّرة في الشجرة (إشارات كلمة gemini الوحيدة داخل تقرير M15-T01 نفسه).
 
 ## ما نُفِّذ فعليًا
 
-- فحص مسارات الإجرائين `analyze.select_all` و`analyze.clear_selection` من `handlers.py` إلى `ctx.resolve` و`SelectionService` في `services.py` والربط في `ui.py` / `ui_binder.py`.
-- إثبات صحة التنفيذ الحالي في كود المنتج (حيث يحدد `select_all_visible` العناصر المرئية فقط ويعيد الصفوف المرئية، ويمسح `clear` التحديد دون حذف أو تعديل العناصر المرئية، ومسار الخطأ يرجع الطول الصحيح دون تسريب أسرار).
-- إنشاء ملف الاختبارات الحقيقي `python-package/tests/test_selection.py` بـ 5 اختبارات تغطي: تحديد العناصر المرئية فقط، مسح التحديد مع الحفاظ على العناصر والصفوف، جاسوس (spy) على `ctx.resolve` والخدمة الفعلية، ومسار الخطأ والطول (`arity=2`) وعدم تسريب الأسرار.
-- ترقية إجرائي التحديد في `python-package/teledrive/action_registry.py` إلى `tested=True` وربط `proof_test` بهما (`24/41 ready actions resolve`).
-- لم يتغير أي كود منتج أو أي ملف محمي (`.github/workflows/ci.yml`, `docs/CONSTITUTION.md`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock`).
+- استبدال منطق Cell 1 في `python-package/teledrive/notebook_cells.py` بدالة مسمّاة `resolve_package_zip()` ومساعداتها (`_is_tested_archive`, `_safe_inner_member`, `_unwrap_inner`): اكتشاف بالمحتوى (جذر `teledrive-v4.5/` + `requirements.lock`)، فك الغلاف عبر ملف مؤقت مختلف ثم `os.replace` ذري (لا قراءة/كتابة على الملف نفسه)، رفض traversal، تحقق من البنية قبل الاعتماد، والإبقاء على الخطأ الواضح عند الغياب.
+- إنشاء `python-package/tests/test_restore_package.py` بـ 16 اختبارًا يرفع طبقة الدوال AST-حرفيًا من مصدر المولد ويثبت كل سيناريوهات DOC (مباشر/غلاف/غلاف مُعاد تسميته/غياب/traversal/تالف/Drive).
+- إعادة توليد `python-package/notebook/TeleDrive.ipynb` و`public/TeleDrive.ipynb` و`python-package/teledrive/colab_cells.json` من المصدر الواحد — النوتبوكان byte-identical.
+- إضافة تعليمات التنزيل في `docs/RUNBOOK.md` (الغلاف يُرفع كما هو؛ ممنوع إعادة التسمية؛ المصدر Actions artifact).
+- تحديث `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK}.md` وإنشاء `docs/PHASE_REPORTS/PHASE_17.md`.
 
 ## البوابات ومخرجاتها الحقيقية
 
 | البوابة | النتيجة | المخرجات |
 |---|---|---|
-| `python -m compileall teledrive` من `python-package` | PASS | نجاح دون أخطاء |
-| `python -m pytest -q tests` من `python-package` (venv) | PASS | `306 passed in 8.66s` (بزيادة 7 اختبارات عن 299)، exit 0 |
-| `python teledrive_launcher.py --check` من `python-package` (venv) | PASS | `binding check ok: 24/41 ready actions resolve`، exit 0 |
-| `python -m teledrive.notebook_cells --check` من `python-package` (venv) | PASS | `notebooks are in sync`، exit 0 |
-| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | متطابقان تمامًا، exit 0 |
-| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `archive: teledrive_v4.5.zip`، exit 0 |
-| GitHub Actions CI للـ PR | PASS | Run `31245120463` (`success` بوظيفتي `Python package (tests + Colab contract)` و`Frontend build`) |
+| `python -m compileall teledrive` | PASS | بلا أخطاء |
+| `python -m pytest -q tests` | PASS | `322 passed in 9.08s` (306 + 16)، exit 0 |
+| `python teledrive_launcher.py --check` | PASS | `binding check ok: 24/41 ready actions resolve` |
+| `python -m teledrive.notebook_cells --check` | PASS | `notebooks are in sync` |
+| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | متطابقان، exit 0 |
+| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `archive: teledrive_v4.5.zip` |
+| `bun run lint` (الجذر) | PASS | exit 0 — 0 errors / 6 warnings |
+| `bun install --frozen-lockfile` + `bun run build` (الجذر) | BLOCKED بيئيًا | `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR` على tarballs الحزم في بيئة الـsandbox؛ الإثبات على CI الـPR |
+| GitHub Actions CI للـPR | ينتظر | يُسجَّل فور تشغيله |
 
-لإعادة إنتاج الاختبار المحلي المثبت:
+## ما لم يُثبَت
 
-```bash
-cd python-package
-PATH=/tmp/teledrive-m13-venv/bin:$PATH python -m pytest -q tests
-# 306 passed in 8.66s
-PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
-# binding check ok: 24/41 ready actions resolve
-```
-
-الـ venv مؤقتة خارج Git، وثُبّتت من `requirements.lock`; لم يُعدّل lock ولم تُحفظ credentials.
-
-## اختبارات لم تُشغَّل أو لم تُثبَت (`TESTS NOT RUN OR NOT PROVEN`)
-
-- لم يُختبر تشغيل حقيقي على Google Colab (Telegram حي + Google Drive حي + نقل ملف حقيقي + shutdown/recovery/logs الحية). هذا ما زال مملوكًا للمالك في M15-T01.
-- لم تُشغّل `bun run lint` أو `bun run build` محليًا لعدم توفر `bun` في بيئة نظام الأوامر؛ الاعتماد هو آخر CI أخضر Run `31244752412` وسيقوم CI الخاص بالـ PR بتشغيلها.
-- لم تُبنَ Gradio UI في browser/Colab حقيقي؛ binding evidence هو static/contract test واختبارات خدمة حقيقية.
-- التحقق المختبري النهائي ليس دليل `Colab-ready` ولا `Complete`.
+- Colab الحقيقي (رفع الغلاف وتشغيل 7 خلايا ختامًا بنقل ملف) — بيد المالك ضمن المرحلة 10 (M15-T01 التشغيلي).
+- Gradio UI وTelegram/Drive الحيّان — لم تُلمس ولم تُختبر.
+- `bun run build` محليًا (قيد بيئي أعلاه) — نجاحه النهائي على CI فقط.
 
 ## الحالة الصادقة
 
@@ -74,19 +62,20 @@ PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
 
 ## الخطوة التالية الأصغر
 
-- `M13-T04`: مجموعة صغيرة أخرى مثبتة الحاجة من الإجراءات المتبقية (`11 NOT_TESTED`)، أو الانتقال إلى Colab الحقيقي (`M15-T01`).
+- تشغيل Colab حقيقي (المرحلة 10): رفع `teledrive-package.zip` كما هو والتحقق من أن Cell 1 تفكه تلقائيًا ثم إتمام الخلايا (M15-T01 التشغيلي، بيد المالك).
+- `M13-T04` (إجراءات `11 NOT_TESTED` المتبقية) يمكن أن يسبق ذلك إن رأى المالك.
 
 ## Git / التسليم
 
 ```text
-Audit commit: SUCCESS — b63f4d9b82e75c5e41534aebb5fa10da185678a8 (audit & fix commit; this handoff update is a follow-up docs commit)
-Push: SUCCESS — origin/arena/019fe024-drive-buddy-3579bf74
-Pull Request: CREATED — #9
-Branch: arena/019fe024-drive-buddy-3579bf74
-Base SHA: 86005ff6ef5eb55ddfd639f306c85ff17acadc4c
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/9
-Checks: PASS — GitHub Actions Run 31245120463 (success)
+Fix commit: ينتظر — يبدأ بـ "M15-T02:" على arena/019fe124-drive-buddy-3579bf74
+Push: ينتظر
+Pull Request: ينتظر — إلى main
+Branch: arena/019fe124-drive-buddy-3579bf74
+Base SHA: 1f60a37d91abeeb3cba5a0279fcdcf78f49d8264
+PR URL: يُسجَّل فور الإنشاء
+Checks: ينتظر
 ```
 
 ---
-**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_16.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـ Base SHA والـ Result SHA المسجلين في تقرير التسليم قبل أي ادعاء.
+**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_17.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـ Base SHA والـ Result SHA المسجلين في تقرير التسليم قبل أي ادعاء.

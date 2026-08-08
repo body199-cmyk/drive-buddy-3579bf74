@@ -2,6 +2,24 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T02] — 2026-08-08 — إصلاح استيراد حزمة Colab: قبول غلاف teledrive-package.zip تلقائيًا
+
+### Verified
+- Cell 1 تقبل الآن ثلاثة أشكال دون إعادة تسمية يدوية: الأرشيف الحقيقي `teledrive_v4.5.zip`، والغلاف الرسمي `teledrive-package.zip`، وغلافًا أُعيدت تسميته خطأً (يكتشف بالمحتوى عبر `teledrive-v4.5/` + `requirements.lock`).
+- 16 اختبارًا جديدًا في `python-package/tests/test_restore_package.py` يرفع طبقة الدوال AST-حرفيًا من مصدر المولد الواحد ويثبت: قبول المباشر، استخراج الغلاف عبر temp مختلف + نقل ذري، رفض الغلاف المسمّى كحقيقي (لا EOFError)، بقاء الخطأ الواضح عند الغياب، رفض مسارات الأعضاء غير الآمنة (traversal) والمحتوى التالف، ودعم مواضع Drive.
+- `python -m pytest -q tests`: **322 passed in 9.08s** (306 + 16 جديدًا). `compileall`: PASS. `launcher --check`: `24/41 ready actions resolve`. `notebook_cells --check`: in sync. `cmp` النوتبوكين: IDENTICAL. `package_service --build`: archive ✔.
+
+### Changed
+- `python-package/teledrive/notebook_cells.py`: استبدال منطق Cell 1 بدالة مسمّاة `resolve_package_zip()` + مساعدات `_is_tested_archive` / `_safe_inner_member` / `_unwrap_inner` (temp + `os.replace`، رفض traversal، التحقق من البنية قبل الاعتماد).
+- `python-package/tests/test_restore_package.py`: ملف جديد بـ 16 اختبارًا.
+- `python-package/notebook/TeleDrive.ipynb` + `public/TeleDrive.ipynb` + `python-package/teledrive/colab_cells.json`: أُعيد توليدها من المولد الواحد؛ النوتبوكان byte-identical.
+- `docs/RUNBOOK.md`: تعليمات تنزيل واضحة — الغلاف يُرفع كما هو، ممنوع إعادة تسميته، ومصدره Actions artifact.
+- `docs/KNOWN_ISSUES.md`: البند #16 (فخ الغلاف) ✅. `docs/TODO.md`, `docs/ACTIVE_TASK.md`, `docs/AI_HANDOFF.md`, `docs/PHASE_REPORTS/PHASE_17.md`: تحديثات الجلسة.
+
+### Not changed — عمدًا
+- لا تعديل على Telegram أو Drive auth أو UI أو queue أو transfer manager، ولا على `.github/workflows`، ولا Releases، ولا `requirements.lock`/`bun.lock`. تقرير M15-T01 (`docs/PHASE_REPORTS/PHASE_M15_T01.md`) لم يُمسّ.
+- `bun run build` محليًا: BLOCKED بيئيًا (خطأ شهادة TLS عند تنزيل tarballs في هذه البيئة؛ `bun run lint` نجح بـ 0 أخطاء/6 تحذيرات) — الإثبات على CI الفعلي. الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M13-T03] — 2026-08-08 — إصلاح analyze.select_all وanalyze.clear_selection مع اختبارات binding حقيقية
 
 ### Verified

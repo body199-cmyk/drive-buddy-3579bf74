@@ -58,40 +58,146 @@ Run the cells top to bottom, once, in a single Colab runtime.
 CELL_1 = '''# ==== Cell 1: restore the tested package and install pinned dependencies ====
 # Mounted Drive is used ONLY to fetch the tested archive. SQLite, logs and temp
 # files stay on local /content — never on the mounted Drive filesystem.
-import os, pathlib, shutil, sys, zipfile
+#
+# GitHub Actions downloads the artifact as an OUTER wrapper named
+# teledrive-package.zip that CONTAINS the real teledrive_v4.5.zip inside it.
+# Upload either file as-is: resolve_package_zip() detects the wrapper by
+# content and unwraps it automatically (temp file + atomic move — it never
+# reads and writes the same file). Renaming the wrapper is never needed.
+import os, pathlib, shutil, sys, tempfile, zipfile
 
-LOCAL_ROOT = pathlib.Path("/content")
-PACKAGE_ZIP = LOCAL_ROOT / "teledrive_v4.5.zip"
-DRIVE_ZIP = pathlib.Path("/content/drive/MyDrive/TeleDrive/teledrive_v4.5.zip")
+LOCAL_ROOT = pathlib.Path(\"/content\")
+PACKAGE_ZIP = LOCAL_ROOT / \"teledrive_v4.5.zip\"
+DRIVE_ZIP = pathlib.Path(\"/content/drive/MyDrive/TeleDrive/teledrive_v4.5.zip\")
+WRAPPER_NAME = \"teledrive-package.zip\"   # official GitHub Actions artifact download
+INNER_NAME = \"teledrive_v4.5.zip\"        # the only member ever unwrapped
+EXPECTED_ROOT = \"teledrive-v4.5\"         # directory the tested archive must contain
+
+def _zip_member_names(path):
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return archive.namelist()
+    except (OSError, zipfile.BadZipFile):
+        return None
+
+def _is_tested_archive(path):
+    \"\"\"True only for the real tested archive: an EXPECTED_ROOT/ tree with its lock.\"\"\"
+    names = _zip_member_names(path)
+    if not names:
+        return False
+    prefix = EXPECTED_ROOT + \"/\"
+    return any(name.startswith(prefix) for name in names) and (
+        prefix + \"requirements.lock\" in names
+    )
+
+def _safe_inner_member(names):
+    \"\"\"Pick the ONE safe inner member, or None.
+
+    Absolute paths, backslashes and \"..\" components are never trusted (no
+    path traversal); only a member whose final component is exactly
+    teledrive_v4.5.zip is unwrapped.
+    \"\"\"
+    for name in names:
+        pure = pathlib.PurePosixPath(name)
+        if pure.is_absolute() or \"\\\\\" in name or \"..\" in pure.parts:
+            continue
+        if pure.name == INNER_NAME:
+            return name
+    return None
+
+def _unwrap_inner(wrapper_path, destination):
+    \"\"\"Unwrap the wrapper's inner archive onto destination, safely.
+
+    Bytes go to a DIFFERENT temp file, the inner archive is validated there
+    (EXPECTED_ROOT + requirements.lock), and only then is it moved atomically
+    onto destination. The wrapper is closed before the move, so even a wrapper
+    renamed to teledrive_v4.5.zip (destination == wrapper) never reads and
+    writes the same file — no self-corruption, no EOFError.
+    \"\"\"
+    wrapper_path = pathlib.Path(wrapper_path)
+    destination = pathlib.Path(destination)
+    with zipfile.ZipFile(wrapper_path) as archive:
+        member = _safe_inner_member(archive.namelist())
+        if member is None:
+            raise KeyError(f\"no safe {INNER_NAME} member inside wrapper\")
+        payload = archive.read(member)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=\".\" + INNER_NAME + \".\", suffix=\".part\", dir=str(destination.parent)
+    )
+    tmp_path = pathlib.Path(tmp_name)
+    try:
+        with os.fdopen(fd, \"wb\") as handle:
+            handle.write(payload)
+        if not _is_tested_archive(tmp_path):
+            raise ValueError(
+                f\"inner {member} is not the tested archive \"
+                f\"(missing {EXPECTED_ROOT}/requirements.lock)\"
+            )
+        os.replace(tmp_path, destination)  # atomic rename on the same filesystem
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+    return destination
+
+def resolve_package_zip(local_root=LOCAL_ROOT):
+    \"\"\"Locate the tested archive, unwrapping the official CI artifact if needed.
+
+    Search order: the real archive at <root>, the real archive in the mounted
+    Drive folder, then the official wrapper (teledrive-package.zip) in either
+    place. A wrapper RENAMED to teledrive_v4.5.zip is recognized by content —
+    it is NOT the tested archive — and is unwrapped via a temp file instead.
+    Corrupt files and wrappers without a safe inner member fail with a clear
+    error naming the offending path.
+    \"\"\"
+    local_root = pathlib.Path(local_root)
+    package_zip = local_root / INNER_NAME
+    drive_dir = local_root / \"drive/MyDrive/TeleDrive\"
+    candidates = (
+        package_zip,
+        drive_dir / INNER_NAME,
+        local_root / WRAPPER_NAME,
+        drive_dir / WRAPPER_NAME,
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        if _is_tested_archive(candidate):
+            if candidate != package_zip:
+                shutil.copy2(candidate, package_zip)  # distinct paths, no self-copy
+            return package_zip
+        try:
+            return _unwrap_inner(candidate, package_zip)
+        except (KeyError, ValueError, OSError, zipfile.BadZipFile) as exc:
+            raise RuntimeError(f\"invalid package at {candidate}: {exc}\") from exc
+    raise AssertionError(
+        f\"upload the tested archive to {package_zip} (or {drive_dir / INNER_NAME}) \"
+        f\"first; the official GitHub Actions download {WRAPPER_NAME} is accepted \"
+        f\"too — upload it as-is, do NOT rename it\"
+    )
 
 try:
     from google.colab import drive as colab_drive
-    colab_drive.mount("/content/drive", force_remount=False)
+    colab_drive.mount(\"/content/drive\", force_remount=False)
 except Exception as exc:  # not on Colab, or the user declined the mount
-    print("drive mount skipped:", type(exc).__name__)
+    print(\"drive mount skipped:\", type(exc).__name__)
 
-if not PACKAGE_ZIP.exists() and DRIVE_ZIP.exists():
-    shutil.copy2(DRIVE_ZIP, PACKAGE_ZIP)
-
-assert PACKAGE_ZIP.exists(), (
-    f"upload the tested archive to {PACKAGE_ZIP} (or {DRIVE_ZIP}) first"
-)
+PACKAGE_ZIP = resolve_package_zip(LOCAL_ROOT)
 
 with zipfile.ZipFile(PACKAGE_ZIP) as archive:
     archive.extractall(LOCAL_ROOT)
 
-PACKAGE_DIR = next(p for p in LOCAL_ROOT.glob("teledrive-v4.5*") if p.is_dir())
+PACKAGE_DIR = next(p for p in LOCAL_ROOT.glob(\"teledrive-v4.5*\") if p.is_dir())
 os.chdir(PACKAGE_DIR)
 sys.path.insert(0, str(PACKAGE_DIR))
 
 # Exact pins, straight from the archive - requirements.lock is the ONE source of
 # dependency truth. No version is ever hard-coded in this notebook.
-!pip -q install -r "{PACKAGE_DIR}/requirements.lock"
-print("dependency source:", PACKAGE_DIR / "requirements.lock")
+!pip -q install -r \"{PACKAGE_DIR}/requirements.lock\"
+print(\"dependency source:\", PACKAGE_DIR / \"requirements.lock\")
 
-print("package root:", PACKAGE_DIR)
-print("runtime root (local, not Drive):", os.environ.setdefault(
-    "TELEDRIVE_ROOT", "/content/teledrive_runtime"))
+print(\"package root:\", PACKAGE_DIR)
+print(\"runtime root (local, not Drive):\", os.environ.setdefault(
+    \"TELEDRIVE_ROOT\", \"/content/teledrive_runtime\"))
 '''
 
 CELL_2 = '''# ==== Cell 2: bootstrap local directories, logging, SQLite migrations, WAL ====
