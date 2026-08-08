@@ -1,4 +1,4 @@
-# TeleDrive v3.1 — pinned dependency lock.
+# TeleDrive v4.5 — pinned dependency lock.
 # Generated in Phase 0 from requirements.txt. The notebook installs from THIS file.
 # Every version below is an exact pin resolved from PyPI on 2026-07-29.
 telethon==1.44.0

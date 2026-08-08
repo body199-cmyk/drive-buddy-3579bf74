@@ -3,13 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "TeleDrive v3.1 — Telegram to Google Drive on Colab" },
+      { title: "TeleDrive v4.5 — Telegram to Google Drive on Colab" },
       {
         name: "description",
         content:
-          "Download the TeleDrive v3.1 package and its 7-cell Colab notebook: one launcher, one runtime, native Colab Drive auth, no public link by default.",
+          "Download the TeleDrive v4.5 package and its 7-cell Colab notebook: one launcher, one runtime, native Colab Drive auth, no public link by default.",
       },
-      { property: "og:title", content: "TeleDrive v3.1 — Telegram → Google Drive" },
+      { property: "og:title", content: "TeleDrive v4.5 — Telegram → Google Drive" },
       {
         property: "og:description",
         content:
@@ -86,7 +86,7 @@ function Index() {
       <main className="mx-auto max-w-3xl px-6 py-12">
         <header className="mb-10">
           <h1 className="text-3xl font-bold tracking-tight">
-            TeleDrive v3.1 — ناقل تيليجرام إلى Google Drive
+            TeleDrive v4.5 — ناقل تيليجرام إلى Google Drive
           </h1>
           <p className="mt-3 text-muted-foreground leading-relaxed">
             حزمة بايثون كاملة (Telethon + Google Drive API + Gradio) تعمل داخل Google Colab. الصفحة
@@ -102,7 +102,7 @@ function Index() {
               download
               className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              تحميل حزمة TeleDrive v3.1 (ZIP)
+              تحميل حزمة TeleDrive v4.5 (ZIP)
             </a>
             <a
               href="/TeleDrive.ipynb"
@@ -187,7 +187,7 @@ function Index() {
         </section>
 
         <footer className="text-xs text-muted-foreground">
-          v3.1 — لا رابط عام افتراضياً، ولا يُرسَل أي سرّ إلى هذا الموقع؛ كل شيء يبقى داخل حساباتك
+          v4.5 — لا رابط عام افتراضياً، ولا يُرسَل أي سرّ إلى هذا الموقع؛ كل شيء يبقى داخل حساباتك
           على Google و Telegram.
         </footer>
       </main>

@@ -1,24 +1,31 @@
-# Drive Buddy
+# TeleDrive v4.5 — Telegram → Google Drive Transfer Manager
 
-https://github.com/body199-cmyk/drive-companion.git
+> **المواصفة:** v4.5.0 (AI-OS Continuity Edition)
+> **بيئة التشغيل:** Google Colab (Python 3.11 + Gradio + Telethon + Google Drive API)
+> **الموقع المرجعي للتوثيق:** [`docs/`](docs/) — راجع [`docs/BOOTSTRAP_PROMPT.md`](docs/BOOTSTRAP_PROMPT.md) و [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md)
 
-This project was built with [Lovable](https://lovable.dev).
+## نظرة عامة (Overview)
 
-## Build with Lovable
+TeleDrive هو محرك لنقل الوسائط والملفات من Telegram إلى Google Drive، مصمم للعمل كلياً داخل Google Colab مع واجهة Gradio محلية (`share=False`) ومصادقة Google Drive الأصلية الخاصة بـ Colab.
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/3d5ef585-545f-4bd9-9736-193be8df2a14).
+## البدء السريع (Quick Start)
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+1. افتح النوت‌بوك [`public/TeleDrive.ipynb`](public/TeleDrive.ipynb) أو [`python-package/notebook/TeleDrive.ipynb`](python-package/notebook/TeleDrive.ipynb) في Google Colab.
+2. حمّل حزمة `teledrive_v4.5.zip` أو شغّل النوت‌بوك المكوّن من 7 خلايا.
+3. تفويض Google Drive أصلي داخل بيئة Colab بدون رفع أي ملفات سرية.
+4. إدخال بيانات Telegram API (ID / Hash) بشكل مخفي دون تسجيلها في السجلات.
 
-## Development
+## التوثيق الدستوري (AI-OS Documentation)
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+- **نقطة الدخول:** [`docs/BOOTSTRAP_PROMPT.md`](docs/BOOTSTRAP_PROMPT.md)
+- **قواعد التشغيل:** [`docs/AI_RULES.md`](docs/AI_RULES.md)
+- **السياق المرجعي:** [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
+- **الدستور الأعلى:** [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md)
+- **الخريطة المعمارية:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **سجل العمل المفتوح:** [`docs/TODO.md`](docs/TODO.md)
+- **سجل التسليم الحي:** [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md)
+- **سجل التغييرات:** [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+## التطوير والمزامنة مع Lovable
+
+هذا المشروع متصل بـ Lovable. أي تغيير يُدفع إلى `main` يُزامن تلقائياً.

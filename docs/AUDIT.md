@@ -18,12 +18,17 @@
 
 ### ما هو مفقود/متضارب ويحتاج إصلاح (من KNOWN_ISSUES)
 
-1. **تضارب إصدار** — `config.py=3.1.0` لكن `__init__.py=1.0.0/2.0` — TODO #2.
-2. **README الجذر** يقول Drive Buddy + رابط drive-companion — TODO #7.
-3. **Gradio 6.20.0 `prevent_thread_lock`** لم يُبنَ في بيئة حقيقية (PHASE_9 اعترف fake object فقط) — TODO #4.
-4. **177 passed غير معاد** — TODO #4.
-5. **تحقق حقيقي Telegram/Drive/نقل ملف** غائب — TODO #6 بيد المالك PHASE_10.
-6. **public/teledrive-package.zip** غير موجود — رابط مكسور في landing page.
+1. **Gradio 6.20.0 `prevent_thread_lock`** لم يُبنَ في بيئة حقيقية (PHASE_9 اعترف fake object فقط) — TODO #4.
+2. **177 passed غير معاد** بمثبتات requirements.lock في بيئة CI كاملة — TODO #4.
+3. **تحقق حقيقي Telegram/Drive/نقل ملف** غائب — TODO #6 بيد المالك PHASE_10.
+4. **public/teledrive-package.zip** يتم بناؤه في CI كـ `teledrive_v4.5.zip` — جاهز للتوزيع عبر CI artifact.
+
+### ما تم حله وتوحيده في هذه الجلسة (2026-08-08)
+
+1. **توحيد الإصدار إلى 4.5.0** عبر الحزمة بالكامل (`config.py=4.5.0`, `__init__.py=4.5.0`, `notebook_cells.py=4.5.0`, `requirements.lock`, `.github/workflows/ci.yml`, `src/routes/index.tsx`, `README.md`).
+2. **تحديث النوت‌بوك ومولد الخلايا** ومطابقة النوت‌بوكين بايت-بايت.
+3. **إنهاء مؤشرات ADR-001** في المواقع القديمة وجمع تقارير المراحل التاريخية في `docs/PHASE_REPORTS/`.
+4. **تحديث README الجذر** بهوية TeleDrive v4.5 وروابط بيت التوثيق `docs/`.
 
 ### ما هو محظور (CONSTITUTION §4)
 

@@ -118,8 +118,8 @@ class RuntimeConfig:
     share_public: bool = False
     manual_concurrency: int | None = None
     drive_folder_id: str | None = None
-    version: str = "3.1.0"
-    spec_version: str = "3.1.0"
+    version: str = "4.5.0"
+    spec_version: str = "4.5.0"
     extra: dict = field(default_factory=dict)
 
     def concurrency_value(self) -> int:

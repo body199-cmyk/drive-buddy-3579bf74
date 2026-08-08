@@ -14,12 +14,12 @@
 
 ## الحالة الصادقة (2026-08-08)
 
-- Phase 0: COMPLETE — docs skeleton, requirements.lock, spec_version 3.1.0 (سيتم توحيده لاحقًا إلى 4.5.0)
+- Phase 0: COMPLETE — docs skeleton, requirements.lock, spec_version/version 4.5.0 موحد.
 - Phase 1: COMPLETE — ApplicationContext واحد + AsyncRuntime واحد، لا حلقات ad-hoc.
 - Phase 2-8: COMPLETE — action_registry (41 action), ui_binder، handlers، Telegram state machine 10 حالات، Drive native auth (`adopt_service`), scanning/selection, queue/recovery, UI/theme/export, notebook 7 خلايا.
 - Phase 9: COMPLETE in code — cell 4 non-blocking (`blocking=False` → `prevent_thread_lock=True`), `requirements.lock` مصدر وحيد، CI يشغل 6 بوابات + bun lint/build.
 - Phase 10: **NOT VERIFIED** — يتطلب Colab حقيقي + حسابات حية (بيد المالك).
-- Phase 11 (AI-OS): **IN PROGRESS** هذه الجلسة — توحيد بيت التوثيق في `docs/` حسب §18.
+- Phase 11 (AI-OS): **COMPLETE** — توحيد بيت التوثيق في `docs/` حسب §18، وتوحيد هوية v4.5.0 بالكامل، وتحويل المواقع القديمة لمؤشرات قانونية (ADR-001).
 
 **Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.** لا يجوز قول Colab-ready قبل PHASE_10.
 
@@ -67,4 +67,4 @@ docs/
 API ID/hash، أرقام هواتف، أكواد، 2FA، session strings، OAuth tokens، روابط خاصة، tracebacks غير منقحة — ممنوعة في كل مكان (ملفات، سجلات، checkoints، ZIP، git).
 
 ---
-**Next:** إكمال TODO #1 (نظام الاستمرارية) ثم #2 (توحيد هوية 4.5.0) على فرع `aios/v4.5-continuation`.
+**Next:** TODO #4 (تشغيل البوابات الست في بيئة اختبار كاملة + فحص Gradio 6.20.0 والأسرار).

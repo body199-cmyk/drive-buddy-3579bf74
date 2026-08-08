@@ -95,11 +95,11 @@ class PackageService:
         return collected
 
     def build_archive(self, destination: Path | None = None) -> Path:
-        destination = destination or (ROOT / "teledrive_v3.1.zip")
+        destination = destination or (ROOT / "teledrive_v4.5.zip")
         destination.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
             for path in self._files():
-                archive.write(path, arcname=str(Path("teledrive-v3.1") / path.relative_to(self.root)))
+                archive.write(path, arcname=str(Path("teledrive-v4.5") / path.relative_to(self.root)))
         _log.info("archive built at %s", destination)
         return destination
 
