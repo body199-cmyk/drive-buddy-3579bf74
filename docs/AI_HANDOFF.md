@@ -7,60 +7,63 @@
 
 | الحقل | القيمة |
 |---|---|
-| التاريخ (UTC) | 2026-08-08T06:00:00Z |
-| نوع الجلسة | New Coding Session |
-| تصنيف الاستئناف | N/A (جلسة جديدة من DOC جديد) |
-| TASK ID | M12-T02 |
-| العنوان | تصحيح AI_RULES لترقيم v5.0 + تنظيف docs/ من التلوث + توثيق السبب الجذري لانكسار CI |
+| التاريخ (UTC) | 2026-08-08T06:25:00Z |
+| نوع الجلسة | Resumed Coding Session |
+| تصنيف الاستئناف | Clean Resume |
+| TASK ID | M13-T01 |
+| العنوان | توثيق أول تشغيل CI حقيقي وتحليل نتائج البوابات |
 | المستودع | body199-cmyk/drive-buddy-3579bf74 |
-| الفرع | arena/019fdff4-drive-buddy-3579bf74 |
-| HEAD قبل العمل | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
+| الفرع | arena/019fdfff-drive-buddy-3579bf74 |
+| HEAD قبل العمل | ff6a484abbeae666b9151e0f729ac07b28c57e9c |
 | HEAD بعد العمل | رأس الفرع بعد commit هذه الدفعة — استخرجه بـ `git log -1 --format=%H`؛ يستحيل رياضيًا تضمين SHA الـcommit داخل شجرته ذاتها، والاسم الكامل مسجَّل في متن الـPR ورد الجلسة الختامي |
-| Base SHA المعتمد | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
-| سبب اختيار الـbaseline | PR #5 مدموج فعليًا؛ الـbaseline هو commit الدمج بعد فحصه |
-| الحالة النهائية | ACTIVE — كل ملفات docs/ (7 ملفات) سلِّمت ودُفعت ببوابات خضراء محليًا بما فيها pytest؛ جزء (أ) من DOC (استبدال ci.yml) بيد المالك ولم يُنفَّذ بعد |
-| آخر SHA أخضر | مثل حقل HEAD بعد العمل أعلاه (نفس الـcommit، بعد خضور البوابات الثماني كلها محليًا) |
-| نقطة rollback | قبل الدمج: إغلاق PR والعودة إلى ad3a454. بعد الدمج: `git revert -m 1 <merge SHA>` |
+| Base SHA المعتمد | ff6a484abbeae666b9151e0f729ac07b28c57e9c |
+| سبب اختيار الـbaseline | commit المالك `ff6a484` طبّق الجزء (أ) يدويًا على GitHub فأصلح workflow وأطلق أول تشغيل أخضر حقيقي `31243523514` |
+| الحالة النهائية | VERIFIED COMPLETE — التحقق الكامل من تشغيل Actions الأخضر `31243523514` (المدّة 1m21s، نجاح Python 1m17s وFrontend 16s)، وتوثيق الأدلة في docs/ وPHASE_14 |
+| آخر SHA أخضر | ff6a484abbeae666b9151e0f729ac07b28c57e9c (run 31243523514) |
+| نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` |
 
 ## ما نُفِّذ فعليًا
 
-- `docs/pic for frontend`: حُذف عبر `git rm` — ملف بايت واحد لوّث بيت الذاكرة القانوني من commit المالك `afde5fe`.
-- `docs/AI_RULES.md`: استبدال كامل — ترقيم أقسام v5.0 (§2, §3, §7, §9.7, §10, §11, §17, §18, §20)، الأدوار §3 (Brain/LM Arena Agent/Owner)، Lovable يُذكر فقط في فقرة "خرج نهائيًا" وملاحظة المرآة التقنية، جدول قيود المنصة مضاف.
-- `docs/KNOWN_ISSUES.md`: #8 و#13 مُحدَّثان بملاحظة "بانتظار تطبيق المالك" والسبب الجذري الكامل؛ #14 جديد (تلوث ✅ حُذف)؛ #15 جديد (صلاحية المنصة).
-- `docs/TODO.md`: M10-T02 أوضح؛ M12-T01 → PARTIALLY COMPLETE؛ M12-T02 مضاف ACTIVE؛ M13-T01 أعيدت صياغتها ("تحليل نتائج أول تشغيل CI حقيقي").
-- `docs/ACTIVE_TASK.md`: استبدال لـM12-T02 مع الفرع والـSHA الحقيقيين.
-- `docs/CHANGELOG.md`: مدخل [M12-T02] أعلى المدخلات.
-- `docs/PHASE_REPORTS/PHASE_13.md`: تقرير هذه الجلسة مع السبب الجذري الكامل لانكسار CI وحاجز صلاحية `workflows`.
+- **التحقق من CI على GitHub Actions:**
+  - Run ID: `31243523514` على commit `ff6a484abbeae666b9151e0f729ac07b28c57e9c`.
+  - النتيجة: `success` بالكامل.
+  - المدة الكلية: 1m21s (81 ثانية — من 06:15:46Z إلى 06:17:07Z).
+  - الوظيفة الأولى: `Python package (tests + Colab contract)` (ID: `93068234642`) نجحت في 1m17s (شملت 299 passed في pytest، وفحص launcher 22/41، ومزامنة النوت‌بوك، وبناء ورفع `teledrive_v4.5.zip` كـartifact باسم `teledrive-package`).
+  - الوظيفة الثانية: `Frontend build` (ID: `93068234649`) نجحت في 16s (شملت bun install وbun lint وbun build).
+- **تحديث ملفات الحوكمة والذاكرة القانونية:**
+  - `docs/TODO.md`: إغلاق `M10-T02` و`M12-T01` و`M12-T02` و`M13-T01` كـ `VERIFIED COMPLETE`؛ تحديد `M13-T02` كالخطوة القادمة.
+  - `docs/KNOWN_ISSUES.md`: إغلاق المشاكل #8 (بناء v4.5) و#13 (انكسار بدء CI) و#15 (تطبيق المالك اليدوي لفك حاجز المنصة) بأدلتها.
+  - `docs/ACTIVE_TASK.md`: توثيق إغلاق `M13-T01` برقم الـrun والـSHA.
+  - `docs/CHANGELOG.md`: إضافة مدخل [M13-T01] في رأس الملف.
+  - `docs/PHASE_REPORTS/PHASE_14.md`: إنشاء التقرير الشامل بالأدلة والمخرجات.
 
 ## البوابات ومخرجاتها الحقيقية
 
 | البوابة | النتيجة | المخرجات |
 |---|---|---|
+| GitHub Actions Run `31243523514` | PASS (success) | 1m21s إجمالي (Python 1m17s, Frontend 16s) · artifact `teledrive-package` مرفوع |
 | `python -m compileall teledrive` | PASS (exit 0) | Listing + Compiling نظيف لكل الوحدات |
-| `python -m pytest -q tests` | PASS | **299 passed in 8.55s** (pytest 9.1.1 بمثبتات requirements.lock) |
+| `python -m pytest -q tests` | PASS | **299 passed in 8.12s** (pytest 9.1.1 بمثبتات requirements.lock) |
 | `python teledrive_launcher.py --check` | PASS (exit 0) | `bootstrap ok schema=1` + `binding check ok: 22/41 ready actions resolve` |
 | `python -m teledrive.notebook_cells --check` | PASS (exit 0) | `notebooks are in sync` |
 | `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS (exit 0) | متطابقان byte-for-byte |
-| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS (exit 0) | `tests passed` ثم `archive: teledrive_v4.5.zip` (أُزيل بعد التحقق لأنه artifact) |
-| `eslint .` (lint) | PASS (exit 0) | 0 errors، 6 warnings (react-refresh/only-export-components — موجودة مسبقًا) |
-| `vite build` | PASS (exit 0) | `✓ built in 302ms` + nitro/wrangler output مكتمل |
+| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS (exit 0) | `tests passed` ثم `archive: teledrive_v4.5.zip` |
+| GitHub CI Frontend (`bun lint` + `bun build`) | PASS (exit 0) | تم بنجاح في 16 ثانية على GitHub Actions runner |
 
 ## اختبارات لم تُشغَّل أو لم تُثبَت
 
-- بوابات CI على GitHub — **لا تعمل حاليًا على أي فرع**: workflow غير صالح بسبب `runner.temp` في job-env (KNOWN_ISSUES #13). الجزء (أ) من DOC (استبدال ci.yml) بيد المالك ولم يُنفَّذ بعد.
-- `bun install --frozen-lockfile` — bun غير متاح في هذه البيئة الرملية؛ lint وbuild أُثبتا على node_modules المكتمِلة مسبقًا عبر npm.
-- لا تحقق حقيقي من Telegram / Drive / نقل ملفات — يبقى بيد المالك في M15-T01 (PHASE 10).
+- لم يُختبر تشغيل حقيقي على Google Colab (حساب Telegram حي + Google Drive API حي + نقل ملفات حقيقي) — هذا مؤجل ومملوك للمالك في M15-T01 (`docs/PHASE_REPORTS/PHASE_10.md`).
+- لم يتم تدقيق الـ19 إجراءً غير الجاهزة في Action Registry (مستهدفة في المهمة التالية `M13-T02`).
 
 ## الحالة الصادقة
 
 **Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.**
 
-CI لا يزال ميتًا على GitHub — الجزء (أ) من DOC لم يُنفَّذ بعد.
+البوابات تعمل الآن بنجاح على GitHub Actions لأول مرة في تاريخ المشروع (Run 31243523514)، وجميع اختبارات الحزمة (299 test) خضراء.
 
 ## الخطوة التالية الأصغر
 
-- **بيد المالك:** تطبيق الجزء (أ) من DOC M12-T02 — استبدال `.github/workflows/ci.yml` بالكامل عبر متصفح GitHub (3 أسطر تتغير: `runner.temp` → `github.workspace`، `v3.1` → `v4.5` مرتين). المحتوى الكامل في DOC §2.2. لا تدمج قبل أن ترى النتيجة — الفشل هنا مفيد لأنه أول تشغيل حقيقي.
-- **بعد نجاح المالك:** M13-T01 — تحليل نتائج أول تشغيل CI حقيقي وإصلاح ما يظهر.
+- **M13-T02:** تدقيق Action Registry زرًا-زرًا وحصر الـ19 إجراءً غير الجاهزة من أصل 41، وتصنيفها (ميتة/غير مطبقة/غير مختبرة) وفقًا لـ §14.
 
 ---
 **تعليمات للجلسة القادمة:** `CONSTITUTION.md` → `BOOTSTRAP_PROMPT.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md`. ثم `git rev-parse HEAD` وقارنه بالجدول أعلاه قبل أي ادعاء.

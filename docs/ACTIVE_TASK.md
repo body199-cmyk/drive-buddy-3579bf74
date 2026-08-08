@@ -5,20 +5,19 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M12-T02 |
-| العنوان | تصحيح AI_RULES لترقيم v5.0 + تنظيف docs/ من التلوث + توثيق السبب الجذري لانكسار CI |
-| الحالة | ACTIVE |
+| TASK ID | M13-T01 |
+| العنوان | توثيق أول تشغيل CI حقيقي وتحليل نتائج البوابات |
+| الحالة | VERIFIED COMPLETE |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
-| Base SHA | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
-| الفرع | arena/019fdff4-drive-buddy-3579bf74 |
+| Base SHA | ff6a484abbeae666b9151e0f729ac07b28c57e9c |
+| الفرع | arena/019fdfff-drive-buddy-3579bf74 |
 | فتح بتاريخ (UTC) | 2026-08-08 |
-| النطاق | docs/ فقط (AI_RULES.md, KNOWN_ISSUES.md, TODO.md, ACTIVE_TASK.md, AI_HANDOFF.md, CHANGELOG.md, PHASE_13.md) |
-| خارج النطاق | .github/**, docs/CONSTITUTION.md, الأرشيف, تقارير PHASE_0-12, python-package/**, public/**, src/**, package.json, bun.lock, AGENTS.md |
+| النطاق | docs/ فقط (TODO.md, KNOWN_ISSUES.md, AI_HANDOFF.md, ACTIVE_TASK.md, CHANGELOG.md, PHASE_14.md) |
+| خارج النطاق | .github/**, docs/CONSTITUTION.md, docs/CONSTITUTION_V4.5_ARCHIVE.md, تقارير PHASE_0-12, python-package/**, public/**, src/**, package.json, bun.lock, AGENTS.md |
+| الخطوة التالية | M13-T02 (تدقيق Action Registry زرًا-زرًا وحصر الـ19 إجراءً غير الجاهزة) |
 
-> ملاحظة توثيقية 1: اسم الفرع المقترح في DOC كان `arena/M12-T02-docs-hygiene`، لكن جلسة Arena مثبَّتة على الفرع أعلاه ولا تسمح بتبديل الفروع أو إنشاء فرع آخر للعمل نفسه. سُجِّل الانحراف في PHASE_13 وAI_HANDOFF.
-
-> ملاحظة توثيقية 2 (الجزء أ — CI): DOC يقسم المهمة إلى جزء (أ) بيد المالك حصريًا (استبدال ci.yml) وجزء (ب) بيد LM Arena (هذا الجزء). الجزء (أ) لم يُنفَّذ بعد عند كتابة هذا الملف — `runner.temp` لا يزال في السطر 16 من ci.yml. لا أدّعي أن CI أخضر.
+> ملاحظة توثيقية: تم التحقق من نجاح أول تشغيل GitHub Actions حقيقي (run `31243523514` على commit `ff6a484`) واستغرق 1m21s بنجاح كامل للوظيفتين (Python 1m17s, Frontend 16s) وتوليد artifact `teledrive-package`. المهمة مكتملة وموثقة في PHASE_14.
 
 ## قاعدة الاستخدام
 
