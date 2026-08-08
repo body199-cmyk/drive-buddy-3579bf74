@@ -2,6 +2,24 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M13-T01] — 2026-08-08 — توثيق أول تشغيل CI حقيقي وتحليل البوابات
+
+### Verified
+- `GitHub Actions Run 31243523514`: أول تشغيل حقيقي ناجح (`success`) على commit المالك `ff6a484`، استغرق 1m21s كاملة (من 06:15:46Z إلى 06:17:07Z).
+  - `Python package (tests + Colab contract)` (ID: `93068234642`): نجاح كامل في 1m17s (299 passed في pytest، launcher check، notebook sync، وبناء الحزمة).
+  - `Frontend build` (ID: `93068234649`): نجاح كامل في 16s (bun install وbun lint وbun build).
+  - `teledrive-package` artifact: رُفع بنجاح محتويًا `teledrive_v4.5.zip`.
+
+### Closed Tasks & Issues
+- `docs/TODO.md`: إغلاق `M10-T02` و`M12-T01` و`M12-T02` و`M13-T01` كـ `VERIFIED COMPLETE`. تحديد `M13-T02` كالخطوة القادمة.
+- `docs/KNOWN_ISSUES.md`: إغلاق المشاكل #8 (بناء v4.5 في CI)، #13 (انكسار بدء CI بسبب `runner.temp` في job env)، #15 (حاجز صلاحية workflows بعد تطبيق المالك اليدوي لـ commit `ff6a484`).
+
+### Added
+- `docs/PHASE_REPORTS/PHASE_14.md`: تقرير الأدلة الكامل لأول تشغيل CI حقيقي ومخرجات البوابات.
+
+### Changed
+- `docs/ACTIVE_TASK.md` و`docs/AI_HANDOFF.md`: توثيق الحالة المحدثة والأدلة الفعلية وبطاقة الجلسة.
+
 ## [M12-T02] — 2026-08-08 — تصحيح AI_RULES وتنظيف docs وتوثيق السبب الجذري لانكسار CI
 
 ### Fixed
