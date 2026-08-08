@@ -2,6 +2,30 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M13-T03] — 2026-08-08 — إصلاح analyze.select_all وanalyze.clear_selection مع اختبارات binding حقيقية
+
+### Verified
+- كود المنتج الحالي (`handlers.py` و`services.py`) لإجرائي التحديد `analyze.select_all` و`analyze.clear_selection` سليم ويحقق كل شروط معايير القبول دون تعديل.
+- إضافة 5 اختبارات إثبات حقيقية في `python-package/tests/test_selection.py` تثبت:
+  - `select_all`: يحدد العناصر المرئية فقط مع استبعاد العناصر المخفية، ويعيد `rows_for(visible)`.
+  - `clear_selection`: يمسح التحديد دون حذف العناصر أو تغيير مرئيتها، ويعيد الصفوف المرئية دون تعديل.
+  - استدعاء الـ handlers يمر عبر `ctx.resolve(spec.service_path)` ويصل إلى `SelectionService.select_all_visible` و`SelectionService.clear`.
+  - مسار الخطأ يرجع الطول الصحيح (`tuple` بطول 2) ولا يسرب أي أسرار أو tracebacks.
+- `PATH=/tmp/teledrive-m13-venv/bin:$PATH python -m pytest -q tests`: **306 passed in 8.66s**.
+- `python teledrive_launcher.py --check`: **binding check ok: 24/41 ready actions resolve** (ترقية إجرائي التحديد من `NOT_TESTED` إلى `READY`).
+
+### Changed
+- `python-package/teledrive/action_registry.py`: ترقية `analyze.select_all` و`analyze.clear_selection` إلى `tested=True` وربط `proof_test` بهما؛ لم تُلمس أي إجراءات أخرى.
+- `python-package/tests/test_selection.py`: ملف جديد بـ 5 اختبارات إثبات حقيقية.
+- `docs/PHASE_REPORTS/PHASE_16.md`: تقرير المرحلة 16 المفصل بالأدلة ومخرجات بوابات التحقق.
+- `docs/TODO.md`: إغلاق M13-T03 وتحديث الخطوة التالية (M13-T04).
+- `docs/KNOWN_ISSUES.md`: تحديث البند #10 ليعكس ارتقاء الإجراءات الجاهزة إلى 24/41.
+- `docs/ACTIVE_TASK.md` و`docs/AI_HANDOFF.md`: تحديث بطاقة الجلسة والتقرير المعتمد ومخرجات التحقق.
+
+### Not changed — عمدًا
+- لم يتم تعديل كود المنتج في `handlers.py` أو `services.py` أو أي مسارات أخرى لثبوت صحتها.
+- لا تغيير في `.github/workflows/ci.yml`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock`، أو الدستور. الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M13-T02] — 2026-08-08 — تدقيق Action Registry وتصنيف الإجراءات غير الجاهزة
 
 ### Verified

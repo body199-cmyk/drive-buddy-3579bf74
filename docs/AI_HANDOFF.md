@@ -7,63 +7,65 @@
 
 | الحقل | القيمة |
 |---|---|
-| التاريخ (UTC) | 2026-08-08T06:32:34Z |
-| نوع الجلسة | New Coding Session after M13-T01 merge |
+| التاريخ (UTC) | 2026-08-08T07:05:00Z |
+| نوع الجلسة | Fix and proof tests for select_all and clear_selection (M13-T03) |
 | تصنيف الاستئناف | `RESUME_VERIFIED` |
-| TASK ID | `M13-T02` |
-| العنوان | تدقيق Action Registry زرًا-زرًا وتصنيف الإجراءات غير الجاهزة |
+| TASK ID | `M13-T03` |
+| العنوان | إصلاح `analyze.select_all` و`analyze.clear_selection` مع اختبارات binding حقيقية |
 | المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| الفرع | `arena/019fe010-drive-buddy-3579bf74` |
-| HEAD قبل العمل | `61df83e0912debede0e7e41b8bfde5e6bfabcee9` |
-| HEAD بعد العمل | رأس commit M13-T02؛ يُستخرج بـ `git log -1 --format=%H` بعد commit |
-| Base SHA المعتمد | `61df83e0912debede0e7e41b8bfde5e6bfabcee9` |
-| سبب اختيار baseline | PR #7 مدموج فعليًا إلى `main`، وHEAD المحلي هو merge SHA؛ Run `31243921611` أخضر بعد الدمج |
-| الحالة النهائية | `VERIFIED COMPLETE` — اكتمل تدقيق 41 action وجدول الأدلة والتصنيف دون تعديل كود |
-| آخر SHA أخضر | `61df83e0912debede0e7e41b8bfde5e6bfabcee9` — Run `31243921611` (`success`) |
+| الفرع | `arena/019fe024-drive-buddy-3579bf74` |
+| HEAD قبل العمل | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` |
+| HEAD بعد العمل | رأس commit M13-T03؛ يُستخرج بـ `git log -1 --format=%H` بعد commit |
+| Base SHA المعتمد | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` |
+| سبب اختيار baseline | PR #8 مدموج فعليًا إلى `main`، وHEAD المحلي هو merge SHA؛ Run `31244752412` أخضر بعد الدمج |
+| الحالة النهائية | `VERIFIED COMPLETE` — إثبات صحة كود المنتج الحالي لإجرائي التحديد، إضافة 5 اختبارات في `test_selection.py`، وترقية الإجرائين إلى `READY` (`24/41` جاهزة) |
+| آخر SHA أخضر | `86005ff6ef5eb55ddfd639f306c85ff17acadc4c` — Run `31244752412` (`success`) |
 | نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` |
 
 ## تحقق baseline السابق
 
-- PR السابق: [#7](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/7)، الحالة `MERGED`، merge SHA `61df83e`.
-- الملفات التي دخلت PR #7: `docs/ACTIVE_TASK.md`, `docs/AI_HANDOFF.md`, `docs/CHANGELOG.md`, `docs/KNOWN_ISSUES.md`, `docs/PHASE_REPORTS/PHASE_14.md`, `docs/TODO.md`.
-- `gh run view 31243921611`: `success` على `61df83e`، بوظيفتي `Python package (tests + Colab contract)` و`Frontend build`.
-- لا يوجد اختلاف غير مفسر بين baseline وذاكرة M13-T01: الخطوة التالية المعلنة كانت M13-T02.
+- PR السابق: [#8](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/8)، الحالة `MERGED`، merge SHA `86005ff`.
+- الملفات التي دخلت PR #8: `docs/ACTIVE_TASK.md`, `docs/AI_HANDOFF.md`, `docs/CHANGELOG.md`, `docs/KNOWN_ISSUES.md`, `docs/PHASE_REPORTS/PHASE_15.md`, `docs/TODO.md`.
+- Run `31244752412`: `success` على `86005ff`، بوظيفتي `Python package (tests + Colab contract)` و`Frontend build`.
+- لا يوجد اختلاف غير مفسر بين baseline وذاكرة M13-T02: الخطوة التالية المعلنة كانت M13-T03.
 
 ## ما نُفِّذ فعليًا
 
-- فحص `all_specs()` على context حي: `41` declaration، `22` ready، `19` unready.
-- مقارنة كل صف مع handler metadata، `ctx.resolve(service_path)`، موضع `wire_if_ready` في `ui.py`، واختبارات binding.
-- التصنيف الكامل: `22 READY`, `6 BLOCKED` (Drive/native Colab gate), `13 NOT_TESTED`; `0 DEAD_CONTROL`, `0 NOT_IMPLEMENTED`, `0 NOT_WIRED`.
-- إنشاء `docs/PHASE_REPORTS/PHASE_15.md` وتحديث `TODO.md`, `KNOWN_ISSUES.md`, `ACTIVE_TASK.md`, `CHANGELOG.md`.
-- لم يتغير `python-package/**` أو أي ملف محمي. لم تتغير قيم `implemented` أو `tested`، ولم تُضف fake handlers/services/tests.
+- فحص مسارات الإجرائين `analyze.select_all` و`analyze.clear_selection` من `handlers.py` إلى `ctx.resolve` و`SelectionService` في `services.py` والربط في `ui.py` / `ui_binder.py`.
+- إثبات صحة التنفيذ الحالي في كود المنتج (حيث يحدد `select_all_visible` العناصر المرئية فقط ويعيد الصفوف المرئية، ويمسح `clear` التحديد دون حذف أو تعديل العناصر المرئية، ومسار الخطأ يرجع الطول الصحيح دون تسريب أسرار).
+- إنشاء ملف الاختبارات الحقيقي `python-package/tests/test_selection.py` بـ 5 اختبارات تغطي: تحديد العناصر المرئية فقط، مسح التحديد مع الحفاظ على العناصر والصفوف، جاسوس (spy) على `ctx.resolve` والخدمة الفعلية، ومسار الخطأ والطول (`arity=2`) وعدم تسريب الأسرار.
+- ترقية إجرائي التحديد في `python-package/teledrive/action_registry.py` إلى `tested=True` وربط `proof_test` بهما (`24/41 ready actions resolve`).
+- لم يتغير أي كود منتج أو أي ملف محمي (`.github/workflows/ci.yml`, `docs/CONSTITUTION.md`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock`).
 
 ## البوابات ومخرجاتها الحقيقية
 
 | البوابة | النتيجة | المخرجات |
 |---|---|---|
-| `python teledrive_launcher.py --check` من `python-package` | PASS | `binding check ok: 22/41 ready actions resolve`، exit 0 |
-| `python -m pytest -q tests` على interpreter النظام | BLOCKED بالبيئة | `/usr/bin/python: No module named pytest`، exit 1؛ ليس test failure |
-| نفس pytest عبر venv مبنية من `requirements.lock` | PASS | `299 passed in 8.22s`، exit 0 |
-| binding contract داخل pytest | PASS | `test_bindings.py` و`test_handlers_contract.py` مرّا ضمن 299؛ exact service-object spy لكل 41 |
-| GitHub Actions baseline | PASS | Run `31243921611`, `success` على merge SHA، Python + Frontend |
+| `python -m compileall teledrive` من `python-package` | PASS | نجاح دون أخطاء |
+| `python -m pytest -q tests` من `python-package` (venv) | PASS | `306 passed in 8.66s` (بزيادة 7 اختبارات عن 299)، exit 0 |
+| `python teledrive_launcher.py --check` من `python-package` (venv) | PASS | `binding check ok: 24/41 ready actions resolve`، exit 0 |
+| `python -m teledrive.notebook_cells --check` من `python-package` (venv) | PASS | `notebooks are in sync`، exit 0 |
+| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | متطابقان تمامًا، exit 0 |
+| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `archive: teledrive_v4.5.zip`، exit 0 |
+| GitHub Actions CI للـ PR | PENDING | سيُفحص على GitHub Actions بعد فتح PR #9 |
 
 لإعادة إنتاج الاختبار المحلي المثبت:
 
 ```bash
 cd python-package
 PATH=/tmp/teledrive-m13-venv/bin:$PATH python -m pytest -q tests
-# 299 passed in 8.22s
+# 306 passed in 8.66s
 PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
-# binding check ok: 22/41 ready actions resolve
+# binding check ok: 24/41 ready actions resolve
 ```
 
-الـvenv مؤقتة خارج Git، وثُبّتت من `requirements.lock`; لم يُعدّل lock ولم تُحفظ credentials.
+الـ venv مؤقتة خارج Git، وثُبّتت من `requirements.lock`; لم يُعدّل lock ولم تُحفظ credentials.
 
-## اختبارات لم تُشغَّل أو لم تُثبَت
+## اختبارات لم تُشغَّل أو لم تُثبَت (`TESTS NOT RUN OR NOT PROVEN`)
 
 - لم يُختبر تشغيل حقيقي على Google Colab (Telegram حي + Google Drive حي + نقل ملف حقيقي + shutdown/recovery/logs الحية). هذا ما زال مملوكًا للمالك في M15-T01.
-- لم تُشغّل `bun run lint` أو `bun run build` محليًا في هذه المهمة docs-only؛ الاعتماد هو آخر CI أخضر Run `31243921611`.
-- لم تُبنَ Gradio UI في browser/Colab حقيقي؛ binding evidence هو static/contract test فقط.
+- لم تُشغّل `bun run lint` أو `bun run build` محليًا لعدم توفر `bun` في بيئة نظام الأوامر؛ الاعتماد هو آخر CI أخضر Run `31244752412` وسيقوم CI الخاص بالـ PR بتشغيلها.
+- لم تُبنَ Gradio UI في browser/Colab حقيقي؛ binding evidence هو static/contract test واختبارات خدمة حقيقية.
 - التحقق المختبري النهائي ليس دليل `Colab-ready` ولا `Complete`.
 
 ## الحالة الصادقة
@@ -72,19 +74,18 @@ PATH=/tmp/teledrive-m13-venv/bin:$PATH python teledrive_launcher.py --check
 
 ## الخطوة التالية الأصغر
 
-- `M13-T03`: DOC إصلاحي منفصل لـ`analyze.select_all` + `analyze.clear_selection`، وهما أصغر مجموعة مترابطة. يجب إضافة proof tests ثم ترقية flags فقط بعد النجاح؛ لا تُصلح الـ19 دفعة واحدة.
+- `M13-T04`: مجموعة صغيرة أخرى مثبتة الحاجة من الإجراءات المتبقية (`11 NOT_TESTED`)، أو الانتقال إلى Colab الحقيقي (`M15-T01`).
 
 ## Git / التسليم
 
 ```text
-Audit commit: SUCCESS — fd660804694ad26ddcfae33028d76b74191908eb
-Push: SUCCESS — origin/arena/019fe010-drive-buddy-3579bf74
-Pull Request: CREATED — #8
-Branch: arena/019fe010-drive-buddy-3579bf74
-Base SHA: 61df83e0912debede0e7e41b8bfde5e6bfabcee9
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/8
-Checks: IN_PROGRESS at handoff update; verify on GitHub
+Audit commit: PENDING (سيتم التسجيل بعد commit الفعلي)
+Push: PENDING
+Pull Request: PENDING
+Branch: arena/019fe024-drive-buddy-3579bf74
+Base SHA: 86005ff6ef5eb55ddfd639f306c85ff17acadc4c
+PR URL: (سيُضاف رابط PR بعد إنشائه)
 ```
 
 ---
-**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_15.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـBase SHA والـResult SHA المسجلين في تقرير التسليم قبل أي ادعاء.
+**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_16.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـ Base SHA والـ Result SHA المسجلين في تقرير التسليم قبل أي ادعاء.

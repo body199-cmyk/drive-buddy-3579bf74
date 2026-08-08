@@ -13,7 +13,8 @@
 | M12-T02 | تصحيح `AI_RULES.md` لترقيم v5.0 + تنظيف `docs/` من التلوث + توثيق السبب الجذري لانكسار CI | VERIFIED COMPLETE | PR #6 mrg 35ba04c · commit ff6a484 |
 | M13-T01 | توثيق أول تشغيل CI حقيقي وتحليل نتائج البوابات | VERIFIED COMPLETE | PR #7 merge `61df83e` · run 31243921611 بعد الدمج · PHASE_14 |
 | M13-T02 | تدقيق Action Registry زرًا-زرًا (§14) وتصنيف كل الـ41 | VERIFIED COMPLETE | PHASE_15 · `all_specs()=41`, `22 READY`, `6 BLOCKED`, `13 NOT_TESTED`; `299 passed` |
-| M13-T03 | DOC إصلاحي منفصل لأصغر مجموعة مترابطة من الإجراءات غير المختبرة | PLANNED | المقترح الأول: `analyze.select_all` + `analyze.clear_selection`; لا إصلاح جماعي للـ19 |
+| M13-T03 | إصلاح analyze.select_all وanalyze.clear_selection مع اختبارات binding حقيقية | VERIFIED COMPLETE | PHASE_16 · `24/41 READY` · proof tests في `python-package/tests/test_selection.py` · `306 passed` |
+| M13-T04 | مجموعة صغيرة أخرى مثبتة الحاجة من الإجراءات المتبقية (`11 NOT_TESTED`) | PLANNED | لا إصلاح جماعي؛ التقييم حسب الحاجة قبل Colab الحقيقي |
 | M14-T01 | إصلاح محتوى الأرشيف الموزَّع: `package_service` يشحن مؤشرات بدل توثيق حقيقي | PLANNED | KNOWN_ISSUES #9 |
 | M15-T01 | **المرحلة 10 — تشغيل Colab الحقيقي** (Telegram + Drive + نقل ملف واحد) | PLANNED — بيد المالك | يلزم حساب حي؛ القالب في `docs/PHASE_REPORTS/PHASE_10.md` |
 
