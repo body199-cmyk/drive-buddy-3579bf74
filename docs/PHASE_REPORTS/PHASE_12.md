@@ -135,10 +135,18 @@ gh api -X PUT repos/body199-cmyk/drive-buddy-3579bf74/contents/.github/workflows
 ```
 **القرار المبني على الدليل:** تأكدنا بالطريقتين (git والـAPI) أن بوت Arena App غير مخوّل بلمس ملفات workflow. لم نحاول التفافًا. أُعيد `ci.yml` إلى الـbaseline، وأُعيد بناء الـcommit كدفعة docs-only (13 ملفًا) عبر reset محلي لـcommit **غير منشور** — لا rewriting لأي تاريخ منشور (المنع مقيَّد بالمنشور فقط في MIGRATION rule 3 و§12). سطرا CI يبقيان جاهزين للتطبيق فور رفع الصلاحية أو بيد المالك.
 
+**اكتشاف متأخر (بعد الدفع الأول، بأدلة GitHub Actions):**
+- دفع الـcommit الأول (docs-only) أطلق run ‏31241947281‏ الذي فشل خلال 0s قبل أي job. التعليق التوضيحي من GitHub:
+  `Invalid workflow file: .github/workflows/ci.yml#L1 (Line: 16, Col: 23): Unrecognized named-value: 'runner'. Located at position 1 within expression: runner.temp`
+- الجذر: سياق `runner` غير متاح في `jobs.<id>.env` (متاح في env على مستوى الخطوة). سطر `TELEDRIVE_ROOT: ${{ runner.temp }}/teledrive_runtime` أُدخل في commit ‏2cc5747‏؛ آخر run أخضر ‏30496659877‏ كان على blob ‏1caddeb‏ بـ`${{ github.workspace }}`.
+- **عطل سابق على M12-T01**: يفشل بنفس الصورة على دفعة المالك ‏31129230384‏ (قبل يوم) وعلى merges للـPRs #2/#3/#4؛ ودفعتي docs-only لا تلمس الملف. اسم الـworkflow في API يظهر كمسار الملف بدل "CI" = مؤشر GitHub لفشل تحليل الملف.
+- الملاحظة الضمنية الخطيرة: لم يعمل CI بأي بوابة على GitHub منذ هذا التغيير — أي ادعاء "بوابات خضراء في CI" يبقى غير مُثبت حتى يُصلح الملف (يرتبط بـM13-T01 وKNOWN_ISSUES #13).
+- الإصلاح المقترح (يحتاج صلاحية workflows أو يد المالك): إعادة السطر 16 إلى `TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime` (آخر إعداد أخضر مثبت)، أو نقل env لمستوى الخطوة. ومعها سطرا v4.5 الموثقان أعلاه.
+
 **TESTS NOT RUN OR NOT PROVEN:**
 - إصلاح `ci.yml` على GitHub — مجهَّز ومتحقق محليًا، لكنه غير مدفوع (العائق أعلاه). يُغلق M10-T02 عند هبوطه.
 - `bun install --frozen-lockfile` نفسه في هذه البيئة (السبب أعلاه) — lint وbuild أُثبتا على node_modules المكتمِلة.
-- تشغيل CI الكامل على GitHub لهذه الدفعة — ينتظر الدفع، ويُسجَّل رابطه في رد الجلسة الختامي.
+- بوابات CI على GitHub — **لا تعمل حاليًا على أي فرع** (قسم الاكتشاف المتأخر أعلاه): run ‏31241947281‏ لهذا الـcommit فشل عند التهيئة قبل بدء jobs، مثل كل الدفعات منذ ‏2cc5747‏.
 - أي تحقق Telegram/Drive/نقل حقيقي — بيد المالك في M15-T01.
 - Gradio 6.20.0 UI حقيقي في متصفح — بند M13-T01 قائم.
 

@@ -54,7 +54,7 @@
 
 - **دفع إصلاح CI إلى GitHub — ممنوع بصلاحية المنصة** (الدليل في PHASE_12). التحقق المحلي للسطرين تم قبل التراجع عن الملف.
 - `bun install --frozen-lockfile` فشل في هذه البيئة الرملية فقط: خطأ تحقق شهادة TLS على tarballs `@lovable.dev/*`؛ اكتملت node_modules عبر `npm install --no-package-lock` (bun.lock لم يُمس).
-- CI على GitHub لهذه الدفعة (docs-only) لم يكتمل وقت كتابة هذا الملف — نتيجته في رد الجلسة الختامي.
+- بوابات CI على GitHub — **لا تعمل حاليًا على أي فرع**: run ‏31241947281‏ (لدفعة هذه الجلسة) فشل خلال 0s قبل أي job بالتعليق `Invalid workflow file ... (Line: 16, Col: 23): Unrecognized named-value: 'runner'` — سياق `runner` غير متاح في `jobs.<id>.env`. العطل سابق على الجلسة (يفشل حتى على دفعة المالك ‏31129230384‏ وmerges للـPRs #2/#3/#4)؛ آخر أخضر ‏30496659877‏ على blob ‏1caddeb‏ بـ`${{ github.workspace }}`. التفاصيل في PHASE_12 (اكتشاف متأخر) وKNOWN_ISSUES #13.
 - لا تحقق حقيقي من Telegram / Drive / نقل ملفات — يبقى بيد المالك في M15-T01 (PHASE 10).
 
 ## الحالة الصادقة
@@ -63,7 +63,7 @@
 
 ## الخطوة التالية الأصغر
 
-- إعادة ربط GitHub في Arena بصلاحية `workflows` (أو يطبق المالك `sed 's/teledrive_v3\.1\.zip/teledrive_v4.5.zip/g' .github/workflows/ci.yml` بنفسه)، ثم دفع السطرين — يُغلق M10-T02 و#8 ويكتمل M12-T01. ثم M13-T01.
+- إعادة ربط GitHub في Arena بصلاحية `workflows` (أو يطبق المالك يدويًا) ثم دفع **3 أسطر** في `.github/workflows/ci.yml`: سطرا `teledrive_v3.1.zip`→`teledrive_v4.5.zip` (يغلق M10-T02 و#8) وسطر `TELEDRIVE_ROOT` إلى `${{ github.workspace }}` (يغلق #13 ويعيد CI للعمل)، وكلها موثقة بالأدلة في PHASE_12. ثم M13-T01.
 
 ---
 **تعليمات للجلسة القادمة:** `CONSTITUTION.md` → `BOOTSTRAP_PROMPT.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md`. ثم `git rev-parse HEAD` وقارنه بالجدول أعلاه قبل أي ادعاء.
