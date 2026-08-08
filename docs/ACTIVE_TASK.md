@@ -1,26 +1,27 @@
 # ACTIVE_TASK — قفل معلوماتي لمهمة واحدة
 
-> هذا الملف قفل **معلوماتي** فقط (§7)، وليس mutex runtime. مهمة واحدة نشطة في كل لحظة.
-> عند بدء مهمة: املأ الجدول. عند إغلاقها: انقلها إلى CHANGELOG واضبط الحالة على `NONE`.
+> هذا الملف قفل **معلوماتي** فقط (§7)، وليس mutex runtime. عند إغلاق المهمة يبقى الدليل التاريخي في `CHANGELOG.md` و`PHASE_REPORTS/`، وتصبح الخطوة التالية هي القفل النشط الجديد.
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M13-T01 |
-| العنوان | توثيق أول تشغيل CI حقيقي وتحليل نتائج البوابات |
+| TASK ID | M13-T02 |
+| العنوان | تدقيق Action Registry زرًا-زرًا وتصنيف الإجراءات غير الجاهزة |
 | الحالة | VERIFIED COMPLETE |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
-| Base SHA | ff6a484abbeae666b9151e0f729ac07b28c57e9c |
-| الفرع | arena/019fdfff-drive-buddy-3579bf74 |
+| Base SHA | `61df83e0912debede0e7e41b8bfde5e6bfabcee9` |
+| الفرع | `arena/019fe010-drive-buddy-3579bf74` |
 | فتح بتاريخ (UTC) | 2026-08-08 |
-| النطاق | docs/ فقط (TODO.md, KNOWN_ISSUES.md, AI_HANDOFF.md, ACTIVE_TASK.md, CHANGELOG.md, PHASE_14.md) |
-| خارج النطاق | .github/**, docs/CONSTITUTION.md, docs/CONSTITUTION_V4.5_ARCHIVE.md, تقارير PHASE_0-12, python-package/**, public/**, src/**, package.json, bun.lock, AGENTS.md |
-| الخطوة التالية | M13-T02 (تدقيق Action Registry زرًا-زرًا وحصر الـ19 إجراءً غير الجاهزة) |
-
-> ملاحظة توثيقية: تم التحقق من نجاح أول تشغيل GitHub Actions حقيقي (run `31243523514` على commit `ff6a484`) واستغرق 1m21s بنجاح كامل للوظيفتين (Python 1m17s, Frontend 16s) وتوليد artifact `teledrive-package`. المهمة مكتملة وموثقة في PHASE_14.
+| النطاق | `docs/` فقط: `TODO.md`, `KNOWN_ISSUES.md`, `AI_HANDOFF.md`, `ACTIVE_TASK.md`, `CHANGELOG.md`, `PHASE_REPORTS/PHASE_15.md` |
+| خارج النطاق | `python-package/**`, `.github/workflows/ci.yml`, `docs/CONSTITUTION.md`, `docs/CONSTITUTION_V4.5_ARCHIVE.md`, `docs/PHASE_REPORTS/PHASE_10.md`, `public/**`, `src/**`, `requirements*.txt`, `bun.lock` |
+| النتيجة | جدول كامل لـ41 إجراءً: 22 READY، 6 BLOCKED، 13 NOT_TESTED؛ لا DEAD_CONTROL أو NOT_IMPLEMENTED أو NOT_WIRED |
+| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_15.md` + `python teledrive_launcher.py --check` = `22/41` + `299 passed in 8.22s` من البيئة المثبتة |
+| الخطوة التالية | M13-T03 — DOC إصلاحي منفصل لأصغر مجموعة مترابطة (`analyze.select_all` و`analyze.clear_selection`) |
 
 ## قاعدة الاستخدام
 
-- إذا كانت الحالة `ACTIVE` لمهمة أخرى، لا تبدأ مهمة جديدة قبل إغلاقها أو تعليمها `BLOCKED` بسبب مكتوب.
-- إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD`، فالملف متقادم ويجب إعادة التدقيق قبل أي تعديل.
-- الحالات المسموحة: PLANNED, ACTIVE, VERIFIED COMPLETE, PARTIALLY COMPLETE, FAILED, BLOCKED, CANCELLED.
+- لا تعدّل flags أو تضف handlers/services/tests ضمن M13-T02؛ هذه المهمة تشخيص وتصنيف فقط.
+- لا تعتبر أي إجراء من الـ19 غير الجاهزة جاهزًا بسبب وجود declaration أو generic binding test.
+- إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD` عند بدء جلسة لاحقة، فالملف متقادم ويجب إعادة التدقيق.
+- الحالة الصادقة للمشروع: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+- الحالات المسموحة: `PLANNED`, `ACTIVE`, `VERIFIED COMPLETE`, `PARTIALLY COMPLETE`, `FAILED`, `BLOCKED`, `CANCELLED`.
