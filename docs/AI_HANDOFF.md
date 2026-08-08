@@ -7,63 +7,60 @@
 
 | الحقل | القيمة |
 |---|---|
-| التاريخ (UTC) | 2026-08-08T05:40:00Z |
-| نوع الجلسة | New Coding Session after Arena closure |
-| تصنيف الاستئناف | RESUME_PARTIAL |
-| TASK ID | M12-T01 |
-| العنوان | إصلاح تعارضات v5.0 واستكمال بيت الذاكرة وتصحيح CI |
+| التاريخ (UTC) | 2026-08-08T06:00:00Z |
+| نوع الجلسة | New Coding Session |
+| تصنيف الاستئناف | N/A (جلسة جديدة من DOC جديد) |
+| TASK ID | M12-T02 |
+| العنوان | تصحيح AI_RULES لترقيم v5.0 + تنظيف docs/ من التلوث + توثيق السبب الجذري لانكسار CI |
 | المستودع | body199-cmyk/drive-buddy-3579bf74 |
-| الفرع | arena/019fdfc5-drive-buddy-3579bf74 |
-| HEAD قبل العمل | 4cacc584834a7fc8e0b8ccf36b53ca3808cbab77 |
+| الفرع | arena/019fdff4-drive-buddy-3579bf74 |
+| HEAD قبل العمل | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
 | HEAD بعد العمل | رأس الفرع بعد commit هذه الدفعة — استخرجه بـ `git log -1 --format=%H`؛ يستحيل رياضيًا تضمين SHA الـcommit داخل شجرته ذاتها، والاسم الكامل مسجَّل في متن الـPR ورد الجلسة الختامي |
-| Base SHA المعتمد | 4cacc584834a7fc8e0b8ccf36b53ca3808cbab77 |
-| سبب اختيار الـbaseline | PR #4 مدموج فعليًا؛ الـbaseline هو commit الدمج بعد فحصه |
-| الحالة النهائية | PARTIALLY COMPLETE — كل ملفات docs/ (13 ملفًا) سلِّمت ودُفعت ببوابات خضراء محليًا بما فيها pytest؛ بند إصلاح `ci.yml` (سطران) مجهَّز ومتحقق منه محليًا لكن دفعه **مُنع بصلاحية المنصة**: GitHub App بلا `workflows` |
+| Base SHA المعتمد | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
+| سبب اختيار الـbaseline | PR #5 مدموج فعليًا؛ الـbaseline هو commit الدمج بعد فحصه |
+| الحالة النهائية | ACTIVE — كل ملفات docs/ (7 ملفات) سلِّمت ودُفعت ببوابات خضراء محليًا بما فيها pytest؛ جزء (أ) من DOC (استبدال ci.yml) بيد المالك ولم يُنفَّذ بعد |
 | آخر SHA أخضر | مثل حقل HEAD بعد العمل أعلاه (نفس الـcommit، بعد خضور البوابات الثماني كلها محليًا) |
-| نقطة rollback | قبل الدمج: إغلاق PR والعودة إلى 4cacc58. بعد الدمج: `git revert -m 1 <merge SHA>` |
+| نقطة rollback | قبل الدمج: إغلاق PR والعودة إلى ad3a454. بعد الدمج: `git revert -m 1 <merge SHA>` |
 
 ## ما نُفِّذ فعليًا
 
-- `docs/CONSTITUTION_V4.5_ARCHIVE.md`: استرجاع byte-exact من commit 821cc25 — `git hash-object` = `c281a5cd38d594b54999f77a36c4d000bb6362d3`.
-- `docs/ACTIVE_TASK.md`، `docs/MIGRATION.md`، `docs/REPOSITORY_REGISTRY.md`: إنشاء ملفات §7 الناقصة.
-- `docs/decisions/ADR-002-v5-governance-promotion.md`: توثيق ترقية الحوكمة وأرشفة v4.5.
-- `docs/PHASE_REPORTS/PHASE_10.md`: قالب فارغ غير منفَّذ (بوابة Colab-ready، بيد المالك).
-- `docs/TeleDrive-v5.md`: تحويله من نسخة مكررة 27KB إلى مؤشر سطر واحد (§0، §7).
-- `docs/BOOTSTRAP_PROMPT.md`: استبدال كامل بترقيم أقسام v5.0، بلا Lovable كمنفّذ.
-- `docs/TODO.md`: TASK IDs بصيغة §6؛ M10-T02 مسجَّل بصدق BLOCKED (عائق منصة).
-- `docs/KNOWN_ISSUES.md`: بنود 8–11؛ البند 11 أُغلق بدليل pytest حقيقي.
-- `docs/CHANGELOG.md`: مدخل [M12-T01] في الرأس بلا حذف.
-- `docs/PHASE_REPORTS/PHASE_12.md`: تقرير هذه الجلسة بالأدلة الكاملة.
-- **مجهَّز لكنه لم يُدفَع (عائق منصة):** `.github/workflows/ci.yml` — سطران عبر `sed 's/teledrive_v3\.1\.zip/teledrive_v4.5.zip/g'`، متحقق محليًا (`grep teledrive_v` = سطرا v4.5 فقط، `grep -c v3.1` = 0). `git push` رُفض: *refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows` permission*؛ وREST contents API: *HTTP 403 Resource not accessible by integration*. أُعيد الملف إلى حالة الـbaseline حتى لا يبقى تغيير معلَّق، وأُعيد commit كدفعة docs-only (13 ملفًا). لا rewrite لأي تاريخ منشور.
-- انحراف موثَّق آخر عن DOC: اسم الفرع المقترح `task/M12-T01-constitution-v5-reconciliation` لم يُستخدم — جلسة Arena مثبَّتة على فرعها ولا تسمح بتبديل الفروع.
+- `docs/pic for frontend`: حُذف عبر `git rm` — ملف بايت واحد لوّث بيت الذاكرة القانوني من commit المالك `afde5fe`.
+- `docs/AI_RULES.md`: استبدال كامل — ترقيم أقسام v5.0 (§2, §3, §7, §9.7, §10, §11, §17, §18, §20)، الأدوار §3 (Brain/LM Arena Agent/Owner)، Lovable يُذكر فقط في فقرة "خرج نهائيًا" وملاحظة المرآة التقنية، جدول قيود المنصة مضاف.
+- `docs/KNOWN_ISSUES.md`: #8 و#13 مُحدَّثان بملاحظة "بانتظار تطبيق المالك" والسبب الجذري الكامل؛ #14 جديد (تلوث ✅ حُذف)؛ #15 جديد (صلاحية المنصة).
+- `docs/TODO.md`: M10-T02 أوضح؛ M12-T01 → PARTIALLY COMPLETE؛ M12-T02 مضاف ACTIVE؛ M13-T01 أعيدت صياغتها ("تحليل نتائج أول تشغيل CI حقيقي").
+- `docs/ACTIVE_TASK.md`: استبدال لـM12-T02 مع الفرع والـSHA الحقيقيين.
+- `docs/CHANGELOG.md`: مدخل [M12-T02] أعلى المدخلات.
+- `docs/PHASE_REPORTS/PHASE_13.md`: تقرير هذه الجلسة مع السبب الجذري الكامل لانكسار CI وحاجز صلاحية `workflows`.
 
 ## البوابات ومخرجاتها الحقيقية
 
 | البوابة | النتيجة | المخرجات |
 |---|---|---|
-| `python -m compileall teledrive` | PASS (exit 0) | Listing + Compiling نظيف لكل 43 وحدة |
-| `python -m pytest -q tests` | PASS | **299 passed in 7.58s** (pytest 9.1.1 بمثبتات requirements.lock) |
+| `python -m compileall teledrive` | PASS (exit 0) | Listing + Compiling نظيف لكل الوحدات |
+| `python -m pytest -q tests` | PASS | **299 passed in 8.55s** (pytest 9.1.1 بمثبتات requirements.lock) |
 | `python teledrive_launcher.py --check` | PASS (exit 0) | `bootstrap ok schema=1` + `binding check ok: 22/41 ready actions resolve` |
 | `python -m teledrive.notebook_cells --check` | PASS (exit 0) | `notebooks are in sync` |
 | `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS (exit 0) | متطابقان byte-for-byte |
-| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS (exit 0) | `tests passed` ثم `archive: teledrive_v4.5.zip` (135,237 بايت؛ أُزيل بعد التحقق لأنه artifact) |
-| `bun run lint` | PASS (exit 0) | 0 errors، 6 warnings (react-refresh/only-export-components — موجودة مسبقًا) |
-| `bun run build` | PASS (exit 0) | `✓ built` + nitro/wrangler output مكتمل |
+| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS (exit 0) | `tests passed` ثم `archive: teledrive_v4.5.zip` (أُزيل بعد التحقق لأنه artifact) |
+| `eslint .` (lint) | PASS (exit 0) | 0 errors، 6 warnings (react-refresh/only-export-components — موجودة مسبقًا) |
+| `vite build` | PASS (exit 0) | `✓ built in 302ms` + nitro/wrangler output مكتمل |
 
 ## اختبارات لم تُشغَّل أو لم تُثبَت
 
-- **دفع إصلاح CI إلى GitHub — ممنوع بصلاحية المنصة** (الدليل في PHASE_12). التحقق المحلي للسطرين تم قبل التراجع عن الملف.
-- `bun install --frozen-lockfile` فشل في هذه البيئة الرملية فقط: خطأ تحقق شهادة TLS على tarballs `@lovable.dev/*`؛ اكتملت node_modules عبر `npm install --no-package-lock` (bun.lock لم يُمس).
-- بوابات CI على GitHub — **لا تعمل حاليًا على أي فرع**: run ‏31241947281‏ (لدفعة هذه الجلسة) فشل خلال 0s قبل أي job بالتعليق `Invalid workflow file ... (Line: 16, Col: 23): Unrecognized named-value: 'runner'` — سياق `runner` غير متاح في `jobs.<id>.env`. العطل سابق على الجلسة (يفشل حتى على دفعة المالك ‏31129230384‏ وmerges للـPRs #2/#3/#4)؛ آخر أخضر ‏30496659877‏ على blob ‏1caddeb‏ بـ`${{ github.workspace }}`. التفاصيل في PHASE_12 (اكتشاف متأخر) وKNOWN_ISSUES #13.
+- بوابات CI على GitHub — **لا تعمل حاليًا على أي فرع**: workflow غير صالح بسبب `runner.temp` في job-env (KNOWN_ISSUES #13). الجزء (أ) من DOC (استبدال ci.yml) بيد المالك ولم يُنفَّذ بعد.
+- `bun install --frozen-lockfile` — bun غير متاح في هذه البيئة الرملية؛ lint وbuild أُثبتا على node_modules المكتمِلة مسبقًا عبر npm.
 - لا تحقق حقيقي من Telegram / Drive / نقل ملفات — يبقى بيد المالك في M15-T01 (PHASE 10).
 
 ## الحالة الصادقة
 
 **Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.**
 
+CI لا يزال ميتًا على GitHub — الجزء (أ) من DOC لم يُنفَّذ بعد.
+
 ## الخطوة التالية الأصغر
 
-- إعادة ربط GitHub في Arena بصلاحية `workflows` (أو يطبق المالك يدويًا) ثم دفع **3 أسطر** في `.github/workflows/ci.yml`: سطرا `teledrive_v3.1.zip`→`teledrive_v4.5.zip` (يغلق M10-T02 و#8) وسطر `TELEDRIVE_ROOT` إلى `${{ github.workspace }}` (يغلق #13 ويعيد CI للعمل)، وكلها موثقة بالأدلة في PHASE_12. ثم M13-T01.
+- **بيد المالك:** تطبيق الجزء (أ) من DOC M12-T02 — استبدال `.github/workflows/ci.yml` بالكامل عبر متصفح GitHub (3 أسطر تتغير: `runner.temp` → `github.workspace`، `v3.1` → `v4.5` مرتين). المحتوى الكامل في DOC §2.2. لا تدمج قبل أن ترى النتيجة — الفشل هنا مفيد لأنه أول تشغيل حقيقي.
+- **بعد نجاح المالك:** M13-T01 — تحليل نتائج أول تشغيل CI حقيقي وإصلاح ما يظهر.
 
 ---
 **تعليمات للجلسة القادمة:** `CONSTITUTION.md` → `BOOTSTRAP_PROMPT.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md`. ثم `git rev-parse HEAD` وقارنه بالجدول أعلاه قبل أي ادعاء.

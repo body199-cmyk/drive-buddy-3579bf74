@@ -5,20 +5,20 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M12-T01 |
-| العنوان | إصلاح تعارضات ما بعد ترقية الدستور v5.0 واستكمال بيت الذاكرة |
+| TASK ID | M12-T02 |
+| العنوان | تصحيح AI_RULES لترقيم v5.0 + تنظيف docs/ من التلوث + توثيق السبب الجذري لانكسار CI |
 | الحالة | ACTIVE |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
-| Base SHA | 4cacc584834a7fc8e0b8ccf36b53ca3808cbab77 |
-| الفرع | arena/019fdfc5-drive-buddy-3579bf74 |
+| Base SHA | ad3a454f40b8d4c8dd051f5ba94ceb0c7cd6c250 |
+| الفرع | arena/019fdff4-drive-buddy-3579bf74 |
 | فتح بتاريخ (UTC) | 2026-08-08 |
-| النطاق | docs/ + .github/workflows/ci.yml فقط |
-| خارج النطاق | كل كود المنتج، النوت‌بوك، الاعتماديات، الواجهة |
+| النطاق | docs/ فقط (AI_RULES.md, KNOWN_ISSUES.md, TODO.md, ACTIVE_TASK.md, AI_HANDOFF.md, CHANGELOG.md, PHASE_13.md) |
+| خارج النطاق | .github/**, docs/CONSTITUTION.md, الأرشيف, تقارير PHASE_0-12, python-package/**, public/**, src/**, package.json, bun.lock, AGENTS.md |
 
-> ملاحظة توثيقية 1: اسم الفرع المقترح في DOC كان `task/M12-T01-constitution-v5-reconciliation`، لكن جلسة Arena مثبَّتة على الفرع أعلاه ولا تسمح بتبديل الفروع أو إنشاء فرع آخر للعمل نفسه. سُجِّل الانحراف في PHASE_12 وAI_HANDOFF.
+> ملاحظة توثيقية 1: اسم الفرع المقترح في DOC كان `arena/M12-T02-docs-hygiene`، لكن جلسة Arena مثبَّتة على الفرع أعلاه ولا تسمح بتبديل الفروع أو إنشاء فرع آخر للعمل نفسه. سُجِّل الانحراف في PHASE_13 وAI_HANDOFF.
 
-> ملاحظة توثيقية 2 (عائق منصة مؤكد): إصلاح `.github/workflows/ci.yml` (سطران v4.5) مُجهَّز ومتحقق منه محليًا لكن دفعه مُنع: GitHub App بلا صلاحية `workflows` (`git push`: remote rejected — refusing to allow a GitHub App to create or update workflow؛ REST contents API: HTTP 403 Resource not accessible by integration). جزء docs/ من المهمة دُفع. المهمة تبقى ACTIVE حتى هبوط سطرَي CI (بعد إعادة ربط GitHub بصلاحية workflows، أو يدويًا بيد المالك بأمر sed الموثَّق في PHASE_12).
+> ملاحظة توثيقية 2 (الجزء أ — CI): DOC يقسم المهمة إلى جزء (أ) بيد المالك حصريًا (استبدال ci.yml) وجزء (ب) بيد LM Arena (هذا الجزء). الجزء (أ) لم يُنفَّذ بعد عند كتابة هذا الملف — `runner.temp` لا يزال في السطر 16 من ci.yml. لا أدّعي أن CI أخضر.
 
 ## قاعدة الاستخدام
 
