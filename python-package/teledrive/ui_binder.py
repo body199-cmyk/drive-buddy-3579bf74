@@ -26,6 +26,22 @@ _log = get_logger("teledrive.binder")
 _EVENTS = ("click", "change", "submit", "select", "input")
 
 
+def component_update(**props: Any) -> dict[str, Any]:
+    """Return the Gradio update payload for the given component properties.
+
+    The binder is the ONLY module coupled to Gradio's event/update API, so a
+    handler asks for a *payload* instead of importing gradio itself. When
+    gradio is absent (contract tests, CI) a plain mapping is returned; both
+    forms are mappings, so ``payload["visible"]`` is always assertable and no
+    test needs gradio installed.
+    """
+    try:
+        import gradio as gr  # local import: gradio is optional outside Colab
+    except Exception:  # pragma: no cover - Colab always has gradio
+        return dict(props)
+    return gr.update(**props)
+
+
 @dataclass
 class WireRecord:
     action_id: str

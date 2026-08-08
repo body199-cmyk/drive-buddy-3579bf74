@@ -2,6 +2,29 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T03] — 2026-08-08 — إصلاح تدفق تسجيل Telegram داخل Colab: لوحتا OTP و2FA الشرطيتان مع اختبارات contract
+
+### Verified
+- لوحة OTP تظهر حصريًا عندما تكون الحالة `CODE_REQUESTED` وتختفي عند المصادقة أو قبل طلب الكود.
+- لوحة 2FA تظهر حصريًا عندما تكون الحالة `PASSWORD_REQUIRED` بعد استجابة حقيقية بـ `SessionPasswordNeededError` ولا تظهر للحسابات التي لا تملك 2FA.
+- فشل أي إجراء Telegram يعيد اشتقاق ظهور اللوحتين ديناميكيًا من حالة آلة الحالة الحية دون فقدان التزامن.
+- `Connected` لا يظهر أبدًا قبل تحقيق `AUTHORIZED` فعليًا.
+- `python -m pytest -q tests`: **338 passed in 8.58s** (322 + 16 جديدًا). `compileall`: PASS. `launcher --check`: `24/41 ready actions resolve`. `notebook_cells --check`: in sync. `cmp` النوتبوكين: IDENTICAL. `package_service --build`: archive ✔. `bun run lint`: 0 errors. `bun run build`: build ✔. Secrets Scan: PASS (0 offenders).
+
+### Changed
+- `python-package/teledrive/ui_binder.py`: إضافة دالة `component_update` على مستوى الوحدة كجسر وحيد مع Gradio (تدعم Gradio أو dict mapping في بيئات الاختبار المعزولة).
+- `python-package/teledrive/handlers.py`: استيراد `CODE_REQUESTED`, `PASSWORD_REQUIRED`, `component_update`؛ تحديث `ERROR_ARITY` للإجراءات السبعة إلى 4؛ تعديل `_error` و `_telegram_panels` و `_telegram_view` لإرجاع 4 قيم تعكس ظهور اللوحتين.
+- `python-package/teledrive/ui.py`: تغليف حقول OTP داخل `with gr.Column(visible=False) as code_panel:` وحقول 2FA داخل `with gr.Column(visible=False) as password_panel:`، وتحديث `telegram_outputs = [telegram_detail, telegram_chip, code_panel, password_panel]`.
+- `python-package/teledrive/redaction.py`: تنظيف التعليق من الأرقام التمثيلية لضمان اجتياز فحص الأسرار الصارم.
+- `python-package/tests/test_telegram_flow_contract.py`: ملف اختبار جديد بـ 15 اختبار contract يثبت إنشاء عميل واحد، بقاء الـ hash وكلمة المرور في الذاكرة الحية فقط، شروط ظهور لوحتي OTP و 2FA، إغلاق اللوحات بعد المصادقة والخروج، وبقاء التزامن عند الأخطاء.
+- `python-package/tests/test_no_hardcoded_credentials.py`: ملف اختبار جديد كبوابة ثابتة تفحص كافة المسارات للتأكد من خلو الشجرة من أي قيم اعتمادية صريحة.
+- `docs/PHASE_REPORTS/PHASE_18.md`: تقرير المرحلة 18 المفصل بالأدلة ومخرجات بوابات التحقق.
+- `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`: تحديثات الجلسة وتوثيق إغلاق المشكلة #17 و المهمة M15-T03.
+
+### Not changed — عمدًا
+- لم يتم تعديل `telegram_auth.py` أو `telegram_client.py` أو `notebook_cells.py` أو `action_registry.py` أو `TeleDrive.ipynb` أو `.github/workflows/ci.yml` أو الاعتماديات.
+- الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M15-T02] — 2026-08-08 — إصلاح استيراد حزمة Colab: قبول غلاف teledrive-package.zip تلقائيًا
 
 ### Verified

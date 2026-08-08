@@ -12,7 +12,7 @@ PLACEHOLDER = "<redacted>"
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # +9715xxxxxxx / 00971... phone numbers
     (re.compile(r"(?<!\w)\+\d[\d\s().-]{6,}\d"), PLACEHOLDER),
-    # api_id=12345 / api_hash=... / code=12345 / password=... / token=...
+    # api_id=... / api_hash=... / code=... / password=... / token=...
     (
         re.compile(
             r"(?i)\b(api[_-]?id|api[_-]?hash|phone|phone_code_hash|code|password|"

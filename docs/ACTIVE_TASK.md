@@ -4,24 +4,23 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M15-T02 |
-| العنوان | إصلاح استيراد حزمة TeleDrive في Colab عند تنزيل GitHub Artifact wrapper |
-| الحالة | VERIFIED COMPLETE — PR #10، CI أخضر (run 31261291379 pull_request + run 31261265446 push): Python ✓ + Frontend ✓ |
+| TASK ID | M15-T03 |
+| العنوان | إصلاح تدفق تسجيل Telegram داخل Colab: API، الهاتف، OTP، و2FA شرطي |
+| الحالة | VERIFIED COMPLETE — بوابات محلية كاملة خضراء (pytest 338 passed + launcher + notebooks sync + package build + lint + build) |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (ClickUp DOC) |
-| Base SHA | `1f60a37d91abeeb3cba5a0279fcdcf78f49d8264` |
-| الفرع | `arena/019fe124-drive-buddy-3579bf74` (الفرع الجانبي الثابت لهذه الجلسة — لا يُنشأ فرع آخر) |
+| Base SHA | `8fbd18595c3b6d32d20f1c3319d0b551dee4dfa6` |
+| الفرع | `arena/019fe1f1-drive-buddy-3579bf74` (الفرع الجانبي الثابت لهذه الجلسة — لا يُنشأ فرع آخر) |
 | فتح بتاريخ (UTC) | 2026-08-08 |
-| النطاق | `python-package/teledrive/notebook_cells.py`, `python-package/tests/test_restore_package.py`, `python-package/notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `python-package/teledrive/colab_cells.json`, `docs/RUNBOOK.md`, `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`, `docs/PHASE_REPORTS/PHASE_17.md` |
-| خارج النطاق | Telegram/Drive auth/UI/queue/transfer manager، `.github/workflows/**`، Releases، `requirements.lock`/`bun.lock`/`requirements.txt`، الدستور، `docs/PHASE_REPORTS/PHASE_M15_T01.md` (تقرير تاريخي لا يُمس)، أي تعديل Gemini خارج هذه القائمة |
-| النتيجة | Cell 1 تقبل الأرشيف الحقيقي والغلاف الرسمي (وحتى غلافًا مُعاد تسميته) عبر `resolve_package_zip()` — temp مختلف + نقل ذري + رفض traversal + تحقق بنية قبل الاعتماد؛ 16 اختبارًا جديدًا؛ `322 passed` محليًا |
-| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_17.md` + PR [#10](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/10) + `pytest` = `322 passed` محليًا و CI أخضر بالوظيفتين |
-| الخطوة التالية | دمج PR #10 بيد المالك، ثم M15-T01 التشغيلي (المرحلة 10 — Colab حقيقي) لإثبات الغلاف ميدانيًا؛ أو M13-T04 |
+| النطاق | `python-package/teledrive/ui_binder.py`, `python-package/teledrive/handlers.py`, `python-package/teledrive/ui.py`, `python-package/teledrive/redaction.py`, `python-package/tests/test_telegram_flow_contract.py`, `python-package/tests/test_no_hardcoded_credentials.py`, `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`, `docs/PHASE_REPORTS/PHASE_18.md` |
+| خارج النطاق | `.github/workflows/**`، `docs/CONSTITUTION.md`، `docs/CONSTITUTION_V4.5_ARCHIVE.md`، `docs/TeleDrive-v5.md`، `python-package/teledrive/telegram_auth.py`، `python-package/teledrive/telegram_client.py`، `python-package/teledrive/notebook_cells.py`، `python-package/teledrive/action_registry.py`، `python-package/notebook/TeleDrive.ipynb`، `public/TeleDrive.ipynb`، `python-package/requirements.txt`، `python-package/requirements.lock`، `bun.lock` |
+| النتيجة | لوحة OTP تظهر حصريًا عند `CODE_REQUESTED` وتُغلق بعد التحقق؛ لوحة 2FA تظهر حصريًا عند `PASSWORD_REQUIRED` بعد `SessionPasswordNeededError` حقيقي؛ 15 اختبار contract + اختبار فحص الأسرار الثابت؛ 338 passed محليًا |
+| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_18.md` + `pytest` = `338 passed` محليًا |
+| الخطوة التالية | M15-T01 التشغيلي (المرحلة 10 — Colab حقيقي بحساب حي، بيد المالك) أو M13-T04 |
 
 ## قاعدة الاستخدام
 
-- لا تعدّل Telegram أو Drive auth أو UI أو queue أو transfer manager.
-- لا تعِد تسمية الغلاف كحل؛ الاكتشاف بالمحتوى + الاستخراج عبر temp هو العقد المثبت.
+- OTP و 2FA مشروطان دائمًا بحالة آلة الحالة الحية.
 - لا تدّعِ `Colab-ready` — التفعيل على Colab حقيقي لم يُختبر بعد.
 - إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD` عند بدء جلسة لاحقة، فالملف متقادم ويجب إعادة التدقيق.
 - الحالة الصادقة للمشروع: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`

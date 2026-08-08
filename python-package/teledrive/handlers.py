@@ -15,6 +15,8 @@ from .i18n import t
 from .logging_config import get_logger
 from .redaction import redact, safe_exception
 from .services import rows_for
+from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
+from .ui_binder import component_update
 from .utils import human_bytes
 
 _log = get_logger("teledrive.handlers")
@@ -54,13 +56,13 @@ def action(action_id: str) -> Callable:
 
 # Number of UI outputs each action writes; used to shape error returns.
 ERROR_ARITY: dict[str, int] = {
-    "telegram.set_credentials": 2,
-    "telegram.send_code": 2,
-    "telegram.resend_code": 2,
-    "telegram.verify_code": 2,
-    "telegram.verify_password": 2,
-    "telegram.logout": 2,
-    "telegram.status": 2,
+    "telegram.set_credentials": 4,
+    "telegram.send_code": 4,
+    "telegram.resend_code": 4,
+    "telegram.verify_code": 4,
+    "telegram.verify_password": 4,
+    "telegram.logout": 4,
+    "telegram.status": 4,
     "drive.connect": 2,
     "drive.reconnect": 2,
     "drive.status": 2,
@@ -102,6 +104,11 @@ class Handlers:
         return self.ctx.resolve(spec.service_path)(*args, **kwargs)
 
     def _error(self, action_id: str, message: str):
+        if action_id.startswith("telegram."):
+            # A failed action must never desync the login panels: visibility is
+            # re-derived from the LIVE state machine, not from the failed call.
+            state = getattr(getattr(self.ctx, "telegram_auth", None), "state", "")
+            return (message, None, *self._telegram_panels(state))
         arity = ERROR_ARITY.get(action_id, DEFAULT_QUEUE_ARITY)
         if arity <= 1:
             return message
@@ -109,14 +116,27 @@ class Handlers:
 
     # ---- shared renderers ----
 
-    def _telegram_view(self, status) -> tuple[str, str]:
+    def _telegram_panels(self, state: str) -> tuple[Any, Any]:
+        """OTP panel ONLY in CODE_REQUESTED, 2FA panel ONLY in PASSWORD_REQUIRED.
+
+        No field is ever rendered "just in case": a user without 2FA never sees
+        a password box, and nobody sees an OTP box before Telegram really sent
+        a code.
+        """
+        return (
+            component_update(visible=state == CODE_REQUESTED),
+            component_update(visible=state == PASSWORD_REQUIRED),
+        )
+
+    def _telegram_view(self, status) -> tuple[str, str, Any, Any]:
         label = t("status.connected") if status.authorized else t("status.disconnected")
         detail = f"{label} · {status.state}"
         if status.account_label:
             detail += f" · {status.account_label}"
         if status.can_resend_in:
             detail += f" · {t('btn.resend_code')} {status.can_resend_in}s"
-        return detail, label
+        code_panel, password_panel = self._telegram_panels(status.state)
+        return detail, label, code_panel, password_panel
 
     def _drive_view(self, status) -> tuple[str, str]:
         label = t("status.connected") if status.connected else t("status.disconnected")
