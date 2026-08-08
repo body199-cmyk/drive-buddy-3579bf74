@@ -21,7 +21,7 @@ from teledrive.app import launch  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="TeleDrive v3.1 launcher")
+    parser = argparse.ArgumentParser(description="TeleDrive v4.5 launcher")
     parser.add_argument(
         "--share",
         action="store_true",

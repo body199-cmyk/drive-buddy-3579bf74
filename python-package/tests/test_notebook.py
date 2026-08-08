@@ -34,11 +34,12 @@ def test_copies_match_the_generator():
     assert notebook_cells.check_all() == [], "run: python -m teledrive.notebook_cells --write"
 
 
-def test_title_is_v31(notebooks):
+def test_title_is_v45(notebooks):
     for path, nb in notebooks.items():
         head = "".join(nb["cells"][0]["source"])
-        assert "TeleDrive v3.1" in head, path
-        assert "v2" not in head.replace("v3.1", ""), path
+        assert "TeleDrive v4.5" in head, path
+        assert "v2" not in head.replace("v4.5", ""), path
+        assert "v3.1" not in head, path
 
 
 def test_exactly_seven_code_cells(notebooks):

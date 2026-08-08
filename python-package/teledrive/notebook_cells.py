@@ -1,4 +1,4 @@
-"""Single authoritative source for the TeleDrive v3.1 Colab notebook.
+"""Single authoritative source for the TeleDrive v4.5 Colab notebook.
 
 Both notebook copies are GENERATED from this module:
 
@@ -30,8 +30,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-NOTEBOOK_VERSION = "3.1.0"
-TITLE = "TeleDrive v3.1 — Telegram → Google Drive (native Colab)"
+NOTEBOOK_VERSION = "4.5.0"
+TITLE = "TeleDrive v4.5 — Telegram → Google Drive (native Colab)"
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent  # python-package/
 REPO_ROOT = PACKAGE_ROOT.parent
@@ -61,8 +61,8 @@ CELL_1 = '''# ==== Cell 1: restore the tested package and install pinned depende
 import os, pathlib, shutil, sys, zipfile
 
 LOCAL_ROOT = pathlib.Path("/content")
-PACKAGE_ZIP = LOCAL_ROOT / "teledrive_v3.1.zip"
-DRIVE_ZIP = pathlib.Path("/content/drive/MyDrive/TeleDrive/teledrive_v3.1.zip")
+PACKAGE_ZIP = LOCAL_ROOT / "teledrive_v4.5.zip"
+DRIVE_ZIP = pathlib.Path("/content/drive/MyDrive/TeleDrive/teledrive_v4.5.zip")
 
 try:
     from google.colab import drive as colab_drive
@@ -80,7 +80,7 @@ assert PACKAGE_ZIP.exists(), (
 with zipfile.ZipFile(PACKAGE_ZIP) as archive:
     archive.extractall(LOCAL_ROOT)
 
-PACKAGE_DIR = next(p for p in LOCAL_ROOT.glob("teledrive-v3.1*") if p.is_dir())
+PACKAGE_DIR = next(p for p in LOCAL_ROOT.glob("teledrive-v4.5*") if p.is_dir())
 os.chdir(PACKAGE_DIR)
 sys.path.insert(0, str(PACKAGE_DIR))
 
