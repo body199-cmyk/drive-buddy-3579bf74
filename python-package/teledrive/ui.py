@@ -333,31 +333,56 @@ def _render_shell(ctx: ApplicationContext, binder, lang_state: Any, lang: str) -
             # ---------------- Analyze ----------------
             with gr.Tab(t("nav.link")):
                 with gr.Group(elem_classes=["td-card"]):
+                    gr.Markdown(t("analyze.instructions"), elem_classes=["td-section-title"])
                     with gr.Row():
-                        link = gr.Textbox(label=t("form.link"), scale=3)
-                        scope = gr.Radio(list(SCOPE_CHOICES), value="auto", label=t("form.scope"), scale=1)
-                    analyze_btn = binder.button(gr, "analyze.run", variant="primary")
+                        link = gr.Textbox(label=t("form.link"), scale=4)
+                        analyze_btn = binder.button(gr, "analyze.run", variant="primary", scale=1)
+                    with gr.Row():
+                        mode = gr.Radio(
+                            choices=["message", "range", "latest", "chat"],
+                            value="chat",
+                            label=t("form.scan_mode"),
+                            scale=2,
+                        )
+                        media_types = gr.CheckboxGroup(
+                            choices=["all", "video", "audio", "document", "photo", "voice", "animation", "sticker"],
+                            value=["all"],
+                            label=t("form.media_types"),
+                            scale=3,
+                        )
+                    with gr.Row():
+                        message_id = gr.Number(label=t("form.message_id"), precision=0, minimum=1)
+                        start_id = gr.Number(label=t("form.start_message"), precision=0, minimum=1)
+                        end_id = gr.Number(label=t("form.end_message"), precision=0, minimum=1)
+                        limit = gr.Number(label=t("form.message_limit"), value=1000, precision=0, minimum=1, maximum=1000)
                     analyze_message = gr.Textbox(label=t("btn.analyze"), interactive=False)
-                candidates_table = gr.Dataframe(
-                    headers=_headers(), value=seed["analyze_rows"] or None,
-                    interactive=False, wrap=True, elem_classes=["td-table"],
-                )
-                with gr.Accordion(t("form.filters"), open=False):
-                    media_types = gr.CheckboxGroup(list(MEDIA_TYPES), label=t("col.type"))
-                    extensions = gr.Textbox(label=t("form.extensions"))
+                    candidates_table = gr.Dataframe(
+                        headers=_headers(),
+                        value=seed["analyze_rows"] or None,
+                        interactive=False,
+                        wrap=True,
+                        elem_classes=["td-table"],
+                    )
+                    with gr.Accordion(t("form.filters"), open=False):
+                        filter_media_types = gr.CheckboxGroup(
+                            choices=["all", "video", "audio", "document", "photo", "voice", "animation", "sticker"],
+                            value=["all"],
+                            label=t("form.media_types"),
+                        )
+                        extensions = gr.Textbox(label=t("form.extensions"))
+                        with gr.Row():
+                            min_size = gr.Number(label=t("form.min_size_mb"), value=None)
+                            max_size = gr.Number(label=t("form.max_size_mb"), value=None)
+                        with gr.Row():
+                            date_from = gr.Textbox(label=t("form.date_from"))
+                            date_to = gr.Textbox(label=t("form.date_to"))
+                        include = gr.Textbox(label=t("form.include"))
+                        exclude = gr.Textbox(label=t("form.exclude"))
+                        filters_btn = binder.button(gr, "analyze.apply_filters", variant="secondary")
                     with gr.Row():
-                        min_size = gr.Number(label=t("form.min_size_mb"), value=None)
-                        max_size = gr.Number(label=t("form.max_size_mb"), value=None)
-                    with gr.Row():
-                        date_from = gr.Textbox(label=t("form.date_from"))
-                        date_to = gr.Textbox(label=t("form.date_to"))
-                    include = gr.Textbox(label=t("form.include"))
-                    exclude = gr.Textbox(label=t("form.exclude"))
-                    filters_btn = binder.button(gr, "analyze.apply_filters", variant="secondary")
-                with gr.Row():
-                    select_all_btn = binder.button(gr, "analyze.select_all")
-                    clear_selection_btn = binder.button(gr, "analyze.clear_selection")
-                    enqueue_btn = binder.button(gr, "analyze.enqueue_selected", variant="primary")
+                        select_all_btn = binder.button(gr, "analyze.select_all")
+                        clear_selection_btn = binder.button(gr, "analyze.clear_selection")
+                        enqueue_btn = binder.button(gr, "analyze.enqueue_selected", variant="primary")
 
             # ---------------- Connection Center ----------------
             with gr.Tab(t("nav.connection")):
@@ -501,10 +526,15 @@ def _render_shell(ctx: ApplicationContext, binder, lang_state: Any, lang: str) -
                              [folder_message, selected_folder])
         binder.wire_if_ready(quota_btn, "drive.refresh_quota", [], [quota_line, quota_json])
 
-        binder.wire_if_ready(analyze_btn, "analyze.run", [link, scope], analyze_outputs)
+        binder.wire_if_ready(
+            analyze_btn,
+            "analyze.run",
+            [link, mode, message_id, start_id, end_id, limit, media_types],
+            analyze_outputs,
+        )
         binder.wire_if_ready(
             filters_btn, "analyze.apply_filters",
-            [media_types, extensions, min_size, max_size, date_from, date_to, include, exclude],
+            [filter_media_types, extensions, min_size, max_size, date_from, date_to, include, exclude],
             analyze_outputs,
         )
         binder.wire_if_ready(select_all_btn, "analyze.select_all", [], analyze_outputs)

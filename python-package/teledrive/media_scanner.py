@@ -1,8 +1,10 @@
 """Scan a Telegram link and produce MediaItem candidates."""
+
 from __future__ import annotations
 
 import mimetypes
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 from .logging_config import get_logger
 from .models import MediaItem
@@ -10,6 +12,53 @@ from .telegram_links import ParsedLink
 from .utils import sanitize_filename, slugify, source_key
 
 _log = get_logger("teledrive.scanner")
+
+SCAN_MODES = ("message", "range", "latest", "chat")
+MEDIA_TYPES = ("all", "video", "audio", "document", "photo", "voice", "animation", "sticker")
+MAX_SCAN_MESSAGES = 1000
+MAX_RANGE_MESSAGES = 1000
+
+
+@dataclass(frozen=True)
+class ScanRequest:
+    mode: str = "chat"
+    message_id: int | None = None
+    start_id: int | None = None
+    end_id: int | None = None
+    limit: int = MAX_SCAN_MESSAGES
+    media_types: frozenset[str] = frozenset({"all"})
+
+    def validate(self) -> "ScanRequest":
+        mode = str(self.mode or "").strip().lower()
+        if mode not in SCAN_MODES:
+            raise ValueError("unsupported scan mode")
+        selected = frozenset(str(x).strip().lower() for x in self.media_types if str(x).strip())
+        if not selected:
+            selected = frozenset({"all"})
+        if "all" not in selected and not selected.issubset(set(MEDIA_TYPES) - {"all"}):
+            raise ValueError("unsupported media type")
+        limit = max(1, min(int(self.limit or MAX_SCAN_MESSAGES), MAX_SCAN_MESSAGES))
+        if mode == "message":
+            if self.message_id is None or int(self.message_id) <= 0:
+                raise ValueError("message mode requires a positive message id")
+        elif mode == "range":
+            if self.start_id is None or self.end_id is None:
+                raise ValueError("range mode requires start and end ids")
+            start, end = int(self.start_id), int(self.end_id)
+            if start <= 0 or end < start:
+                raise ValueError("invalid message range")
+            if end - start + 1 > MAX_RANGE_MESSAGES:
+                raise ValueError("message range is too large")
+        elif mode == "latest" and limit <= 0:
+            raise ValueError("latest mode requires a positive limit")
+        return ScanRequest(
+            mode=mode,
+            message_id=int(self.message_id) if self.message_id is not None else None,
+            start_id=int(self.start_id) if self.start_id is not None else None,
+            end_id=int(self.end_id) if self.end_id is not None else None,
+            limit=limit,
+            media_types=selected,
+        )
 
 
 def _media_type_of(msg: Any) -> str:
@@ -28,6 +77,30 @@ def _media_type_of(msg: Any) -> str:
     if getattr(msg, "document", None):
         return "document"
     return "document"
+
+
+def _matches_media_type(message: Any, requested: frozenset[str]) -> bool:
+    return "all" in requested or _media_type_of(message) in requested
+
+
+async def _iter_requested_messages(telegram, parsed: ParsedLink, request: ScanRequest):
+    request = request.validate()
+    if request.mode == "message":
+        yield await telegram.get_message(parsed.chat, request.message_id)
+        return
+    if request.mode == "range":
+        async for message in telegram.iter_messages(
+            parsed.chat,
+            min_id=request.start_id - 1,
+            max_id=request.end_id + 1,
+            reverse=True,
+        ):
+            yield message
+        return
+    async for message in telegram.iter_messages(parsed.chat, limit=request.limit):
+        yield message
+        if request.mode == "latest" and request.limit and request.limit <= 0:
+            break
 
 
 def _file_meta(msg: Any) -> tuple[str, str, int, str]:
@@ -60,53 +133,54 @@ def _file_meta(msg: Any) -> tuple[str, str, int, str]:
     return original, (ext or "bin").lower(), int(size), unique
 
 
-async def scan_link(telegram, parsed: ParsedLink, chat_title_hint: str = "") -> list[MediaItem]:
-    """Return MediaItem candidates from a parsed link."""
-    items: list[MediaItem] = []
+async def scan_link(
+    telegram,
+    parsed: ParsedLink,
+    request: ScanRequest | None = None,
+    chat_title_hint: str = "",
+) -> list[MediaItem]:
+    request = (request or ScanRequest()).validate()
     entity = await telegram.get_entity(parsed.chat)
     chat_id = int(getattr(entity, "id", 0))
-    chat_title = getattr(entity, "title", None) or getattr(entity, "username", None) or chat_title_hint or "chat"
+    chat_title = (
+        getattr(entity, "title", None)
+        or getattr(entity, "username", None)
+        or chat_title_hint
+        or "chat"
+    )
+    items: list[MediaItem] = []
 
-    async def _add(msg):
-        if msg is None or not (getattr(msg, "media", None)):
+    async def _add(message: Any) -> None:
+        if message is None or not getattr(message, "media", None):
             return
-        orig, ext, size, unique = _file_meta(msg)
-        mt = _media_type_of(msg)
-        safe = sanitize_filename(orig or f"{slugify(chat_title)}_{msg.id}_{mt}.{ext}")
-        item = MediaItem(
-            source_key=source_key(chat_id, msg.id, unique),
+        media_type = _media_type_of(message)
+        if not _matches_media_type(message, request.media_types):
+            return
+        original, extension, size, unique = _file_meta(message)
+        safe_name = sanitize_filename(
+            original or f"{slugify(chat_title)}_{message.id}_{media_type}.{extension}"
+        )
+        items.append(MediaItem(
+            source_key=source_key(chat_id, message.id, unique),
             chat_id=chat_id,
             chat_title=str(chat_title),
-            message_id=int(msg.id),
+            message_id=int(message.id),
             file_unique_id=unique,
-            original_name=orig,
-            safe_name=safe,
-            media_type=mt,
-            extension=ext,
+            original_name=original,
+            safe_name=safe_name,
+            media_type=media_type,
+            extension=extension,
             size_bytes=size,
-            message_date=str(getattr(msg, "date", "") or ""),
-        )
-        items.append(item)
+            message_date=str(getattr(message, "date", "") or ""),
+        ))
 
-    if parsed.message_id is not None:
-        # Single message; if it's a grouped album, gather siblings.
-        msg = await telegram.get_message(parsed.chat, parsed.message_id)
-        grouped_id = getattr(msg, "grouped_id", None) if msg else None
-        if grouped_id:
-            # Fetch a small window around the message to find album siblings.
-            async for m in telegram.iter_messages(
-                parsed.chat, min_id=max(0, parsed.message_id - 20), max_id=parsed.message_id + 20
-            ):
-                if getattr(m, "grouped_id", None) == grouped_id:
-                    await _add(m)
-        else:
-            await _add(msg)
+    if request.mode == "message" and parsed.message_id is not None:
+        # A direct message link remains authoritative when the user chose message mode.
+        message = await telegram.get_message(parsed.chat, parsed.message_id)
+        await _add(message)
     else:
-        # Whole chat, capped
-        count = 0
-        async for m in telegram.iter_messages(parsed.chat, limit=1000):
-            await _add(m)
-            count += 1
-            if count >= 1000:
+        async for message in _iter_requested_messages(telegram, parsed, request):
+            await _add(message)
+            if len(items) >= MAX_SCAN_MESSAGES:
                 break
     return items

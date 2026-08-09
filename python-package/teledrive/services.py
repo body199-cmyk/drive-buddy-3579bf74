@@ -27,7 +27,10 @@ from .errors import (
 from .filters import FilterSet, apply as apply_filterset
 from .i18n import t, toggle as toggle_lang, set_language
 from .logging_config import get_logger, tail as tail_log
-from .media_scanner import scan_link
+from .media_scanner import MAX_SCAN_MESSAGES as SCANNER_MAX_SCAN_MESSAGES  # canonical bound
+from .media_scanner import MEDIA_TYPES as SCANNER_MEDIA_TYPES
+from .media_scanner import SCAN_MODES as SCANNER_SCAN_MODES
+from .media_scanner import ScanRequest, scan_link
 from .models import MediaItem
 from .redaction import redact
 from .telegram_links import parse as parse_link
@@ -35,7 +38,10 @@ from .utils import human_bytes, human_duration, now_iso, safe_disk_free
 
 _log = get_logger("teledrive.services")
 
-MAX_SCAN_MESSAGES = 1000
+MAX_SCAN_MESSAGES = SCANNER_MAX_SCAN_MESSAGES
+# re-export for handlers/tests that import from services
+SCAN_MODES = SCANNER_SCAN_MODES
+MEDIA_TYPES = SCANNER_MEDIA_TYPES
 
 
 # --------------------------------------------------------------------------
@@ -138,25 +144,79 @@ class ScannerService:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
 
-    def analyze(self, link: str, scope: str = "auto", limit: int = MAX_SCAN_MESSAGES) -> ScanResult:
+    def analyze(
+        self,
+        link: str,
+        mode: str = "chat",
+        message_id: int | None = None,
+        start_id: int | None = None,
+        end_id: int | None = None,
+        limit: int = MAX_SCAN_MESSAGES,
+        media_types: Iterable[str] | None = None,
+        *args,
+        **kwargs,
+    ) -> ScanResult:
+        # Backward-compat: callers may pass `scope` as positional second arg or kwarg.
+        # Spec calls it `mode`, but old tests use "auto". Map auto->chat.
+        if "scope" in kwargs and (not mode or mode == "chat"):
+            # If caller supplied scope kwarg, prefer it.
+            mode = kwargs.pop("scope", mode)
+        # Also support legacy positional where second arg was scope string "auto"
+        # and limit passed as third positional (rare) – handled via args if needed.
+        # For simplicity, if extra positional args were supplied, map them.
+        if args:
+            # legacy: analyze(link, scope, limit)
+            if len(args) >= 1 and mode == "chat" and isinstance(args[0], str):
+                # already have mode; ignore
+                pass
+            elif len(args) >= 1:
+                # if first extra arg looks like legacy limit, capture it
+                try:
+                    limit = int(args[0])
+                except Exception:
+                    pass
         telegram_auth = self.ctx.telegram_auth
         if telegram_auth is None or not telegram_auth.authorized:
             raise TelegramNotReadyError("telegram is not authorized")
         parsed = parse_link((link or "").strip())
-        if scope == "message" and parsed.message_id is None:
-            raise TeleDriveError("link has no message id", "err.bad_link")
-        if scope == "chat":
-            parsed.message_id = None
-        items = self.ctx.aio.run(scan_link(telegram_auth.client, parsed))
-        items = items[: max(1, int(limit or MAX_SCAN_MESSAGES))]
+        requested_mode = str(mode or "chat").strip().lower()
+        # Legacy alias: "auto" means whole chat scan (same as "chat")
+        if requested_mode == "auto":
+            requested_mode = "chat"
+        if requested_mode == "message" and parsed.message_id is not None and message_id is None:
+            message_id = parsed.message_id
+        request = ScanRequest(
+            mode=requested_mode,
+            message_id=message_id,
+            start_id=start_id,
+            end_id=end_id,
+            limit=limit,
+            media_types=frozenset(media_types or {"all"}),
+        ).validate()
+        items = self.ctx.aio.run(
+            scan_link(telegram_auth.client, parsed, request)
+        )
         self.ctx.selection.set_candidates(items)
-        db.add_event("", "scan", "analyzed", {"count": len(items), "scope": scope})
+        db.add_event("", "scan", "analyzed", {
+            "count": len(items),
+            "mode": request.mode,
+            "media_types": sorted(request.media_types),
+            "bounded": True,
+        })
         return ScanResult(
             total=len(items),
-            total_bytes=sum(i.size_bytes for i in items),
-            scope=scope,
+            total_bytes=sum(item.size_bytes for item in items),
+            scope=request.mode,
             rows=rows_for(items),
         )
+
+    # Backward-compat alias: older callers (and some tests) still use scope/limit names.
+    # Keep it delegated to the new analyze to avoid duplication.
+    def analyze_legacy(self, link: str, scope: str = "auto", limit: int = MAX_SCAN_MESSAGES) -> ScanResult:  # pragma: no cover
+        # Map legacy scope values to new modes: auto -> chat, message -> message, chat -> chat
+        mode_map = {"auto": "chat", "message": "message", "chat": "chat"}
+        mode = mode_map.get(str(scope).strip().lower(), "chat")
+        return self.analyze(link, mode=mode, limit=limit)
 
 
 def rows_for(items: Iterable[MediaItem]) -> list[list[Any]]:
