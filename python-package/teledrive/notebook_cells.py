@@ -250,11 +250,17 @@ print("drive status:", ctx.drive_auth.status().state)
 ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resume
 
 # share=False: the UI is reachable inside this runtime only. A public link is an
-# explicit opt-in (pass share to launch yourself) and is never the default.
+# explicit opt-in (pass share to launch yourself) and is never the default —
+# no Gradio public tunnel is created and no secrets are exposed.
+# inline=False + the official Colab proxy: launch() binds 0.0.0.0:7860, obtains
+# the official google.colab.kernel.proxyPort(7860) URL, seeds Gradio's root_path
+# with it so /config, events, assets and queue resolve through the proxy (not
+# localhost), and prints ONE usable "TeleDrive URL:" line below. A clickable
+# external proxy URL is preferred over a fragile inline iframe.
 # blocking=False: the cell returns immediately, so cells 5-7 (handoff, tests,
 # maintenance) stay runnable while the interface keeps serving. The launch
 # handle lives on ctx.ui and is closed by ctx.shutdown() in cell 7.
-launch(ctx, share=False, inline=True, blocking=False)
+launch(ctx, share=False, inline=False, blocking=False)
 print("ui running (non-blocking); cells 5-7 can be run while it serves")
 '''
 
