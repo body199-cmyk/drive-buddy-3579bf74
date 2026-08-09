@@ -125,19 +125,22 @@ jobs:
           PY
 
       - name: Gate - release not already published with both assets
+        # NOTE: do NOT use a `python - <<'PY' ... PY` heredoc inside this `if`
+        # block. After YAML dedent the heredoc terminator ends up indented, bash
+        # does not recognise it, reads to EOF, and the step exits with code 2
+        # (a syntax error). The shell-only form below keeps the same fail-closed
+        # semantics: if the release already exists with both assets the publish
+        # step is skipped; if it exists but is missing an asset the job fails;
+        # otherwise the publish step runs.
         run: |
-          if gh release view "$RELEASE_TAG" --json tagName,assets > /tmp/release.json 2>/dev/null; then
-            python - <<'PY'
-            import json, os
-            with open("/tmp/release.json") as handle:
-                release = json.load(handle)
-            assets = {a["name"]: a for a in release["assets"]}
-            required = {"teledrive_v4.5.zip", "teledrive_manifest.json"}
-            missing = required - set(assets)
-            if missing:
-                raise SystemExit("release exists but missing assets: %s" % sorted(missing))
-            print("release already published with both assets; nothing to do")
-            PY
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > /tmp/assets.txt 2>/dev/null; then
+            for required in teledrive_v4.5.zip teledrive_manifest.json; do
+              grep -qx "$required" /tmp/assets.txt || {
+                echo "release exists but missing asset: $required"
+                exit 1
+              }
+            done
+            echo "release already published with both assets; nothing to do"
             echo "already-published" >> "$GITHUB_ENV"
           else
             echo "release does not exist yet; will create"
