@@ -63,7 +63,7 @@ jobs:
       - name: Checkout the pinned verified commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.PINNED_SHA }}
+          ref: 10b5d3b1b74542b2388983a2cc582c4906154982
 
       - name: Set up Python
         uses: actions/setup-python@v5
