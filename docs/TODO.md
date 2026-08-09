@@ -20,7 +20,8 @@
 | M15-T02 | إصلاح استيراد حزمة Colab: قبول غلاف `teledrive-package.zip` تلقائيًا في Cell 1 | VERIFIED COMPLETE | PR #10 · run 31261291379 ✓ (و31261265446 push) · PHASE_17 · `322 passed` |
 | M15-T03 | إصلاح تدفق تسجيل Telegram داخل Colab: لوحتا OTP و2FA الشرطيتان مع اختبارات contract | VERIFIED COMPLETE | PHASE_18 · `338 passed` · ui_binder/handlers/ui/flow_contract/no_credentials |
 | M15-T04 | تشخيص اتصال Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع الحفاظ على التحكم الحقيقي | VERIFIED COMPLETE | PHASE_19 · `360 passed` · ui/handlers/progress_tracker(RLock)/locale + 22 اختبار contract · بوابتا bun مؤجلتان لـ CI على الـPR (حاجز شبكة حاوية) |
-| M15-T07 | إصلاح CI بعد الدمج (بناء الحزمة) + مسار تحديث Colab دستوري آمن (manifest + sha256 + استبدال ذري، رفض أثناء تشغيل الـruntime) | ACTIVE | PHASE_M15_T07 · بوابات Python محلية خضراء (`402 passed`) · أرشيف قابل لإعادة الإنتاج · الروابط النهائية (PR/run/artifact/release) تُثبَّت في تقرير الجلسة النهائي |
+| M15-T07 | إصلاح CI بعد الدمج (بناء الحزمة) + مسار تحديث Colab دستوري آمن (manifest + sha256 + استبدال ذري، رفض أثناء تشغيل الـruntime) | VERIFIED COMPLETE | PHASE_M15_T07 · PR #15 · run 31329502070 success · main `10b5d3b` |
+| M15-T08 | نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` مع الأرشيف الداخلي وmanifest العام | BLOCKED | PHASE_M15_T08 · build/artifact bytes verified (`sha256 0179970f…`, `188695` bytes)؛ GitHub `uploads.github.com` أغلق اتصال رفع الأصول بـ`EOF`، فتم rollback آمن ولم يبقَ إصدار منشور |
 
 ## ملاحظات أمان
 
