@@ -147,7 +147,9 @@ class Handlers:
 
     def _queue_view(self, snapshot: dict) -> tuple[str, list]:
         counts = ", ".join(f"{t('state.' + k)}: {v}" for k, v in (snapshot.get("counts") or {}).items())
-        header = f"{t('dash.queue_status')}: {snapshot.get('status', '')} · {counts}"
+        header = f"{t('dash.queue_status')}: {snapshot.get('status', '')}"
+        if counts:
+            header += f" · {counts}"
         return header, self.queue_rows()
 
     def queue_rows(self) -> list:
@@ -218,9 +220,7 @@ class Handlers:
 
     @action("drive.refresh_quota")
     def h_drive_refresh_quota(self):
-        quota = self.call("drive.refresh_quota")
-        warning = t("warn.drive_almost_full") if quota.get("warn") else ""
-        return f"{quota['label']} · {t('dash.free')}: {human_bytes(quota['free'])} {warning}".strip(), quota
+        return _quota_view(self.call("drive.refresh_quota"))
 
     # ---- Analyze ----
 
@@ -357,3 +357,49 @@ class Handlers:
     def h_maintenance_checkpoint(self):
         result = self.call("maintenance.checkpoint")
         return f"{t('msg.checkpoint_saved')} · {result['at']}"
+
+
+def _quota_view(quota: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Read-only quota line shared by the refresh handler and the shell seed."""
+    warning = t("warn.drive_almost_full") if quota.get("warn") else ""
+    line = f"{quota['label']} · {t('dash.free')}: {human_bytes(quota['free'])} {warning}".strip()
+    return line, quota
+
+
+def shell_seed(ctx) -> dict[str, Any]:
+    """Initial UI values, always derived from LIVE context state.
+
+    The graphite shell re-renders in a new language/direction without touching
+    the runtime: Telegram login state, the queue, transfers and the selection
+    all live on the ApplicationContext. These seeds rebuild every component
+    from that live state so a re-render can never reset panels to a default
+    that contradicts reality (e.g. hiding an OTP box while CODE_REQUESTED) and
+    never fabricates a value (empty tables stay empty, chips start
+    Disconnected only when the state machine really says so).
+    """
+    handlers = ctx.handlers
+    telegram_detail, telegram_label, code_panel, password_panel = handlers._telegram_view(
+        ctx.telegram_auth.status()
+    )
+    drive_detail, drive_label = handlers._drive_view(ctx.drive_auth.status())
+    queue_header, queue_rows = handlers._queue_view(ctx.queue_manager.snapshot())
+    quota_last = ctx.drive_quota.last or None
+    quota_line, quota_payload = _quota_view(quota_last) if quota_last else ("", None)
+    return {
+        "language": ctx.ui_state.language,
+        "theme": ctx.ui_state.extra.get("theme", "dark"),
+        "telegram_detail": telegram_detail,
+        "telegram_label": telegram_label,
+        "otp_visible": bool(code_panel.get("visible")),
+        "password_visible": bool(password_panel.get("visible")),
+        "drive_detail": drive_detail,
+        "drive_label": drive_label,
+        "queue_header": queue_header,
+        "queue_rows": queue_rows,
+        "analyze_rows": rows_for(ctx.selection.visible()),
+        "dashboard": ctx.stats.dashboard(),
+        "logs": ctx.log_service.tail(300),
+        "quota_line": quota_line,
+        "quota_payload": quota_payload,
+        "concurrency": ctx.config.concurrency_value(),
+    }

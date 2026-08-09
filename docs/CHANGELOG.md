@@ -2,6 +2,28 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T04] — 2026-08-09 — تشخيص اتصال Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع الحفاظ على التحكم الحقيقي
+
+### Verified
+- تشخيص Telegram الكامل: عميل واحد، Telethon user account، إدخال مخفي في Cell 3، نفس السياق/العميل/الـ loop في Cell 4، الواجهة تستخدم الواجهة العامة السباعية فقط — كلها مثبتة باختبارات حقيقية، ولا اعتمادية مكشوفة في أي مخرجات.
+- عيبان حقيقيان أُصلحا: (أ) `ProgressTracker.snapshot()` كان يعلِّق نفسه (`Lock` → `RLock`)، (ب) الواجهة الخام أصبحت قشرة غرافيت RTL افتراضيًا / LTR مع بذر من الحالة الحية.
+- OTP يظهر فقط في `CODE_REQUESTED` و2FA فقط في `PASSWORD_REQUIRED` — في الإقلاع الأول وبعد تبديل اللغة، على Gradio حقيقي.
+- كل الـ 41 إجراءً المُعلن في `ui.py` ومربوط عبر `wire_if_ready`؛ `assert_complete()` في كل render pass؛ لا lambda ولا أحداث مباشرة ولا زر شكلي ولا تطبيق ثانٍ.
+- `python -m pytest -q tests`: **360 passed** (338 + 22 جديدًا). `compileall` PASS · `launcher --check`: `24/41` · notebooks in sync/IDENTICAL · `package_service --build` archive ✔ · Gradio smoke حقيقي (`/config 200`, `share=False`).
+- `bun run lint`/`bun run build`: **لم تُنفَّذ في الحاوية** — حاجز شبكة يمنع تنزيل رزمتي `@lovable.dev/*` من `europe-west1-npm.pkg.dev`؛ صفر ملفات frontend معدَّلة؛ بوابة CI على الـPR هي الحكم.
+
+### Changed
+- `python-package/teledrive/ui.py`: إعادة بناء كاملة — شريط علوي حقيقي (اسم+نسخة، شريحتا Telegram/Drive، زر اللغة، زر ZIP)، تنقل جانبي بـ`gr.Tabs` الأصلي، 7 صفحات بأسماء DOC، بذر كل مكوّن من `handlers.shell_seed`، تبديل لغة عبر `gr.State`+`gr.render` يحفظ الحالة التشغيلية.
+- `python-package/teledrive/handlers.py`: استخراج `_quota_view` المشترك + `shell_seed(ctx)` المشتق من الحالة الحية فقط + تلميع `_queue_view`.
+- `python-package/teledrive/progress_tracker.py`: `Lock` → `RLock` (عيب deadlock مثبت؛ انظر DEVIATIONS في تقرير الجلسة).
+- `python-package/teledrive/locale/{ar,en}.json`: 5 مفاتيح جديدة + تسميات صفحات DOC.
+- اختبارات: `tests/test_ui_shell_contract.py` (18) + `tests/test_drive_connection_gate.py` (4).
+- ذاكرة: `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,CHANGELOG,AI_HANDOFF}.md` + `docs/PHASE_REPORTS/PHASE_19.md`.
+
+### Not changed — عمدًا
+- لم تُمس: `action_registry.py`, `telegram_auth.py`, `telegram_client.py`, `notebook_cells.py`, النوتبوكان, `.github/**`, `services.py`, `app.py`, `ui_binder.py`, `requirements*.txt`, `requirements.lock`, `bun.lock`, وكل الواجهة الأمامية.
+- الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M15-T03] — 2026-08-08 — إصلاح تدفق تسجيل Telegram داخل Colab: لوحتا OTP و2FA الشرطيتان مع اختبارات contract
 
 ### Verified

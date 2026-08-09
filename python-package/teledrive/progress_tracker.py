@@ -20,7 +20,10 @@ class ItemProgress:
 
 class ProgressTracker:
     def __init__(self):
-        self._lock = threading.Lock()
+        # RLock: snapshot() holds the lock while composing speeds/ETA, and those
+        # helpers acquire the SAME lock — a plain Lock self-deadlocks on the
+        # first snapshot() call (found by real execution in M15-T04).
+        self._lock = threading.RLock()
         self._items: dict[str, ItemProgress] = {}
         self._done_bytes = 0
         self._done_files = 0
