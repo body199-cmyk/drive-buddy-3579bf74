@@ -14,7 +14,7 @@
 | Requested branch | `arena/m15-t11-scoped-analysis` (mirrored; Arena session stays on fixed branch) |
 | HEAD at session start | `e4ba2aede6b3bd43bcdb5a1a52f91f5043d513c1` (`origin/main`, merged PR #15) |
 | Requested base SHA | `a25499147f99d8af721e007d6806f2652581ff5c` — not resolvable (`fatal: bad object`); actual base is `e4ba2ae` |
-| Result SHA | `0aef235cb251acdc546855023871028b327cf496` (see `git log -1`) |
+| Result SHA | `9e5bd01081f1e3064ce94dfa7fdeedc2e55c0dda` (see `git log -1`) |
 | Status | `VERIFIED COMPLETE` (code-complete candidate) |
 | Files changed | 12: 7 modified (`media_scanner.py`, `services.py`, `handlers.py`, `action_registry.py`, `ui.py`, `locale/en.json`, `locale/ar.json`) + 2 new tests (`test_scoped_scan.py`, `test_analyze_ui_contract.py`) + 3 docs (`TODO.md`, `KNOWN_ISSUES.md`, `PHASE_M15_T11.md`) + this handoff |
 | Protected files touched | None — `telegram_auth.py`, `telegram_client.py`, `drive_auth.py`, `drive_client.py`, `transfer_manager.py`, `queue_manager.py`, `database.py`, `notebook_cells.py`, `notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `.github/workflows/ci.yml` all unchanged |
@@ -55,8 +55,8 @@ Push: SUCCESS / FAILED / NOT ATTEMPTED
 Pull Request: CREATED / NOT CREATED / FAILED
 Branch: arena/019fe8bf-drive-buddy-3579bf74
 Base SHA: e4ba2aede6b3bd43bcdb5a1a52f91f5043d513c1
-Result SHA: 0aef235cb251acdc546855023871028b327cf496
-PR URL: <gh pr view --json url>
+Result SHA: 9e5bd01081f1e3064ce94dfa7fdeedc2e55c0dda
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/18
 Files changed: 12
 Tests: 419 passed, 1 warning
 Notebook check: notebooks are in sync
