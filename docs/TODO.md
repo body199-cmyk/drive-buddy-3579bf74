@@ -19,6 +19,7 @@
 | M15-T01 | **المرحلة 10 — تشغيل Colab الحقيقي** (Telegram + Drive + نقل ملف واحد) | PLANNED — بيد المالك | يلزم حساب حي؛ القالب في `docs/PHASE_REPORTS/PHASE_10.md` |
 | M15-T02 | إصلاح استيراد حزمة Colab: قبول غلاف `teledrive-package.zip` تلقائيًا في Cell 1 | VERIFIED COMPLETE | PR #10 · run 31261291379 ✓ (و31261265446 push) · PHASE_17 · `322 passed` |
 | M15-T03 | إصلاح تدفق تسجيل Telegram داخل Colab: لوحتا OTP و2FA الشرطيتان مع اختبارات contract | VERIFIED COMPLETE | PHASE_18 · `338 passed` · ui_binder/handlers/ui/flow_contract/no_credentials |
+| M15-T04 | تشخيص اتصال Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع الحفاظ على التحكم الحقيقي | VERIFIED COMPLETE | PHASE_19 · `360 passed` · ui/handlers/progress_tracker(RLock)/locale + 22 اختبار contract · بوابتا bun مؤجلتان لـ CI على الـPR (حاجز شبكة حاوية) |
 
 ## ملاحظات أمان
 
