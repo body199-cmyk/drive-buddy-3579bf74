@@ -2,6 +2,27 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T07] — 2026-08-09 — إصلاح CI بعد الدمج (بناء حزمة main run 65) + مسار تحديث Colab دستوري آمن
+
+### Verified
+- تشخيص run `31326929948` من سجله الفعلي (job `93278678720`): خطوة `python -m teledrive.package_service --build --output teledrive_v4.5.zip` أخفقت لأن `build_tested_archive` أعاد تشغيل الاختبارات فسقط `test_phone_code_hash_stays_in_memory_and_out_of_the_event_log` — الـsentinel القصير `abc` ظهر داخل UUID4 عشوائي للأحداث (`abc91a3a-...`)؛ خطوة الاختبار المستقلة لنفس الـcommit مرّت (380 passed) ⇒ flake، لا regression.
+- أُعيد إنتاج الفشل محليًا قبل الإصلاح (فشل عند التكرار 40 على uuid `fcaabbe1-abc8-...`)، وبعد الإصلاح 25 تشغيلة متتالية للملف خضراء.
+- `python -m pytest -q tests`: **402 passed** (380 + 22). `compileall` PASS · `launcher --check`: `24/41` · notebooks in sync وIDENTICAL · `package_service --build` ✔ بأرشيف **قابل لإعادة الإنتاج** (نفس الشجرة ⇒ نفس sha256 مرتين).
+- بوابة تحديث Colab الجديدة مثبتة بـ21 اختبارًا مُركّزًا (نجاح مُتحقق، already-current، تقارب بلا إعادة تنزيل، mismatch، truncation، انقطاع تنزيل، endpoint غير متاح، 7 حالات manifest غير موثوق، رفض runtime محمَّل قبل أي شبكة، حفظ بيانات runtime، عدم تسريب أسرار، lift-safety، ترتيب استدعاء Cell 1).
+
+### Changed
+- `python-package/teledrive/package_service.py`: `build_archive` حتمي — مدخلات مرتبة/موحَّدة، `date_time` ثابت (2020-01-01)، `create_system=0`، `external_attr=0o644<<16`، arcnames بصيغة posix (الأرشيف = كائن إصدار قابل لإعادة الإنتاج).
+- `python-package/teledrive/notebook_cells.py`: مقطع `CELL_1_PACKAGE_UPDATER` — بوابة تحديث ما-قبل-الإقلاع: manifest موثَّق من release `pkg-2026.08.09-m15t07` (schema/release/commit/sha256/size/archive_url) من نقطة عامة مستقرة، تنزيل `.part` فقط، تحقق digest/حجم قبل أي تغيير، استبدال ذري للأرشيف والدليل فقط، رفض أثناء تشغيل أي وحدة teledrive، سطر نتيجة واحد منقّح، وعرض `package reference:` في Cell 1؛ توليد النوت‌بوكين و`colab_cells.json` من مولد واحد (متطابقان byte-byte).
+- `python-package/tests/test_telegram_flow_contract.py`: sentinel بطول 32 hex + regression بحلقة 48 دورة.
+- اختبارات جديدة: `tests/test_package_update.py` (19) + `tests/test_package_service_determinism.py` (2).
+- ذاكرة: `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,CHANGELOG,AI_HANDOFF}.md` + `python-package/docs/PHASE_REPORTS/PHASE_M15_T07.md`.
+
+### Not changed — عمدًا
+- لم تُمس: `drive_auth.py`, `auth_manager.py`, `app_context.py`, `services.py`, `app.py`, `ui.py`, `telegram_auth.py`, `telegram_client.py`, `transfer_manager.py`, `requirements.lock`, `.github/workflows/**`, وكل الواجهة الأمامية. منطق restore في Cell 1 (fallback + unwrap) بقي حرفيًا؛ أُضيفت استدعاءات البوابة حوله فقط.
+- إصلاح الوكيل M15-T06 (`inline=False`، `server_name="0.0.0.0"`، المنفذ الثابت 7860، `proxyPort` الرسمي، `root_path`، و`NO_PROXY` المحدود) سليم ولم يُقارب؛ لا مسار `share=True` أُضيف.
+- إصلاح M15-T05 (عميل Drive الكسول للـcheckpoint) سليم — `services.py` خارج النطاق ولم تُعدَّل.
+- الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M15-T04] — 2026-08-09 — تشخيص اتصال Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع الحفاظ على التحكم الحقيقي
 
 ### Verified
