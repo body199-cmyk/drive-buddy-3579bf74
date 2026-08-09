@@ -194,7 +194,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.analyze",
         section="analyze",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_scoped_scan.py::test_handler_passes_bounded_scan_request",
     ),
     ActionSpec(
         action_id="analyze.apply_filters",

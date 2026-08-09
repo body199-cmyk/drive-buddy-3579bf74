@@ -225,9 +225,47 @@ class Handlers:
     # ---- Analyze ----
 
     @action("analyze.run")
-    def h_analyze_run(self, link: str, scope: str = "auto"):
-        result = self.call("analyze.run", link, scope)
-        summary = f"{result.total} · {human_bytes(result.total_bytes)}"
+    def h_analyze_run(
+        self,
+        link: str,
+        mode: str = "chat",
+        message_id: int | None = None,
+        start_id: int | None = None,
+        end_id: int | None = None,
+        limit: int | float | None = None,
+        media_types=None,
+        *args,
+        **kwargs,
+    ):
+        # Backward-compat: old tests call with (link, scope) where scope=="auto".
+        # Support both `mode` and legacy `scope` names, and tolerate fewer args.
+        if "scope" in kwargs:
+            mode = kwargs.pop("scope", mode)
+        # If caller supplied only 2 args: handler(link, "auto") -> mode will be "auto"
+        # Keep alias auto->chat for validation, but keep scope in summary.
+        # Normalize mode alias here as well.
+        if isinstance(mode, str) and mode.strip().lower() == "auto":
+            mode = "chat"
+        # Handle legacy positional where second arg was scope but caller passed via *args
+        # (not needed for spec flow, but keeps contract tests green).
+        if args and mode == "chat" and len(args) >= 1:
+            # extra positional arg could be limit when legacy signature used
+            try:
+                if limit is None:
+                    limit = int(args[0])
+            except Exception:
+                pass
+        result = self.call(
+            "analyze.run",
+            link,
+            mode,
+            int(message_id) if message_id else None,
+            int(start_id) if start_id else None,
+            int(end_id) if end_id else None,
+            int(limit or 1000),
+            media_types or ["all"],
+        )
+        summary = f"{result.total} · {human_bytes(result.total_bytes)} · {result.scope}"
         return summary, result.rows
 
     @action("analyze.apply_filters")

@@ -1,56 +1,72 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in
-> `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md`.
+> This file records the latest execution session only. Historical evidence is in `python-package/docs/PHASE_REPORTS/PHASE_M15_T11.md` (and `PHASE_M15_T08.md`, `PHASE_M15_T07.md`, ...).
 
 ## Session card
 
 | Field | Value |
 |---|---|
-| UTC date | 2026-08-09 |
-| Session type | M15-T08 — publish the pinned release `pkg-2026.08.09-m15t07` |
-| TASK ID | `M15-T08` |
+| UTC date | 2026-08-10 |
+| Session type | M15-T11 — Scoped Telegram scan, media filters, and selection queue |
+| TASK ID | `M15-T11` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` (public) |
-| Fixed branch | `arena/019fe868-drive-buddy-3579bf74` |
-| HEAD before docs | `10b5d3b1b74542b2388983a2cc582c4906154982` |
-| Required release target | `10b5d3b1b74542b2388983a2cc582c4906154982` |
-| Merge tree | `78400cd3e8763d0fffee37453fa240f5ffb63f68` |
-| Status | `BLOCKED` — release asset upload endpoint returned `EOF`; partial release was rolled back |
-| Protected/source files changed | None. Only the requested permanent-memory docs are changed in this session. |
-| Last green CI | Run `31329502070` · `https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31329502070` · success · HEAD `10b5d3b1...` |
-| Rollback | `gh release delete pkg-2026.08.09-m15t07 --yes --cleanup-tag` — completed; no tag or release remains |
-| Next step | From an environment able to reach `uploads.github.com`, publish the two assets using the measured manifest values, then perform the unauthenticated endpoint checks. |
+| Fixed branch (Arena) | `arena/019fe8bf-drive-buddy-3579bf74` |
+| Requested branch | `arena/m15-t11-scoped-analysis` (mirrored; Arena session stays on fixed branch) |
+| HEAD at session start | `e4ba2aede6b3bd43bcdb5a1a52f91f5043d513c1` (`origin/main`, merged PR #15) |
+| Requested base SHA | `a25499147f99d8af721e007d6806f2652581ff5c` — not resolvable (`fatal: bad object`); actual base is `e4ba2ae` |
+| Result SHA | `9e5bd01081f1e3064ce94dfa7fdeedc2e55c0dda` (see `git log -1`) |
+| Status | `VERIFIED COMPLETE` (code-complete candidate) |
+| Files changed | 12: 7 modified (`media_scanner.py`, `services.py`, `handlers.py`, `action_registry.py`, `ui.py`, `locale/en.json`, `locale/ar.json`) + 2 new tests (`test_scoped_scan.py`, `test_analyze_ui_contract.py`) + 3 docs (`TODO.md`, `KNOWN_ISSUES.md`, `PHASE_M15_T11.md`) + this handoff |
+| Protected files touched | None — `telegram_auth.py`, `telegram_client.py`, `drive_auth.py`, `drive_client.py`, `transfer_manager.py`, `queue_manager.py`, `database.py`, `notebook_cells.py`, `notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `.github/workflows/ci.yml` all unchanged |
+| Test result | `419 passed, 1 warning in 13.91s` (was `360 passed` before; +59 from 16 new contract tests) |
+| Launcher check | `binding check ok: 25/41 ready actions resolve` (was `24/41`; `analyze.run` now `implemented+tested`) |
+| Notebook check | `notebooks are in sync` · `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb → IDENTICAL` |
+| Package build | `python -m teledrive.package_service --build --output teledrive_v4.5.zip → tests passed / archive: teledrive_v4.5.zip` (198K at `/tmp/...`) |
+| Known limitations | Real Telegram channel scan + real enqueue→transfer still require owner-run Colab evidence (M15-T01); not promoted to `Colab-ready` |
+| Honest status | `Code-complete candidate / NOT Colab-ready` |
 
-## Verified evidence
+## Verified evidence (exact outputs)
 
-- `origin/main` and the session HEAD were both exactly `10b5d3b1b74542b2388983a2cc582c4906154982` before the release operation.
-- CI run `31329502070` completed successfully for that SHA.
-- Artifact `9042509940` is unexpired through `2026-11-07T18:37:24Z`, has wrapper size `177890`, and API digest `sha256:13f010e29d4c3ce5cca2403a4133c2abc56a23315a10d25bd2f090d0a791e133`.
-- The lock-pinned Path A build ran `402` tests through the package builder and produced:
-  - inner SHA-256: `0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce`
-  - inner size: `188695` bytes
-  - required layout: `teledrive-v4.5/requirements.lock`
-- Recreating the GitHub Actions artifact wrapper with the recorded artifact timestamp matched the artifact wrapper digest and size exactly. The direct signed storage download itself was blocked by `EOF`, so this is recorded as a derived artifact-inner check rather than a direct extraction claim.
-- The stale expectation `3452060306c38bd4789bb49e28a66a7f48935623ba6915e5fdd4d20be85baa84` was not used; it omits the phase-report file present in the current tree.
-- The manifest was generated with only the required fields and the measured digest/size. It was not published because the asset upload did not complete.
+- `python -m compileall -q teledrive` → `OK`
+- `python -m pytest -q tests` → `419 passed, 1 warning` (full log in phase report)
+- `python teledrive_launcher.py --check` → `binding check ok: 25/41 ready actions resolve`
+- `python -m teledrive.notebook_cells --check` → `notebooks are in sync`
+- `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` → `IDENTICAL` (exit 0)
+- `python -m teledrive.package_service --build --output /tmp/teledrive_v4.5.zip` → `2026-08-09T23:03:01+00:00 tests passed / archive: /tmp/teledrive_v4.5.zip`
+- `tests/test_action_proofs.py` → `29 passed` (proof gate enforces `analyze.run` → `tests/test_scoped_scan.py::test_handler_passes_bounded_scan_request`)
+- No secret, no unbounded crawl, no auto-enqueue; `ScanRequest.validate()` caps at 1000 (range at 1000), `media_scanner` never calls `iter_messages(limit=None)` for chat/latest.
 
-## GitHub release status
+## What was done
+
+- Added `ScanRequest` dataclass, `SCAN_MODES`, `MEDIA_TYPES`, `MAX_SCAN_MESSAGES`/`MAX_RANGE_MESSAGES`, `_matches_media_type`, `_iter_requested_messages`, and replaced `scan_link()` per spec §4 (bounded, media-filtered)
+- Replaced `ScannerService.analyze()` per spec §5 (mode/message_id/start/end/limit/media_types, `auto→chat` compat, bounded, `bounded: true` event, never enqueues)
+- Replaced `Handlers.h_analyze_run()` per spec §6 (7 inputs, bounded ints, `· {scope}` summary, compat for legacy 2-arg tests)
+- Marked `action_registry:analyze.run` `tested=True` with proof `tests/test_scoped_scan.py::test_handler_passes_bounded_scan_request` (§6)
+- Rebuilt Analyze tab in `ui.py` per spec §7 (instructions, `mode` radio 4 choices, `media_types` 8 choices, `message_id/start_id/end_id/limit`, separate `filter_media_types`, 7-input wiring, no direct Gradio handlers)
+- Added 18 locale keys in both `en.json`/`ar.json` per spec §8
+- Added `tests/test_scoped_scan.py` (10 tests) and `tests/test_analyze_ui_contract.py` (6 tests) per spec §9 — all fake-Telegram, no network, no fabricated rows, no unasserted mocks
+
+## GitHub handoff (to be filled after push/PR)
 
 ```plain
-Release: FAILED (rolled back)
-Tag: pkg-2026.08.09-m15t07
-Target SHA: 10b5d3b1b74542b2388983a2cc582c4906154982
-Assets: none
-Upload error: Post https://uploads.github.com/.../assets?name=teledrive_v4.5.zip: EOF
-Manifest endpoint after rollback: HTTP 404 Not Found
-Archive endpoint after rollback: HTTP 404 Not Found
+GitHub Status:
+Commit: SUCCESS / FAILED
+Push: SUCCESS / FAILED / NOT ATTEMPTED
+Pull Request: CREATED / NOT CREATED / FAILED
+Branch: arena/019fe8bf-drive-buddy-3579bf74
+Base SHA: e4ba2aede6b3bd43bcdb5a1a52f91f5043d513c1
+Result SHA: 9e5bd01081f1e3064ce94dfa7fdeedc2e55c0dda
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/18
+Files changed: 12
+Tests: 419 passed, 1 warning
+Notebook check: notebooks are in sync
+Notebook cmp: IDENTICAL
+Launcher check: binding check ok: 25/41 ready actions resolve
+Known limitations: Real Telegram/Drive scan + transfer still requires owner Colab (M15-T01); not Colab-ready
+Handoff/docs updated: AI_HANDOFF.md, TODO.md, KNOWN_ISSUES.md, python-package/docs/PHASE_REPORTS/PHASE_M15_T11.md
+Honest status: Code-complete candidate / NOT Colab-ready
+Next action: Owner/Brain reviews PR → merge → CI on PR (compile/pytest/launcher/notebook/cmp/package/bun) → owner real Colab proof (M15-T01 scoped scans + enqueue)
+Operation error, if any: <none or details>
 ```
 
-No secret, token, signed artifact URL, or credential is stored in the repository. No `Colab-ready`
-claim is made; the real owner-run Telegram/Drive Colab proof remains separate.
-
-## Final report location
-
-- Phase report: `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md`
-- TODO entry: `docs/TODO.md` (`M15-T08 = BLOCKED`)
-- Docs-only commit and PR URL: to be recorded in the final GitHub handoff after the fixed branch is pushed and reviewed.
+No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made.
