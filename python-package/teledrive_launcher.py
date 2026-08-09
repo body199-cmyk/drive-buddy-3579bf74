@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from teledrive import bootstrap  # noqa: E402
-from teledrive.app import launch  # noqa: E402
+from teledrive.app import DEFAULT_PORT, launch  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +36,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="verify that every ready action resolves, then exit",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"Gradio server port (default {DEFAULT_PORT}, matches the Colab "
+        "proxyPort helper so the official proxy URL is stable)",
     )
     return parser
 
@@ -67,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             ctx.shutdown()
 
-    launch(ctx, share=args.share, blocking=True)
+    launch(ctx, share=args.share, blocking=True, port=args.port)
     return 0
 
 
