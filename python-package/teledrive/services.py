@@ -333,7 +333,7 @@ class CheckpointService:
         drive_auth = self.ctx.drive_auth
         if drive_auth is None or not drive_auth.connected:
             return None
-        return self.ctx.drive_client
+        return self.ctx.ensure_drive_client()
 
     def persist(self) -> dict[str, Any]:
         path = checkpoint_manager.persist_local()
