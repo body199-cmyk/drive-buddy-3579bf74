@@ -21,7 +21,11 @@ Constitution rules encoded here:
     one Drive service, all created in cell 4 and reused afterwards;
   * SQLite and temp files stay on local ``/content``, never on mounted Drive;
   * no blind ``rmtree(TEMP_DIR)`` — maintenance deletes only temp files that
-    belong to verified Uploaded items and quarantines everything unknown.
+    belong to verified Uploaded items and quarantines everything unknown;
+  * cell 1 runs a pre-bootstrap integrity-verified update gate (pinned release
+    manifest + sha256, ``.part``-only downloads, atomic swap) that REFUSES to
+    touch a live runtime and never hot-reloads; the archived ZIP in Drive
+    stays the sanctioned fallback, and refusal is never fatal.
 """
 from __future__ import annotations
 
@@ -53,9 +57,339 @@ Run the cells top to bottom, once, in a single Colab runtime.
   tunnel is created unless you deliberately opt in.
 * The database and temporary files live on local `/content`; only the finished
   uploads go to Google Drive.
+* Cell 1 first runs an integrity-verified update check against the pinned
+  release manifest (digest-checked download, atomic swap, refused while the
+  runtime is loaded). The tested Drive ZIP remains the fallback.
 """
 
-CELL_1 = '''# ==== Cell 1: restore the tested package and install pinned dependencies ====
+CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restore + pinned dependencies ====
+# Pre-bootstrap order: the update gate first (BEFORE any `import teledrive`
+# and before extraction), then the archived-ZIP restore (unchanged, still the
+# sanctioned fallback), then the requirements.lock install.
+#
+# The gate is fail-closed and side-effect free on refusal:
+#   * REFUSED when any teledrive module is already imported — a loaded
+#     ApplicationContext / event loop / UI is never hot-swapped. Use
+#     Runtime > Restart runtime, then re-run Cell 1 for a clean update.
+#   * the versioned manifest (release tag + commit + sha256 + size) comes
+#     from the pinned GitHub RELEASE of the canonical repo — a stable public
+#     endpoint, NOT an ephemeral Actions artifact URL;
+#   * archives download to updater-owned .part files only;
+#   * bytes are verified against the manifest digest BEFORE anything changes
+#     (digest or size mismatch => the current package is never touched);
+#   * replacement is atomic (os.replace on the same filesystem) and touches
+#     ONLY /content/teledrive_v4.5.zip and /content/teledrive-v4.5/;
+#   * /content/teledrive_runtime, SQLite, checkpoints, logs, quarantine and
+#     every Drive file are never touched;
+#   * REFUSED is never fatal: resolve_package_zip() below still restores the
+#     tested archive (Drive copy or official CI-artifact wrapper) as before.
+import datetime
+import hashlib, json, os, pathlib, sys, tempfile, urllib.request, zipfile
+
+PKG_RELEASE_TAG = "pkg-2026.08.09-m15t07"
+PKG_RELEASE_BASE = (
+    "https://github.com/body199-cmyk/drive-buddy-3579bf74"
+    "/releases/download/" + PKG_RELEASE_TAG + "/"
+)
+PKG_MANIFEST_URL = PKG_RELEASE_BASE + "teledrive_manifest.json"
+PKG_ARCHIVE_ROOT = "teledrive-v4.5"
+PKG_INNER_NAME = "teledrive_v4.5.zip"
+PKG_STATE_NAME = "teledrive_package_state.json"
+PKG_MAX_MANIFEST_BYTES = 64 * 1024
+PKG_MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+
+
+def _pkg_short(value, length=12):
+    text = str(value or "")
+    return text[:length] if text else "-"
+
+
+def _pkg_runtime_refusal_reason():
+    loaded = [
+        name for name in sys.modules
+        if name == "teledrive" or name.startswith("teledrive.")
+    ]
+    if loaded:
+        return "runtime already loaded (%d teledrive module(s) imported)" % len(loaded)
+    return None
+
+
+def _pkg_fetch(url, timeout=30):
+    request = urllib.request.Request(url, headers={"User-Agent": "teledrive-update-check"})
+    return urllib.request.urlopen(request, timeout=timeout)  # caller closes
+
+
+def _pkg_load_manifest(fetch, manifest_url):
+    with fetch(manifest_url) as response:
+        payload = response.read(PKG_MAX_MANIFEST_BYTES + 1)
+    if len(payload) > PKG_MAX_MANIFEST_BYTES:
+        raise ValueError("manifest too large")
+    manifest = json.loads(payload.decode("utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest is not an object")
+    return manifest
+
+
+def _pkg_manifest_is_trusted(manifest):
+    digest = manifest.get("sha256")
+    url = manifest.get("archive_url")
+    size = manifest.get("size_bytes")
+    return (
+        manifest.get("schema") == 1
+        and isinstance(manifest.get("release"), str)
+        and bool(manifest.get("release"))
+        and isinstance(digest, str)
+        and len(digest) == 64
+        and all(char in "0123456789abcdef" for char in digest)
+        and isinstance(url, str)
+        and url.startswith(PKG_RELEASE_BASE)
+        and isinstance(size, int)
+        and 0 < size <= PKG_MAX_ARCHIVE_BYTES
+    )
+
+
+def _pkg_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _pkg_is_tested_archive(path):
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+    except (OSError, zipfile.BadZipFile):
+        return False
+    prefix = PKG_ARCHIVE_ROOT + "/"
+    return any(name.startswith(prefix) for name in names) and (
+        prefix + "requirements.lock" in names
+    )
+
+
+def _pkg_members_are_safe(names):
+    for name in names:
+        pure = pathlib.PurePosixPath(name)
+        if pure.is_absolute() or "\\\\" in name or ".." in pure.parts:
+            return False
+    return True
+
+
+def _pkg_remove_tree(path):
+    # Updater-owned targets only; an explicit walk so no blind-wipe helper
+    # ever appears in this notebook.
+    path = pathlib.Path(path)
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+        return
+    for root, dirnames, filenames in os.walk(path, topdown=False, followlinks=False):
+        for filename in filenames:
+            os.remove(os.path.join(root, filename))
+        for dirname in dirnames:
+            candidate = os.path.join(root, dirname)
+            if os.path.islink(candidate):
+                os.remove(candidate)
+            else:
+                os.rmdir(candidate)
+    os.rmdir(path)
+
+
+def _pkg_quiet_remove(path):
+    try:
+        _pkg_remove_tree(path)
+    except OSError:
+        pass
+
+
+def _pkg_cleanup_leftovers(local_root):
+    for pattern in ("." + PKG_INNER_NAME + ".*.part", ".teledrive_pkg_staging_*"):
+        for leftover in local_root.glob(pattern):
+            _pkg_quiet_remove(leftover)
+    stale_state = local_root / (PKG_STATE_NAME + ".part")
+    if stale_state.exists() or stale_state.is_symlink():
+        _pkg_quiet_remove(stale_state)
+
+
+def _pkg_download_verified(url, expected_size, expected_digest, fetch, part_path):
+    digest = hashlib.sha256()
+    total = 0
+    with fetch(url) as response:
+        with open(part_path, "wb") as handle:
+            while True:
+                chunk = response.read(256 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+                digest.update(chunk)
+                total += len(chunk)
+    return total == expected_size and digest.hexdigest() == expected_digest
+
+
+def _pkg_stage_extraction(zip_path, local_root):
+    staging = pathlib.Path(tempfile.mkdtemp(prefix=".teledrive_pkg_staging_", dir=str(local_root)))
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            if not _pkg_members_are_safe(names):
+                raise ValueError("unsafe member name in verified archive")
+            archive.extractall(staging)
+    except (OSError, ValueError, zipfile.BadZipFile):
+        _pkg_quiet_remove(staging)
+        raise
+    if not (staging / PKG_ARCHIVE_ROOT).is_dir():
+        _pkg_quiet_remove(staging)
+        raise ValueError("archive root %s missing" % PKG_ARCHIVE_ROOT)
+    return staging
+
+
+def _pkg_state_read(local_root):
+    try:
+        state = json.loads((local_root / PKG_STATE_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return state if isinstance(state, dict) else None
+
+
+def _pkg_state_write(local_root, manifest):
+    state = {
+        "schema": 1,
+        "release": manifest["release"],
+        "commit": str(manifest.get("commit") or ""),
+        "product_version": str(manifest.get("product_version") or ""),
+        "sha256": manifest["sha256"],
+        "archive_url": manifest["archive_url"],
+        "installed_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    }
+    tmp = local_root / (PKG_STATE_NAME + ".part")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    os.replace(tmp, local_root / PKG_STATE_NAME)
+    return state
+
+
+def _pkg_state_line(local_root):
+    state = _pkg_state_read(local_root)
+    if state and state.get("release") and state.get("sha256"):
+        return "%s commit=%s sha256=%s" % (
+            state["release"],
+            _pkg_short(state.get("commit")),
+            _pkg_short(state["sha256"]),
+        )
+    return "(no verified-release record; the archived-ZIP fallback is active)"
+
+
+def _pkg_refused(reason, emit):
+    line = "Package update: REFUSED %s; current package unchanged" % reason
+    emit(line)
+    return {"outcome": "refused", "reason": reason, "line": line}
+
+
+def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None, emit=print):
+    """One fail-closed update check; always prints exactly ONE redacted line.
+
+    Outcomes: 'already-current' | 'success' | 'refused'. Nothing mutates the
+    installed package unless the bytes matched the pinned manifest digest.
+    """
+    local_root = pathlib.Path(local_root)
+    fetch = fetch or _pkg_fetch
+    _pkg_cleanup_leftovers(local_root)
+
+    reason = _pkg_runtime_refusal_reason()
+    if reason is not None:
+        return _pkg_refused(reason + "; restart the runtime, then re-run Cell 1", emit)
+    try:
+        manifest = _pkg_load_manifest(fetch, manifest_url)
+    except Exception:
+        return _pkg_refused("update endpoint unreachable", emit)
+    if not _pkg_manifest_is_trusted(manifest):
+        return _pkg_refused("untrusted or incomplete manifest", emit)
+
+    release = manifest["release"]
+    digest = manifest["sha256"]
+    size = manifest["size_bytes"]
+    package_zip = local_root / PKG_INNER_NAME
+    package_dir = local_root / PKG_ARCHIVE_ROOT
+    state = _pkg_state_read(local_root)
+    state_matches = (
+        bool(state)
+        and state.get("sha256") == digest
+        and state.get("release") == release
+    )
+    zip_matches = (
+        package_zip.is_file()
+        and _pkg_is_tested_archive(package_zip)
+        and _pkg_sha256(package_zip) == digest
+    )
+    if state_matches and zip_matches and package_dir.is_dir():
+        line = "Package update: ALREADY CURRENT %s commit=%s sha256=%s" % (
+            release, _pkg_short(manifest.get("commit")), _pkg_short(digest))
+        emit(line)
+        return {
+            "outcome": "already-current",
+            "release": release,
+            "sha256": digest,
+            "line": line,
+        }
+
+    part_path = None
+    staging = None
+    committed = False
+    try:
+        source_zip = package_zip
+        if not zip_matches:
+            fd, part_name = tempfile.mkstemp(
+                prefix="." + PKG_INNER_NAME + ".",
+                suffix=".part",
+                dir=str(local_root),
+            )
+            os.close(fd)
+            part_path = pathlib.Path(part_name)
+            try:
+                verified = _pkg_download_verified(
+                    manifest["archive_url"], size, digest, fetch, part_path)
+            except Exception:
+                verified = None
+            if verified is None:
+                _pkg_quiet_remove(part_path)
+                return _pkg_refused("archive download failed", emit)
+            if not verified:
+                _pkg_quiet_remove(part_path)
+                return _pkg_refused("downloaded bytes failed digest/size verification", emit)
+            if not _pkg_is_tested_archive(part_path):
+                _pkg_quiet_remove(part_path)
+                return _pkg_refused("verified archive has an unexpected layout", emit)
+            source_zip = part_path
+        staging = _pkg_stage_extraction(source_zip, local_root)
+        if not zip_matches:
+            os.replace(part_path, package_zip)  # atomic archive replacement
+            part_path = None
+        committed = True
+        if package_dir.exists() or package_dir.is_symlink():
+            _pkg_remove_tree(package_dir)  # ONLY the previous package directory
+        os.replace(staging / PKG_ARCHIVE_ROOT, package_dir)  # atomic dir rename
+        _pkg_quiet_remove(staging)
+        staging = None
+        _pkg_state_write(local_root, manifest)
+        line = "Package update: SUCCESS %s commit=%s sha256=%s" % (
+            release, _pkg_short(manifest.get("commit")), _pkg_short(digest))
+        emit(line)
+        return {"outcome": "success", "release": release, "sha256": digest, "line": line}
+    except Exception as exc:  # the gate must never break the cell or the fallback
+        for leftover in (part_path, staging):
+            if leftover is not None:
+                leftover = pathlib.Path(leftover)
+                if leftover.exists() or leftover.is_symlink():
+                    _pkg_quiet_remove(leftover)
+        if committed:
+            return _pkg_refused(
+                "swap interrupted (%s); runtime data untouched — re-run Cell 1 to converge"
+                % type(exc).__name__,
+                emit,
+            )
+        return _pkg_refused("replacement refused (%s)" % type(exc).__name__, emit)
+'''
+
+CELL_1_RESTORE = '''# ---- restore the tested archive (sanctioned fallback + CI-artifact unwrap) ----
 # Mounted Drive is used ONLY to fetch the tested archive. SQLite, logs and temp
 # files stay on local /content — never on the mounted Drive filesystem.
 #
@@ -181,6 +515,10 @@ try:
 except Exception as exc:  # not on Colab, or the user declined the mount
     print(\"drive mount skipped:\", type(exc).__name__)
 
+# Pre-bootstrap update check. Prints ONE line (SUCCESS / ALREADY CURRENT /
+# REFUSED); REFUSED never aborts the cell — the fallback below still restores.
+pkg_try_update(LOCAL_ROOT)
+
 PACKAGE_ZIP = resolve_package_zip(LOCAL_ROOT)
 
 with zipfile.ZipFile(PACKAGE_ZIP) as archive:
@@ -196,9 +534,13 @@ sys.path.insert(0, str(PACKAGE_DIR))
 print(\"dependency source:\", PACKAGE_DIR / \"requirements.lock\")
 
 print(\"package root:\", PACKAGE_DIR)
+print(\"package reference:\", _pkg_state_line(LOCAL_ROOT))
 print(\"runtime root (local, not Drive):\", os.environ.setdefault(
     \"TELEDRIVE_ROOT\", \"/content/teledrive_runtime\"))
 '''
+
+# Assembled Cell 1: verified update gate + fallback restore. One source, no drift.
+CELL_1 = CELL_1_PACKAGE_UPDATER + CELL_1_RESTORE
 
 CELL_2 = '''# ==== Cell 2: bootstrap local directories, logging, SQLite migrations, WAL ====
 import os
@@ -304,7 +646,7 @@ print("runtime closed")
 '''
 
 CELLS: tuple[dict[str, str], ...] = (
-    {"title": "Restore package and install pinned dependencies", "code": CELL_1},
+    {"title": "Verify/update the package, restore and install pinned dependencies", "code": CELL_1},
     {"title": "Bootstrap directories, logging, SQLite migrations and WAL", "code": CELL_2},
     {"title": "Telegram credentials (hidden) and native Colab Drive auth", "code": CELL_3},
     {"title": "Inject into the one context and launch the UI (share=False)", "code": CELL_4},

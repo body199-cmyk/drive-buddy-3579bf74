@@ -80,26 +80,35 @@ class PackageService:
     # ---- archive ----
 
     def _files(self) -> list[Path]:
-        collected: list[Path] = []
+        # Sorted, de-duplicated: the archive must be a reproducible release
+        # object — the same source tree must always produce the same zip.
+        collected: dict[str, Path] = {}
         for name in INCLUDE_FILES:
             path = self.root / name
             if path.exists():
-                collected.append(path)
+                collected[str(path.relative_to(self.root))] = path
         for directory in INCLUDE_DIRS:
             base = self.root / directory
             if not base.exists():
                 continue
             for path in base.rglob("*"):
                 if path.is_file() and not _is_excluded(path, self.root):
-                    collected.append(path)
-        return collected
+                    collected[str(path.relative_to(self.root))] = path
+        return [collected[key] for key in sorted(collected)]
 
     def build_archive(self, destination: Path | None = None) -> Path:
         destination = destination or (ROOT / "teledrive_v4.5.zip")
         destination.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
             for path in self._files():
-                archive.write(path, arcname=str(Path("teledrive-v4.5") / path.relative_to(self.root)))
+                arcname = (Path("teledrive-v4.5") / path.relative_to(self.root)).as_posix()
+                # Fixed metadata: git does not preserve mtimes, so stamping the
+                # checkout time would make every CI artifact a different blob.
+                info = zipfile.ZipInfo(arcname, date_time=(2020, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 0
+                info.external_attr = 0o644 << 16
+                archive.writestr(info, path.read_bytes())
         _log.info("archive built at %s", destination)
         return destination
 

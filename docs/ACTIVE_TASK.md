@@ -4,25 +4,26 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M15-T04 |
-| العنوان | تشخيص اتصال Telegram وإعادة بناء واجهة Colab الاحترافية مع الحفاظ على التحكم الحقيقي |
-| الحالة | VERIFIED COMPLETE — بوابات Python المحلية كاملة خضراء (pytest 360 passed + launcher + notebooks sync + package build + Gradio smoke حقيقي)؛ بوابتا bun مؤجلتان إلى CI على الـPR (حاجز شبكة الحاوية، PHASE_19 §5) |
+| TASK ID | M15-T07 |
+| العنوان | إصلاح CI بعد الدمج (بناء حزمة `main` run 65) + مسار تحديث حزمة Colab دستوري وآمن |
+| الحالة | ACTIVE — بوابات Python المحلية كلها خضراء (`402 passed` + launcher + notebooks sync/IDENTICAL + بناء أرشيف مُعاد إنتاجه)؛ CI على الـPR والتحقق ما بعد الدمج (run + artifact + release) يُثبَّت في تقرير الجلسة النهائي |
 | المالك التنفيذي | LM Arena Agent |
-| المهندس | Brain (ClickUp DOC) |
-| Base SHA | `a8929521359b0eab184e800412d2e0e829b0312a` |
-| الفرع | `arena/019fe6c5-drive-buddy-3579bf74` (الفرع الجانبي الثابت لهذه الجلسة — لا يُنشأ فرع آخر) |
+| المهندس | Brain (ClickUp DOC — M15-T07) |
+| Base SHA | `333cd753c51b8c56fd1a48a1f7924c44b28e1290` (طابق `origin/main` وHEAD عند البدء) |
+| الفرع | `arena/019fe79f-drive-buddy-3579bf74` (الفرع الجانبي الثابت لهذه الجلسة — لا يُنشأ فرع آخر) |
 | فتح بتاريخ (UTC) | 2026-08-09 |
-| النطاق | `python-package/teledrive/ui.py`, `python-package/teledrive/handlers.py`, `python-package/teledrive/progress_tracker.py` (عيب deadlock مثبت — DEVIATION موثق), `python-package/teledrive/locale/{ar,en}.json`, `python-package/tests/test_ui_shell_contract.py`, `python-package/tests/test_drive_connection_gate.py`, `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md`, `docs/PHASE_REPORTS/PHASE_19.md` |
-| خارج النطاق | `.github/workflows/**`، `docs/CONSTITUTION.md`، `docs/CONSTITUTION_V4.5_ARCHIVE.md`، `docs/TeleDrive-v5.md`، `python-package/teledrive/{notebook_cells,action_registry,telegram_auth,telegram_client,services,app,ui_binder}.py`، `python-package/notebook/TeleDrive.ipynb`، `public/TeleDrive.ipynb`، `python-package/requirements.txt`، `python-package/requirements.lock`، `bun.lock`، كل الواجهة الأمامية |
-| النتيجة | قشرة Gradio غرافيت RTL افتراضيًا/LTR بشريط علوي وتنقل جانبي و7 صفحات؛ كل مكوّن حقيقي مربوط أو مخفي/معطَّل بوضوح؛ OTP/2FA مشروطان بالحالة الحية في كل render pass؛ تبديل اللغة يحفظ الحالة؛ `360 passed` |
-| الدليل الرئيسي | `docs/PHASE_REPORTS/PHASE_19.md` + `pytest` = `360 passed` محليًا |
-| الخطوة التالية | دمج الـPR بيد المالك بعد مراجعة SHA والملفات ومخرجات CI · ثم M15-T01 التشغيلي (المرحلة 10 — Colab حقيقي بحساب حي، بيد المالك) أو M13-T04 |
+| النطاق | `python-package/teledrive/package_service.py`، `python-package/teledrive/notebook_cells.py`، المخرجات المولَّدة (`python-package/notebook/TeleDrive.ipynb`، `public/TeleDrive.ipynb`، `python-package/teledrive/colab_cells.json`)، `python-package/tests/{test_telegram_flow_contract,test_package_update,test_package_service_determinism}.py`، `python-package/docs/PHASE_REPORTS/PHASE_M15_T07.md`، `docs/{CHANGELOG,TODO,KNOWN_ISSUES,ACTIVE_TASK,AI_HANDOFF}.md` |
+| خارج النطاق (لم يُمس) | `.github/workflows/**`، `drive_auth.py`، `auth_manager.py`، `app_context.py`، `services.py`، `app.py`، `ui.py`، `telegram_auth.py`، `telegram_client.py`، `transfer_manager.py`، `requirements.lock`، `bun.lock`، كل الواجهة الأمامية |
+| السبب الجذري (run 65) | اختبار قِلِق إحصائيًا: sentinel القصير `abc` اصطدم عشوائيًا بـUUID4 للأحداث (`abc91a3a-...`) داخل إعادة تشغيل الاختبارات في خطوة البناء — ليس regression منتج |
+| الإصلاح | sentinel بطول 32 hex + اختبار regression (48 دورة)؛ `build_archive` حتمي (مدخلات مرتبة + metadata ثابتة)؛ بوابة تحديث Cell 1: manifest من release مثبَّت `pkg-2026.08.09-m15t07` + sha256/حجم + `.part` + استبدال ذري + رفض أثناء تشغيل الـruntime + سطر نتيجة واحد منقّح |
+| الدليل الرئيسي | `python-package/docs/PHASE_REPORTS/PHASE_M15_T07.md` + `pytest` = `402 passed` محليًا |
+| الخطوة التالية | PR → CI أخضر → دمج → تحقق مستقل من main HEAD وrun ما بعد الدمج وartifact + إنشاء release `pkg-2026.08.09-m15t07` بالأرشيف والـmanifest → تسليم التقرير النهائي بصيغة DOC؛ ثم M15-T01 التشغيلي بيد المالك |
 
 ## قاعدة الاستخدام
 
 - OTP و 2FA مشروطان دائمًا بحالة آلة الحالة الحية في الإقلاع وفي كل إعادة رسم.
 - كل زر ظاهر له مسار تحكم فعلي أو يكون مخفيًا/معطَّل بوضوح (`common.unavailable`).
-- لا تدّعِ `Colab-ready` — التفعيل على Colab حقيقي لم يُختبر بعد.
+- لا تدّعِ `Colab-ready` — التفعيل على Colab حقيقي لم يُختبر بعد (بوابة التحديث الجديدة ضمنًا).
 - إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD` عند بدء جلسة لاحقة، فالملف متقادم ويجب إعادة التدقيق.
 - الحالة الصادقة للمشروع: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
 - الحالات المسموحة: `PLANNED`, `ACTIVE`, `VERIFIED COMPLETE`, `PARTIALLY COMPLETE`, `FAILED`, `BLOCKED`, `CANCELLED`.

@@ -34,6 +34,16 @@ PHONE = "+971500000000"
 CODE = "55555"
 FIRST_HASH = "hash-1"
 
+# Synthetic API hash sentinel. A real api_hash is a 32-character hex string, so
+# the sentinel is too: nothing more specific can leak into the event log, and a
+# random UUID4 ``id`` can collide with it only at 1-in-16**32 (full-string
+# equality). The previous short sentinel "abc" matched any 3-hex substring of
+# the random UUID4 event ids (e.g. "abc91a3a-..."), making this leak check
+# statistically flaky and breaking the post-merge main CI archive build
+# (run 64 passed on the PR branch, run 65 failed on main). See
+# docs/KNOWN_ISSUES.md #20 and python-package/docs/PHASE_REPORTS/PHASE_M15_T07.md.
+API_HASH = "0123456789abcdef0123456789abcdef"
+
 
 @pytest.fixture()
 def auth(ctx):
@@ -101,13 +111,31 @@ def test_non_international_phone_is_refused(auth):
 
 
 def test_phone_code_hash_stays_in_memory_and_out_of_the_event_log(auth):
-    auth.set_credentials("12345", "abc")
+    auth.set_credentials("12345", API_HASH)
     auth.send_code(PHONE)
     assert auth._phone_code_hash == FIRST_HASH  # noqa: SLF001 - memory only
     dumped = json.dumps(db.recent_events(limit=500), ensure_ascii=False, default=str)
     assert FIRST_HASH not in dumped
     assert PHONE not in dumped
-    assert "abc" not in dumped
+    assert API_HASH not in dumped
+
+
+def test_api_hash_never_reaches_the_event_log_across_repeated_logins(auth):
+    """M15-T07 regression: the leak check must be deterministic, not luck.
+
+    With the old short sentinel ("abc") this exact loop fails within ~40
+    iterations because random UUID4 event ids contain it as a substring — the
+    flake that failed the post-merge main CI archive build (run 65). With a
+    full-length 32-hex sentinel the only possible collision is an exact UUID4
+    equality, i.e. this check is now a true permission test, not a dice roll.
+    """
+    for _ in range(48):
+        auth.set_credentials("12345", API_HASH)
+        auth.send_code(PHONE)
+        auth.logout()
+    dumped = json.dumps(db.recent_events(limit=500), ensure_ascii=False, default=str)
+    assert API_HASH not in dumped
+    assert PHONE not in dumped
 
 
 def test_two_factor_password_is_never_recorded(auth):

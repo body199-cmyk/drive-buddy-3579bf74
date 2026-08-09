@@ -1,82 +1,70 @@
 # AI_HANDOFF — آخر جلسة (Live Handoff)
 
 > الملف الحي الوحيد لأحدث جلسة. يُستبدل محتواه بعد كل جلسة تنفيذ ولا يراكم التاريخ (التاريخ في `CHANGELOG.md` و`PHASE_REPORTS/`).
-> الحقول التالية إلزامية بنص §7: UTC، branch، HEAD، TASK ID، الحالة، الأدلة، آخر SHA أخضر، rollback، الخطوة التالية.
+> الحقول التالية إلزامية بنص §7: UTC، branch، HEAD، TASK ID، الحالة، الأدلة، آخر SHA أخضر، rollback، والخطوة التالية.
 
 ## بطاقة الجلسة
 
 | الحقل | القيمة |
 |---|---|
-| التاريخ (UTC) | 2026-08-09T15:20:00Z |
-| نوع الجلسة | M15-T04 — تشخيص Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع التحكم الحقيقي |
-| تصنيف الاستئناف | `RESUME_VERIFIED` (HEAD = رأس `main` بعد دمج PR #11 = `a892952`، الشجرة نظيفة، CI main أخضر run `31267239045`) |
-| TASK ID | `M15-T04` |
-| العنوان | تشخيص اتصال Telegram وإعادة بناء واجهة Colab الاحترافية مع الحفاظ على التحكم الحقيقي |
-| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| الفرع | `arena/019fe6c5-drive-buddy-3579bf74` (فرع الجلسة الثابت؛ لا يُنشأ فرع آخر) |
-| HEAD قبل العمل | `a8929521359b0eab184e800412d2e0e829b0312a` |
-| HEAD بعد العمل | رأس commit `M15-T04:` الواحد على الفرع (يُثبَّت حرفيًا مع رابط الـPR في تقرير الجلسة النهائي) |
-| Base SHA المعتمد | `a8929521359b0eab184e800412d2e0e829b0312a` |
-| سبب اختيار baseline | رأس main المعتمد بعد اكتمال M15-T03 ونجاح run `31267239045` |
-| الحالة النهائية | `VERIFIED COMPLETE` — بوابات Python المحلية كاملة خضراء (360 passed + launcher + notebooks sync + package build + Gradio smoke حقيقي)؛ بوابتا bun مؤجلتان إلى CI على الـPR (حاجز شبكة الحاوية) |
-| آخر SHA أخضر | `a8929521359b0eab184e800412d2e0e829b0312a` — Run `31267239045` (`success`) |
-| نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` |
-| DEVIATION موثق | `progress_tracker.py` خارج قائمة «المتوقع تعديله» (وليس ممنوعًا صراحة): إصلاح self-deadlock مثبت بـ`RLock` وفق DOC §5-08 |
+| التاريخ (UTC) | 2026-08-09T18:35:00Z |
+| نوع الجلسة | M15-T07 — إصلاح CI بعد دمج PR #14 (بناء الحزمة) + مسار تحديث حزمة Colab دستوري وآمن |
+| تصنيف الاستئناف | `RESUME_VERIFIED` (HEAD = رأس `main` بعد دمج PR #14 = `333cd753c51b8c56fd1a48a1f7924c44b28e1290`، الشجرة نظيفة، لا PRs مفتوحة، ACTIVE_TASK السابق مغلق VERIFIED COMPLETE وعلى ملفات أخرى) |
+| TASK ID | `M15-T07` |
+| العنوان | إصلاح بناء الحزمة بعد الدمج وإضافة مسار تحديث Colab آمن ومُتحقَّق |
+| المستودع | `body199-cmyk/drive-buddy-3579bf74` (عام — مُتحقق عبر `gh repo view --json isPrivate`) |
+| الفرع | `arena/019fe79f-drive-buddy-3579bf74` (فرع الجلسة الثابت؛ لا يُنشأ فرع آخر) |
+| HEAD قبل العمل | `333cd753c51b8c56fd1a48a1f7924c44b28e1290` |
+| HEAD بعد العمل | رأس commit `M15-T07:` على الفرع (يُثبَّت حرفيًا مع رابط الـPR في تقرير الجلسة النهائي) |
+| Base SHA المعتمد | `333cd753c51b8c56fd1a48a1f7924c44b28e1290` |
+| سبب اختيار baseline | رأس main المطلوب بنص DOC المهمة، ومطابقته تحققت فعليًا |
+| الحالة النهائية | `ACTIVE` — بوابات Python المحلية كاملة خضراء (402 passed + launcher + notebooks sync/IDENTICAL + بناء أرشيف حتمي)؛ التثبيت النهائي `VERIFIED COMPLETE` مشروط بـ: PR CI أخضر + دمج + run ما بعد الدمج أخضر + artifact غير منتهٍ ومرتبط بـHEAD + release `pkg-2026.08.09-m15t07` منشورًا ومُتحققًا — وكلها تُوثَّق حرفيًا في تقرير الجلسة النهائي |
+| آخر SHA أخضر | `c4eb1b7075604b596158befcddb9af9057413c91` — Run `31324593402` (`success`) — آخر run أخضر لـmain قبل هذه المهمة |
+| نقطة rollback | قبل الدمج: إغلاق PR. بعد الدمج: `git revert -m 1 <merge SHA>` (commit جديد، لا force-push). مسار التحديث نفسه لا يمس الحزمة الحالية إلا بعد تحقق digest، ويحذف فقط مخلّفاته (`*.part`/staging) |
+| DEVIATION موثق | لا شيء خارج ملفات نطاق DOC؛ لم تُلمس أي ملفات محمية ولا `.github/workflows/**` |
 
 ## تحقق baseline السابق
 
-- PR #11 مدموج في main عند `a8929521359b0eab184e800412d2e0e829b0312a` (لم يُعَد استخدامه).
-- run `31267239045` أخضر على main (`status: completed, conclusion: success`).
-- شجرة العمل نظيفة عند البدء ولا PRs مفتوحة.
-- baseline tests قبل التعديل: 338 passed.
+- PR #14 مدموج في main عند `333cd753c51b8c56fd1a48a1f7924c44b28e1290`؛ `git rev-parse HEAD` و`origin/main` طابقاه عند البدء (نظيف).
+- run `31326929948` (run رقم 65 على main) فشل في خطوة «Build the distributable archive» فقط؛ «Frontend build» نجح؛ ورفع الـartifact تخطّاه.
+- سجل فشل run 65 استُرجع فعليًا (لا استنتاج من تقرير سابق): عبر الرابط الموقَّت لمسار `GET /actions/jobs/93278678720/logs` — المقتطفات الحرفية في PHASE_M15_T07 §1.
+- baseline tests قبل التعديل: `380 passed, 1 warning in 12.69s` محليًا (مطابق للـbranch/خطوة الاختبار في CI).
+
+## السبب الجذري (run 65)
+
+اختبار `test_phone_code_hash_stays_in_memory_and_out_of_the_event_log` استخدم sentinel قصيرًا `"abc"` لـapi_hash وادّعى غيابه عن سجل الأحداث المُسلسَل؛ مُعرِّفات الأحداث UUID4 عشوائية، فأي uuid يحوي `abc` يُسقطه (≈2% لكل تشغيلة). نفس الـcommit مرّر خطوة الاختبار (`380 passed`) وأخفق إعادة التشغيل الدستورية داخل خطوة البناء (`1 failed, 379 passed`). لا عيب منتج؛ العيب في الاختبار نفسه. إعادة إنتاج محلية قبل الإصلاح: فشل عند التكرار 40 (uuid `fcaabbe1-abc8-...`).
 
 ## ما نُفِّذ فعليًا
 
-- **تشخيص Telegram (10 نقاط DOC §5):** عميل واحد، Telethon user فقط، إدخال مخفي Cell 3، نفس سياق/عميل/loop في Cell 4، واجهة عامة سباعية فقط، lifecycle/loop/إصدارات (Gradio 6.20.0 / Telethon 1.44.0)/outputs/بناء Gradio حقيقي/`ctx.resolve` — كله سليم إلا العيبين أدناه. جدول الأدلة الكامل في PHASE_19 §2.
-- **عيب (أ) — deadlock حقيقي:** `ProgressTracker.snapshot()` يعلِّق نفسه (`Lock` غير قابل لإعادة الدخول + نداء داخلي). أُعيد إنتاجه بتنفيذ مباشر وأُصلح بـ`RLock` سطرًا واحدًا؛ تغطيته عبر `test_ui_shell_contract.py` الذي ينفّذ `stats.dashboard()` كل render.
-- **عيب (ب) — الواجهة الخام:** لا RTL، لا ثيم مضمون (Gradio 6 نقل theme/css إلى `launch()`، والمسار deprecated عبر مُنشئ Blocks هو الوحيد المتاح من `ui.py` دون لمس `app.py`، ومحروس باختبار)، لا شريط علوي/تنقل جانبي/بذر حالة.
-- **`teledrive/ui.py`:** قشرة غرافيت داكنة + lime عبر `GRAPHITE_CSS` و`_graphite_theme()`؛ شريط علوي حقيقي (اسم TeleDrive + نسخة من config، شريحتا حالة، زر لغة READY، زر ZIP مخفي-غير جاهز)؛ تنقل جانبي `gr.Tabs` أصلي؛ 7 صفحات بأسماء DOC؛ تبديل لغة عبر `gr.State` + `gr.render` واحد يعيد رسم القشرة مع الحفاظ على الحالة التشغيلية؛ كل الـ41 إجراءً معلنًا ومربوطًا عبر `wire_if_ready` و`assert_complete()` في كل render pass.
-- **`teledrive/handlers.py`:** `_quota_view` مشترك + `shell_seed(ctx)` (كل قيمة ابتدائية مشتقة من الحالة الحية: لوحات OTP/2FA، الجداول، السجلات المُنقّحة، المساحة، التزامن، الإحصاءات) + تلميع `_queue_view`.
-- **`locale/{ar,en}.json`:** مفاتيح `transfer.controls`, `transfer.item`, `settings.advanced`, `dash.stats`, `form.current_value` + تسميات صفحات DOC، بتكافؤ مجموعات مفاتيح.
-- **اختبارات جديدة:** `tests/test_ui_shell_contract.py` (18) + `tests/test_drive_connection_gate.py` (4 — بوابة `about().get()` دون قلب أعلام registry).
+- **Phase A:** استبدال الـsentinel بقيمة 32-hex واقعية (`0123456789abcdef0123456789abcdef` — التصادم يتطلب تطابق UUID4 تامًا) + اختبار regression `test_api_hash_never_reaches_the_event_log_across_repeated_logins` (48 دورة؛ 402 passed؛ 25 تشغيلة متتالية للملف خضراء). لا تغيير كود منتج.
+- **`package_service.build_archive`:** حتمية الإخراج (مدخلات مرتبة/موحَّدة، metadata ثابتة، posix arcnames) ⇒ الأرشيف «كائن إصدار قابل لإعادة الإنتاج»: نفس sha256 عبر بنائين (`3452060306c3…` محليًا قبل دفع الفرع؛ القيمة القانونية تُثبَّت من artifact ما بعد الدمج).
+- **Phase B (بوابة تحديث Cell 1):** `CELL_1_PACKAGE_UPDATER` — manifest موثَّق (`schema=1`) من release مثبَّت `pkg-2026.08.09-m15t07` على المستودع العام؛ تنزيل إلى `.part` فقط؛ تحقق sha256+الحجم قبل أي تغيير؛ رفض عند وجود أي وحدة teledrive محمَّلة؛ استبدال ذري (`os.replace` + استخراج مرحّلي مع فحص traversal) لـ`/content/teledrive_v4.5.zip` و`/content/teledrive-v4.5/` فقط؛ حفاظ تام على `/content/teledrive_runtime` وSQLite وcheckpoints والسجلات والحجر وكل بيانات Drive؛ سطر نتيجة واحد منقّح (`SUCCESS`/`ALREADY CURRENT`/`REFUSED` + السبب)؛ عرض `package reference:` (release+commit+sha256) في مخرجات Cell 1؛ سجل التثبيت `/content/teledrive_package_state.json`. الـfallback (Drive ZIP / غلاف artifact عبر `resolve_package_zip()`) بقي حرفيًا وغير قابل للكسر برفض البوابة.
+- **اختبارات:** `test_package_update.py` (19: نجاح مُتحقق، already-current، تقارب بلا إعادة تنزيل، mismatch، truncation، انقطاع تنزيل، endpoint غير متاح، 7 manifest غير موثوق، رفض runtime محمَّل قبل أي شبكة، حفظ بيانات runtime + تنظيف مخلّفات، منع تسريب أسرار، lift-safety، توثيق ترتيب Cell 1) و`test_package_service_determinism.py` (2) وregression التسرب (1) = +22.
 
 ## البوابات ومخرجاتها الحقيقية
 
 | البوابة | النتيجة | المخرجات |
 |---|---|---|
-| `python -m compileall teledrive` | PASS | نجاح بلا أخطاء |
-| `python -m pytest -q tests` | PASS | `360 passed, 1 warning in 12.10s` (338 + 22 جديدًا؛ التحذير = Gradio 6 deprecation موثق) |
+| `python -m compileall -q teledrive` | PASS | نجاح بلا أخطاء |
+| `python -m pytest -q tests` | PASS | `402 passed, 1 warning in 12.30s` (التحذير = Gradio 6 deprecation موثق منذ M15-T04) |
 | `python teledrive_launcher.py --check` | PASS | `binding check ok: 24/41 ready actions resolve` |
 | `python -m teledrive.notebook_cells --check` | PASS | `notebooks are in sync` |
-| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | مطابقان، exit 0 |
-| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `tests passed` · `archive: teledrive_v4.5.zip` |
-| Gradio UI smoke (بلا اعتماديات) | PASS | بناء+render حقيقيان عربي/إنجليزي؛ إقلاع محلي `share=False` و`GET /config` = 200 |
-| `bun run lint` / `bun run build` | NOT RUN محليًا | `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR europe-west1-npm.pkg.dev` لحزمتي `@lovable.dev/*` (حاجز شبكة الحاوية؛ صفر ملفات frontend معدَّلة) — CI على الـPR هو الحكم |
-| Secrets Scan | PASS | بوابة `test_no_hardcoded_credentials` خضراء ضمن الـ360 |
+| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS | IDENTICAL |
+| `python -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS | `tests passed` + `archive: teledrive_v4.5.zip`؛ sha256 متماثل عبر بنائين |
+| `bun run lint` / `bun run build` | غير متأثرة | صفر ملفات frontend معدَّلة؛ يتحقق منها CI كالمعتاد |
 
-## ما لم يُثبَت
+## فحص الأسرار
 
-- Colab الحقيقي بحساب حي — بيد المالك (M15-T01).
-- Telegram/Drive/النقل الحي — خارج الاختبارات المعزولة لم يُختبر.
-- عمودا «السرعة/الوقت المتبقي» لكل صف تحويل — يحتاجان امتداد `services.py` (خارج نطاق الملفات المسموحة).
-- بوابتا الواجهة الأمامية في هذه الحاوية — تُثبَتان بـ CI على الـPR.
+PASS — لا بيانات اعتماد في أي تعديل؛ البوابة تعتمد مفاتيح manifest عامة فقط (release/commit/sha256/url) وتطبع بادئات مختصرة؛ اختبار `test_secret_looking_manifest_fields_never_leak` يحرس التسريب. الملفات المتغيرة رُوجِعت يدويًا قبل الدفع.
 
-## الحالة الصادقة
+## GitHub Status (يُكمَّل حرفيًا في تقرير الجلسة النهائي)
 
-**Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.**
-
-## الخطوة التالية الأصغر
-
-- دمج PR بيد المالك بعد مراجعة SHA/الملفات/CI.
-- تشغيل Colab الحقيقي للقشرة الجديدة (M15-T01: تسجيل + Drive + نقل ملف واحد).
-- أو `M13-T04` (تقييم حاجة حقيقية لإجراءات NOT_TESTED المتبقية).
-
-## Git / التسليم
-
-```text
-Commit: SUCCESS — commit واحد يبدأ بـ `M15-T04:` على الفرع (SHA حرفي في تقرير الجلسة النهائي)
-Push / PR URL: يُثبَّتان حرفيًا في تقرير الجلسة النهائي فور الإنشاء (لا amend بموجب DOC §11)
-Branch: arena/019fe6c5-drive-buddy-3579bf74
-Base SHA: a8929521359b0eab184e800412d2e0e829b0312a
+```plain
+Commit: يُثبَّت SHA commit `M15-T07:` الواحد/المتسلسل على الفرع
+Push / PR URL: يُثبَّتان فور الإنشاء (لا amend بموجب §10)
+Branch: arena/019fe79f-drive-buddy-3579bf74
+Base SHA: 333cd753c51b8c56fd1a48a1f7924c44b28e1290
+Post-merge: main HEAD + run id/URL + artifact id/expiry/sha256 + release pkg-2026.08.09-m15t07 + محتوى manifest — كلها في التقرير النهائي
 ```
-**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `PHASE_REPORTS/PHASE_19.md`. ثم نفّذ `git rev-parse HEAD` وقارنه بالـ Base SHA والـ Result SHA المسجلين في تقرير التسليم قبل أي ادعاء.
+
+**تعليمات الجلسة القادمة:** `CONSTITUTION.md` → `AI_RULES.md` → هذا الملف → `TODO.md` → `ACTIVE_TASK.md` → `python-package/docs/PHASE_REPORTS/PHASE_M15_T07.md`. نفّذ `git rev-parse HEAD` وقارنه بالـBase/Result المسجَّلين، وتحقق من release `pkg-2026.08.09-m15t07` وartifact ما بعد الدمج قبل أي ادعاء أو مهمة جديدة. الخطوة التشغيلية الكبرى تبقى M15-T01 (Colab حقيقي بيد المالك) أو M13-T04/M14-T01 حسب أولوية المالك.
