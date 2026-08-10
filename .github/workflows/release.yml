@@ -1,0 +1,183 @@
+# Release publication workflow — M15-T08
+#
+# Publishes the pinned package release `pkg-2026.08.09-m15t07` for the
+# canonical repository `body199-cmyk/drive-buddy-3579bf74`.
+#
+# Why a workflow (and not a local upload): this repository's Cell-1 updater
+# trusts a STABLE public endpoint (`/releases/download/<tag>/...`). Release
+# asset uploads must therefore be performed from a machine that can reach
+# `uploads.github.com` (GitHub runners), not from the sandbox that authored
+# the change.
+#
+# Safety gates (fail-closed; nothing is published unless every gate passes):
+#   1. The tree is built from the PINNED, verified commit
+#      10b5d3b1b74542b2388983a2cc582c4906154982 (post-merge main at the time
+#      M15-T07 was verified; CI run 31329502070 success).
+#   2. The full test suite runs before the archive is built
+#      (`package_service --build` runs tests first; a failing suite produces
+#      no archive).
+#   3. The archive layout gate requires `teledrive-v4.5/requirements.lock`.
+#   4. Byte-identity gate: the built archive MUST measure exactly
+#      sha256 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce
+#      and 188695 bytes — the bytes verified against CI artifact 9042509940
+#      in PHASE_M15_T08. Any drift fails the run and nothing is published.
+#   5. The manifest carries only the required fields (schema/release/commit/
+#      product_version/sha256/size_bytes/archive_url), and the archive URL is
+#      the release download URL the Cell-1 updater is pinned to.
+#   6. Re-running the workflow is safe: if the tag and both assets already
+#      exist with the expected bytes, the job exits 0 without touching them.
+#
+# Trigger: manual only (workflow_dispatch). The release is a pinned, one-shot
+# publication; it must never be re-created automatically on every push.
+
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-pkg-2026-08-09-m15t07
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish pinned release pkg-2026.08.09-m15t07
+    runs-on: ubuntu-latest
+
+    env:
+      TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
+      TELEDRIVE_LANG: en
+      # gh (pre-installed on the runner) does NOT auto-pick up GITHUB_TOKEN in
+      # an Actions run; without this it exits with code 4 ("set the GH_TOKEN
+      # environment variable") on every gh release ... call. github.token is the
+      # automatically-provided GITHUB_TOKEN, which `permissions: contents: write`
+      # above scopes to release-creating access.
+      GH_TOKEN: ${{ github.token }}
+      PINNED_SHA: 10b5d3b1b74542b2388983a2cc582c4906154982
+      RELEASE_TAG: pkg-2026.08.09-m15t07
+      EXPECTED_SHA256: 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce
+      EXPECTED_SIZE: 188695
+
+    defaults:
+      run:
+        working-directory: python-package
+
+    steps:
+      - name: Checkout the pinned verified commit
+        uses: actions/checkout@v4
+        with:
+          ref: 10b5d3b1b74542b2388983a2cc582c4906154982
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install pytest
+
+      - name: Byte-compile the package
+        run: python -m compileall teledrive
+
+      - name: Run test suite
+        run: python -m pytest -q tests
+
+      - name: Build the distributable archive
+        run: python -m teledrive.package_service --build --output teledrive_v4.5.zip
+
+      - name: Measure archive digest and size
+        id: measure
+        run: |
+          echo "archive_sha256=$(sha256sum teledrive_v4.5.zip | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "archive_size=$(stat -c%s teledrive_v4.5.zip)" >> "$GITHUB_ENV"
+
+      - name: Gate - archive layout (requirements.lock inside the package root)
+        run: |
+          unzip -l teledrive_v4.5.zip | grep -E "teledrive-v4\\.5/requirements\\.lock"
+
+      - name: Gate - byte identity with the verified artifact
+        run: |
+          test "$archive_sha256" = "$EXPECTED_SHA256" || { echo "digest drift: $archive_sha256 != $EXPECTED_SHA256"; exit 1; }
+          test "$archive_size"  = "$EXPECTED_SIZE"  || { echo "size drift: $archive_size != $EXPECTED_SIZE"; exit 1; }
+          echo "byte identity verified: $archive_sha256 ($archive_size bytes)"
+
+      - name: Stage the public manifest
+        run: |
+          python - <<'PY'
+          import json, os
+          manifest = {
+              "schema": 1,
+              "release": os.environ["RELEASE_TAG"],
+              "commit": os.environ["PINNED_SHA"],
+              "product_version": "4.5.0",
+              "sha256": os.environ["archive_sha256"],
+              "size_bytes": int(os.environ["archive_size"]),
+              "archive_url": (
+                  "https://github.com/body199-cmyk/drive-buddy-3579bf74"
+                  "/releases/download/" + os.environ["RELEASE_TAG"] + "/teledrive_v4.5.zip"
+              ),
+          }
+          with open("teledrive_manifest.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2, ensure_ascii=False)
+              handle.write("\n")
+          print(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
+
+      - name: Gate - release not already published with both assets
+        # NOTE: do NOT use a `python - <<'PY' ... PY` heredoc inside this `if`
+        # block. After YAML dedent the heredoc terminator ends up indented, bash
+        # does not recognise it, reads to EOF, and the step exits with code 2
+        # (a syntax error). The shell-only form below keeps the same fail-closed
+        # semantics: if the release already exists with both assets the publish
+        # step is skipped; if it exists but is missing an asset the job fails;
+        # otherwise the publish step runs.
+        run: |
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > /tmp/assets.txt 2>/dev/null; then
+            for required in teledrive_v4.5.zip teledrive_manifest.json; do
+              grep -qx "$required" /tmp/assets.txt || {
+                echo "release exists but missing asset: $required"
+                exit 1
+              }
+            done
+            echo "release already published with both assets; nothing to do"
+            echo "already-published" >> "$GITHUB_ENV"
+          else
+            echo "release does not exist yet; will create"
+          fi
+
+      - name: Publish release with both assets
+        if: env.already-published != 'already-published'
+        run: |
+          gh release create "$RELEASE_TAG" \
+            teledrive_v4.5.zip teledrive_manifest.json \
+            --target "$PINNED_SHA" \
+            --title "TeleDrive v4.5 - pinned package pkg-2026.08.09-m15t07" \
+            --notes "Pinned package release for the Cell-1 updater (M15-T07/T08).
+
+            - Tag: $RELEASE_TAG
+            - Target commit: $PINNED_SHA
+            - Archive sha256: $archive_sha256
+            - Archive size_bytes: $archive_size
+            - Manifest: teledrive_manifest.json (schema 1)
+            - Bytes verified against CI artifact 9042509940 (run 31329502070, wrapper sha256 13f010e2...) in PHASE_M15_T08.
+
+            Published from GitHub Actions (release.yml) on ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+
+      - name: Verify published assets
+        run: |
+          python - <<'PY'
+          import json, os
+          release = json.loads(os.popen("gh release view %s --json tagName,targetCommitish,assets" % os.environ["RELEASE_TAG"]).read())
+          assert release["targetCommitish"] == os.environ["PINNED_SHA"], release
+          assets = {a["name"]: a["size"] for a in release["assets"]}
+          assert assets.get("teledrive_v4.5.zip") == int(os.environ["archive_size"]), assets
+          assert assets.get("teledrive_manifest.json", 0) > 0, assets
+          print("release verified:", json.dumps(release, indent=2, sort_keys=True))
+          PY
