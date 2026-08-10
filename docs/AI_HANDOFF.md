@@ -14,7 +14,9 @@
 | Expected base SHA (MASTER) | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` — verified as ancestor of `origin/main`; everything after it is docs-only (PR #21 M15-T12 docs + PR #22 README) |
 | HEAD at session start | `612115941af6747fdf4719576cdf10f6fbd21a21` (= `origin/main`) |
 | Result SHA | `4dcdadd3b98f21ff8e432de54dbae7127482ce21` (M16-T01 commit) + follow-up docs commit |
-| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 |
+| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 — **MERGED** into `main` (`4a2dac6`, merge commit) per Brain approval |
+| Publish dispatch | **BLOCKED by platform permission** — `gh workflow run "Publish current TeleDrive package" --ref main` → `HTTP 403: Resource not accessible by integration` (the arena bot token lacks `actions:write`; same limitation family as KNOWN_ISSUES #15). **Owner must trigger the publish manually** (Actions → `Publish current TeleDrive package` → Run workflow → branch `main`), then restart the Colab runtime and run Cells 1→4. |
+| Release state after merge | Still OLD: `pkg-2026.08.09-m15t07` target `f8c0ec2` · `teledrive_v4.5.zip` 212474 B — **does NOT contain M16-T01 yet** (matches the owner's note) |
 | Status | `VERIFIED COMPLETE` for the code task (gate evidence below); final product status remains `Code-complete candidate / NOT Colab-ready` |
 | Authority | M16 AUTHORITY: M16 MASTER is the ONLY execution file; DOC-18/21/23/25 (2kzn5jac-518 / 2kzn5jac-538 / 2kzn5jac-478 / 2kzn5jac-98) are cancelled for execution |
 | What was done | Added `DEFAULT_SCAN_MODE="message"`, `MODE_FIELDS`, `fields_for_mode()` (media_scanner.py); `ScannerService.mode_fields()`, `SCAN_VALIDATION_KEYS`, `NON_SCANNABLE_LINK_KINDS`, `InvalidLink→err.bad_link`, invite refusal→`err.link_invite_unsupported`, `validate()` errors→`err.scan_*`/`err.bad_scan_request` (services.py); `analyze.set_mode` action (action_registry.py); `h_analyze_set_mode` + `ERROR_ARITY=4` + `shell_seed` keys `analyze_mode`/`analyze_fields` (handlers.py); full Analyze-block rebuild in ui.py (localized tuple choices, mode-aware `visible=seed[...]`, no `minimum=`/`maximum=` on optional numbers, `limit=MAX_SCAN_MESSAGES`, `binder.is_ready("analyze.set_mode")` gate, `binder.wire_if_ready(mode, ..., event="change")`, `analyze.result` label); +10 locale keys each in ar/en; created `tests/test_analyze_ui_modes.py` (missing but required by the T01 gate); tightened `tests/test_analyze_ui_contract.py`; added the additive `ARGS` line in `tests/test_handlers_contract.py` |
@@ -25,7 +27,12 @@
 
 ## Next action
 
-**STOP — await Brain review of the mandatory M16-T01 report and explicit approval before starting M16-T02.** Per M16 MASTER §1.4: one phase per session; do not start T02/T03/T04 without approval. After Brain approval and owner merge of the PR, the owner must re-run the `Publish current TeleDrive package` workflow on the SAME tag `pkg-2026.08.09-m15t07` and restart Colab (Cell 1 → 4) for the live proof.
+M16-T01 is MERGED (Brain approved; `4a2dac6`). Per the owner's instruction, the live path now is:
+
+1. **Owner**: Actions → `Publish current TeleDrive package` → Run workflow → branch `main` (agent dispatch is 403-blocked). It rebuilds from `main` (includes M16-T01) and re-publishes the SAME tag `pkg-2026.08.09-m15t07` with a NEW sha256 (the old 212474 B / `167d25d4…` archive does NOT contain M16-T01).
+2. **Owner**: In Colab — Runtime → Restart session, then run Cell 1 (expect `Package update: SUCCESS` with the new sha256 ≠ `167d25d4…`), then Cells 2 → 3 → 4, then the live test: single-message link, mode "رسالة واحدة", one item, enqueue, transfer, verify the file on Drive.
+3. Send the Cell 1–4 outputs + transfer result to Brain.
+4. **M16-T02 remains STOPPED** until a separate approval arrives after the live Colab success.
 
 ## GitHub handoff (this session)
 
@@ -33,11 +40,13 @@
 GitHub Status:
 Commit: SUCCESS — 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01)
 Push: SUCCESS — branch arena/019fe96c-drive-buddy-3579bf74 pushed
-Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
+Pull Request: CREATED then MERGED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 (merge commit 4a2dac6 into main)
 Branch: arena/019fe96c-drive-buddy-3579bf74
 Base SHA: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93 (expected) / 612115941af6747fdf4719576cdf10f6fbd21a21 (actual origin/main at start)
-Result SHA: 4dcdadd3b98f21ff8e432de54dbae7127482ce21
+Result SHA: 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01) · main now 4a2dac6
 PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
+Publish workflow dispatch: FAILED (HTTP 403 — bot lacks actions:write) → OWNER ACTION REQUIRED
+Release after merge: still old (target f8c0ec2, zip 212474 B) until the owner re-runs the publish workflow
 Operation error, if any: bun.sh TLS reset from sandbox (documented; bun gates deferred to CI); initial self-authored test bug (shell_seed is a module function, not a Handlers method) fixed before the gate run
 Current repository state: clean tree after commit (memory files updated in the same commit)
 Recovery recommendation: if any gate fails on CI, fix forward on the session branch; never force-push/rebase/amend
