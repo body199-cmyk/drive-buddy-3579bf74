@@ -8,8 +8,8 @@
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (DOC-37) |
 | Base SHA | `a4311dafa8301c228df048930487082597c000ea` (= رأس `origin/main`؛ تحقّق content-rule: `component_update(choices` موجود في handlers.py و `tests/test_drive_folders.py` موجود، بما يُحقّق شرط "T02 IN MAIN" بالمحتوى رغم عدم احتواء السجل على SHA 8325ac3c نتيجة squash) |
-| Result SHA | `???` (سيُملأ بعد الدفع) |
-| PR | `???` (سيُملأ بعد فتح PR) |
+| Result SHA | `879fac53fa9076005640de676f233ecaf46f8c46` |
+| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/27 |
 | الفرع | `arena/019fec15-drive-buddy-3579bf74` (فرع الجلسة المثبّت) |
 | فتح بتاريخ (UTC) | 2026-08-10T17:38Z |
 | النطاق | Part A: الأفعال العشرة المخفية (dashboard.refresh · logs.{refresh,search,download} · settings.{set_concurrency,set_theme} · export.{build_zip,colab_cells} · recovery.restore · maintenance.checkpoint) + حقل `blocked_reason_key` على ActionSpec + `assert_complete()` صارمة. Part B: إعادة كتابة `ui.py` (شريط يمين بسبعة أقسام بالترتيب المطلوب، شرائح حالة من ctx لا من بيانات وهمية، RTL افتراضي، ثيم عبر `ui_theme.py` + `gr.HTML` host)، شريط تمرير التزامن 1..4 افتراضي 2. |
