@@ -30,6 +30,7 @@ class ActionSpec:
     implemented: bool
     tested: bool
     proof_test: str = ""
+    blocked_reason_key: str | None = None  # locale key, required when tested=False
 
     def __post_init__(self) -> None:
         if self.tested and not self.proof_test:
@@ -39,6 +40,10 @@ class ActionSpec:
             )
         if self.tested and not self.implemented:
             raise ValueError(f"{self.action_id}: tested=True requires implemented=True")
+        if self.tested and self.blocked_reason_key is not None:
+            raise ValueError(
+                f"{self.action_id}: tested=True must not carry blocked_reason_key"
+            )
 
     @property
     def ready(self) -> bool:
@@ -380,7 +385,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.refresh",
         section="dashboard",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_dashboard_refresh.py::test_refresh_returns_live_state_or_disconnected",
     ),
 
     # ---- Logs ----
@@ -391,7 +397,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.refresh",
         section="logs",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_logs_actions.py::test_refresh_returns_redacted_text_and_status",
     ),
     ActionSpec(
         action_id="logs.search",
@@ -400,7 +407,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.search_logs",
         section="logs",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_logs_actions.py::test_search_filters_by_needle_and_redacts",
     ),
     ActionSpec(
         action_id="logs.download",
@@ -409,7 +417,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.download_logs",
         section="logs",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_logs_actions.py::test_download_writes_redacted_file",
     ),
 
     # ---- Settings ----
@@ -420,7 +429,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="form.concurrency",
         section="settings",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_settings_concurrency.py::test_one_and_four_accepted_out_of_range_rejected",
     ),
     ActionSpec(
         action_id="settings.toggle_language",
@@ -439,7 +449,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.theme",
         section="settings",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_theme_switch.py::test_dark_differs_from_light_and_invalid_falls_back",
     ),
 
     # ---- Colab code / export ----
@@ -450,7 +461,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.build_zip",
         section="export",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_export_actions.py::test_build_zip_returns_redacted_archive_without_secrets",
     ),
     ActionSpec(
         action_id="export.colab_cells",
@@ -459,7 +471,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.colab_cells",
         section="export",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_export_actions.py::test_colab_cells_redacts_secrets",
     ),
 
     # ---- Maintenance / recovery ----
@@ -470,7 +483,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.recover",
         section="settings",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_recovery_maintenance.py::test_checkpoint_then_restore_round_trip",
     ),
     ActionSpec(
         action_id="maintenance.checkpoint",
@@ -479,7 +493,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.checkpoint",
         section="settings",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_recovery_maintenance.py::test_checkpoint_writes_local_file",
     ),
 )
 
@@ -509,3 +524,37 @@ def sections() -> tuple[str, ...]:
         if spec.section not in seen:
             seen.append(spec.section)
     return tuple(seen)
+
+
+class RegistryError(Exception):
+    """Raised when the visible-disabled contract is broken."""
+
+
+def assert_complete() -> None:
+    """Every not-tested action MUST carry a blocked_reason_key present in ar+en.
+
+    Silently hiding a control is forbidden (KNOWN_ISSUES #28). Every unready
+    action must either be ready (implemented+tested) or render visible but
+    disabled with a localized reason explaining why to the user.
+    """
+    from .i18n import keyset as _locale_keys
+
+    ar_keys = _locale_keys("ar")
+    en_keys = _locale_keys("en")
+    for spec in ACTION_SPECS:
+        if spec.tested:
+            continue
+        if not spec.blocked_reason_key:
+            raise RegistryError(
+                f"action {spec.action_id} is not tested and has no blocked_reason_key"
+            )
+        if spec.blocked_reason_key not in ar_keys:
+            raise RegistryError(
+                f"missing ar locale for blocked reason of {spec.action_id}: "
+                f"{spec.blocked_reason_key}"
+            )
+        if spec.blocked_reason_key not in en_keys:
+            raise RegistryError(
+                f"missing en locale for blocked reason of {spec.action_id}: "
+                f"{spec.blocked_reason_key}"
+            )

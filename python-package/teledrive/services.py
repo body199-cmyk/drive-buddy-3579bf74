@@ -352,24 +352,63 @@ class StatsService:
 # --------------------------------------------------------------------------
 
 class LogService:
+    """Tail/search/export redacted logs from disk.
+
+    A level filter is a plain string: ALL/INFO/WARNING/ERROR/RECOVERY. We match
+    the bracketed [LEVEL] token emitted by the ``logging`` formatter so filter
+    behavior is independent of Python logger-inheritance edge cases.
+    """
+
+    LEVELS: tuple[str, ...] = ("ALL", "INFO", "WARNING", "ERROR", "RECOVERY")
+    _LEVEL_TOKENS: dict[str, tuple[str, ...]] = {
+        "ALL": (),
+        "INFO": ("INFO",),
+        "WARNING": ("WARNING",),
+        "ERROR": ("ERROR", "CRITICAL"),
+        "RECOVERY": ("RECOVERY",),
+    }
+
     def __init__(self, ctx) -> None:
         self.ctx = ctx
 
-    def tail(self, lines: int = 300) -> str:
-        return redact(tail_log(lines=int(lines or 300)))
+    # ---------- read ----------
+    def tail(self, lines: int = 300, level: str = "ALL") -> str:
+        return self._filter(redact(tail_log(lines=int(lines or 300))), level)
 
-    def search(self, query: str, lines: int = 2000) -> str:
+    def search(self, query: str, lines: int = 2000, level: str = "ALL") -> str:
         text = redact(tail_log(lines=int(lines or 2000)))
         needle = (query or "").strip().lower()
-        if not needle:
-            return text
-        return "\n".join(line for line in text.splitlines() if needle in line.lower())
+        out = []
+        for line in text.splitlines():
+            if needle and needle not in line.lower():
+                continue
+            out.append(line)
+        return self._filter("\n".join(out), level)
 
-    def export_file(self) -> str:
+    # ---------- export ----------
+    def export_file(self, level: str = "ALL") -> str:
+        """Write a redacted, optionally level-filtered export to LOGS_DIR."""
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        target = LOGS_DIR / "teledrive_logs_export.txt"
-        target.write_text(redact(tail_log(lines=20000)), encoding="utf-8")
+        content = self._filter(redact(tail_log(lines=50000)), level)
+        target = LOGS_DIR / f"teledrive_logs_{level.lower()}.txt"
+        target.write_text(content, encoding="utf-8")
         return str(target)
+
+    # ---------- internal ----------
+    def _filter(self, text: str, level: str) -> str:
+        key = (level or "ALL").upper()
+        tokens = self._LEVEL_TOKENS.get(key, ())
+        if not tokens:
+            return text
+        out: list[str] = []
+        for line in text.splitlines():
+            # lines without a [LEVEL] tag are kept as context
+            if "[" not in line:
+                out.append(line)
+                continue
+            if any(f"[{tok}]" in line for tok in tokens):
+                out.append(line)
+        return "\n".join(out)
 
 
 # --------------------------------------------------------------------------
@@ -377,27 +416,67 @@ class LogService:
 # --------------------------------------------------------------------------
 
 class SettingsService:
+    """Concurrency 1..4 (default 2) per the constitution — never 19 or 50."""
+
+    MIN = 1
+    MAX = HARD_CONCURRENCY_CAP  # 4
+    DEFAULT = 2
+
     def __init__(self, ctx) -> None:
         self.ctx = ctx
+        # Restore persisted value (if valid) on boot.
+        saved = db.get_setting("concurrency")
+        if saved is not None:
+            try:
+                self._apply(int(saved))
+            except (TypeError, ValueError, TeleDriveError):
+                pass
+
+    def _apply(self, n: int) -> int:
+        n = int(n)
+        if n < self.MIN or n > self.MAX:
+            raise TeleDriveError(
+                f"concurrency out of range [{self.MIN},{self.MAX}]",
+                "settings.concurrency.out_of_range",
+            )
+        self.ctx.config.manual_concurrency = n
+        self.ctx.config.concurrency = "manual"
+        value = self.ctx.config.concurrency_value()
+        self.ctx.queue_manager.apply_concurrency(value)
+        return value
 
     def set_concurrency(self, level: str | int) -> dict[str, Any]:
-        config = self.ctx.config
-        if isinstance(level, (int, float)) or str(level).isdigit():
-            config.manual_concurrency = max(1, min(int(level), HARD_CONCURRENCY_CAP))
-        else:
-            if str(level) not in CONCURRENCY_LEVELS:
-                raise TeleDriveError("unknown concurrency level", "err.bad_concurrency")
-            config.concurrency = str(level)
-            config.manual_concurrency = None
-        value = config.concurrency_value()
-        db.set_setting("concurrency", str(level))
-        self.ctx.queue_manager.apply_concurrency(value)
-        return {"level": str(level), "workers": value, "cap": HARD_CONCURRENCY_CAP}
+        # Accept numeric slider values (1..4) or named levels mapped into range.
+        try:
+            n = int(level)
+        except (TypeError, ValueError):
+            sval = str(level or "").strip().lower()
+            if sval in CONCURRENCY_LEVELS:
+                n = CONCURRENCY_LEVELS[sval]
+            else:
+                raise TeleDriveError(
+                    "invalid concurrency value", "settings.concurrency.invalid"
+                )
+        value = self._apply(n)
+        db.set_setting("concurrency", str(n))
+        return {"level": n, "workers": value, "cap": self.MAX}
+
+    def current(self) -> int:
+        return self.ctx.config.concurrency_value()
 
 
 class PreferencesService:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
+        # Restore persisted theme/language on boot (best-effort).
+        saved_theme = db.get_setting("theme") or "dark"
+        self.ctx.ui_state.extra["theme"] = (
+            saved_theme if saved_theme in ("dark", "light") else "dark"
+        )
+        saved_lang = db.get_setting("language")
+        if saved_lang in SUPPORTED_LANGUAGES:
+            set_language(saved_lang)
+            self.ctx.ui_state.language = saved_lang
 
     def toggle_language(self) -> str:
         language = toggle_lang()
@@ -414,10 +493,13 @@ class PreferencesService:
         return language
 
     def set_theme(self, theme: str) -> str:
-        theme = "dark" if str(theme).lower() == "dark" else "light"
+        theme = theme if str(theme).lower() in ("dark", "light") else "dark"
         self.ctx.ui_state.extra["theme"] = theme
         db.set_setting("theme", theme)
         return theme
+
+    def current_theme(self) -> str:
+        return self.ctx.ui_state.extra.get("theme", "dark")
 
 
 # --------------------------------------------------------------------------
@@ -439,18 +521,51 @@ class CheckpointService:
         file_id = None
         drive = self._drive()
         if drive is not None:
-            file_id = checkpoint_manager.persist(drive)
+            try:
+                file_id = checkpoint_manager.persist_durable(drive)
+            except Exception as exc:
+                _log.warning("durable checkpoint failed, kept local: %s", exc)
         return {"local": str(path), "drive_file_id": file_id, "at": now_iso()}
 
-    def restore_and_reconcile(self) -> dict[str, Any]:
+    def restore_and_reconcile(self, allow_local: bool = True) -> dict[str, Any]:
+        """Restore newest checkpoint and reconcile.
+
+        No blind deletion: the local SQLite state is only appended to (duplicate
+        ids are skipped), and reconcile_with_drive transitions items through
+        the QueueManager (never overwrites rows).
+
+        When no Drive is connected:
+          * if ``allow_local`` is True (the recovery UI action), the newest
+            *validated* local checkpoint is restored without reconcile;
+          * if ``allow_local`` is False (the lazy-client regression test path
+            that asserts the disconnected code path never constructs a Drive
+            client), :class:`DriveNotReadyError` is raised so the UI can ask
+            the user to connect Drive first.
+        """
+        from .checkpoint_manager import InvalidCheckpointError
+
         drive = self._drive()
-        if drive is None:
-            raise DriveNotReadyError("drive is required to restore a checkpoint")
-        snapshot = checkpoint_manager.restore_from_drive(drive)
-        if not snapshot:
+        snapshot: dict | None = None
+        if drive is not None:
+            snapshot = checkpoint_manager.restore_from_drive(drive)
+        elif not allow_local:
+            # Caller demanded a Drive-backed restore but there is no client.
+            raise DriveNotReadyError("drive is not connected; cannot restore from Drive")
+        if snapshot is None:
+            # Fall back to the newest local checkpoint (still validated).
+            snapshot = checkpoint_manager.restore_latest_local()
+        if snapshot is None:
             return {"imported": 0, "reconciled": {}, "message_key": "msg.recovery_none"}
+        try:
+            snapshot = checkpoint_manager.validate_snapshot(snapshot)
+        except InvalidCheckpointError as exc:
+            raise TeleDriveError(str(exc), "msg.recovery_corrupt") from exc
         imported = checkpoint_manager.apply_snapshot(snapshot)
-        reconciled = checkpoint_manager.reconcile_with_drive(drive, self.ctx.queue_manager)
+        reconciled: dict[str, Any] = {}
+        if drive is not None:
+            reconciled = checkpoint_manager.reconcile_with_drive(
+                drive, self.ctx.queue_manager
+            )
         return {"imported": imported, "reconciled": reconciled, "message_key": "msg.recovery_ok"}
 
 

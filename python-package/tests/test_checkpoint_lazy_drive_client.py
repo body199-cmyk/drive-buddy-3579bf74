@@ -264,8 +264,10 @@ def test_restore_and_reconcile_builds_the_lazy_client_once(ctx, monkeypatch):
 def test_disconnected_drive_raises_and_never_constructs_a_client(ctx, monkeypatch):
     counting = _counting_drive_service(monkeypatch)
 
+    # Caller explicitly demands a Drive-backed restore with no Drive connected:
+    # must raise DriveNotReadyError and must NOT attempt to build a client.
     with pytest.raises(DriveNotReadyError):
-        ctx.checkpoints.restore_and_reconcile()
+        ctx.checkpoints.restore_and_reconcile(allow_local=False)
 
     assert counting.from_auth_calls == 0, "no client may be built while disconnected"
     assert ctx.drive_client is None
