@@ -28,6 +28,7 @@ ARGS = {
     "drive.create_folder": ("name", "root"),
     "drive.select_folder": ("name :: id",),
     "analyze.run": ("https://t.me/x/1", "auto"),
+    "analyze.set_mode": ("message",),
     "analyze.apply_filters": ([], "", None, None, "", "", "", ""),
     "logs.search": ("query",),
     "settings.set_concurrency": ("safe",),

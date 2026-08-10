@@ -4,19 +4,19 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M15-T01 |
-| العنوان | **المرحلة 10 — تشغيل Colab الحقيقي** (Telegram + Drive + نقل ملف واحد) عبر نقطة الإصدار الحية |
-| الحالة | PLANNED — بيد المالك (يلزم حساب حي؛ لا يستطيع الوكيل تنفيذها) |
-| المالك التنفيذي | المالك (Owner) |
-| المهندس | Brain (ClickUp DOC — M15-T01) |
-| Base SHA | `6408f7c74c8f5602ad1f9fe8bfd543c15aa29f64` (طابق `origin/main` عند إقفال M15-T08 بتاريخ 2026-08-10) |
-| الفرع | غير مطلوب — تنفيذ يدوي على Colab، والتقرير يُسلَّم عبر PR من فرع arena للجلسة القادمة |
-| فتح بتاريخ (UTC) | 2026-08-10 |
-| النطاق | تشغيل حقيقي على Colab: فتح النوت‌بوك، بوابة تحديث Cell 1 تقرأ الـmanifest الحي من الإصدار المثبَّت `pkg-2026.08.09-m15t07` (sha256 `167d25d4…cce3`/`212474` بايت — بعد إعادة النشر في M15-T12)، تسجيل Telegram (OTP/2FA الشرطيتان)، ربط Drive، ونقل ملف واحد مُتحكَّم به؛ القالب في `docs/PHASE_REPORTS/PHASE_10.md` |
-| خارج النطاق | أي تعديل على `.github/workflows/**` أو `requirements.lock` أو `bun.lock` أو كود المنتج — كل بوابات الكود خضراء ومقفلة حتى يثبت العكس بدليل تشغيل حي |
-| الدليل الرئيسي المطلوب | تقرير M15-T01 بمخرجات حقيقية من Colab (لا محاكاة)؛ نقطة البداية الموثوقة: Release https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07 (run النشر `31343436790` success) |
-| الخطوة السابقة (مُغلَقة) | M15-T12: نشر حزمة الـmain الحالية على نفس التاج `pkg-2026.08.09-m15t07` — VERIFIED COMPLETE (run `31345898521`، دليله في `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md`) · سبقها M15-T08 (run `31343436790`) |
-| الخطوة التالية | تنفيذ M15-T01 بيد المالك؛ مهام الوكيل الاختيارية المتاحة قبله/بالتوازي: M13-T04 (تقييم الإجراءات المتبقية عند الحاجة) وM14-T01 (KNOWN_ISSUES #9 — محتوى الأرشيف الموزَّع) |
+| TASK ID | M16-T01 |
+| العنوان | **إصلاح Analyze الحي** — `analyze.set_mode` + حقول حسب النمط + تعريب + أخطاء مترجمة (من ملف M16 MASTER، المرجع الوحيد بقرار M16 AUTHORITY) |
+| الحالة | VERIFIED COMPLETE (على مستوى الكود والبوابات) — بانتظار مراجعة Brain |
+| المالك التنفيذي | LM Arena Agent (نفّذ) → Brain (يراجع التقرير) |
+| المهندس | Brain (ClickUp DOC — M16 MASTER) |
+| Base SHA | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` (متوقع من MASTER) — HEAD الفعلي عند البدء `612115941af6747fdf4719576cdf10f6fbd21a21` (تغييرات ما بعد f8c0ec2 docs-only فقط: PR #21 + PR #22) |
+| الفرع | `arena/019fe96c-drive-buddy-3579bf74` (فرع الجلسة المثبَّت من المنصة — اسم فرع MASTER غير قابل للاستخدام) |
+| فتح بتاريخ (UTC) | 2026-08-10T02:45Z |
+| النطاق | كتلة Analyze في `ui.py` (بدون `minimum=`/`maximum=` على الحقول الاختيارية، اختيارات مترجمة، حقول حسب النمط، افتراضي `message`) + `DEFAULT_SCAN_MODE`/`MODE_FIELDS`/`fields_for_mode()` في `media_scanner.py` + `ScannerService.mode_fields()` وأخطاء مترجمة (`err.bad_link`/`err.link_invite_unsupported`/`err.scan_*`) في `services.py` + action `analyze.set_mode` + مفاتيح ar/en + الاختبارات (`test_analyze_ui_modes.py` جديد، `test_analyze_ui_contract.py` مشدَّد، سطر `ARGS` في `test_handlers_contract.py`) |
+| خارج النطاق | Notebooks، `PKG_RELEASE_TAG`، workflows، lockfiles، `package.json`، Release، أي ملف محمي في M16 MASTER؛ وM16-T02/T03/T04 حتى موافقة Brain |
+| الدليل الرئيسي | بوابة T01 `97 passed` · كامل `443 passed` · launcher `26/42 ready` · notebooks identical · package build OK · التقرير الكامل في `docs/PHASE_REPORTS/PHASE_M16_T01.md` |
+| الخطوة السابقة (مُغلَقة) | M15-T12: نشر حزمة الـmain الحالية على التاج `pkg-2026.08.09-m15t07` — VERIFIED COMPLETE (run `31345898521`) |
+| الخطوة التالية | **STOP — بانتظار مراجعة Brain للتقرير الإلزامي وموافقته قبل بدء M16-T02** |
 
 ## قاعدة الاستخدام
 

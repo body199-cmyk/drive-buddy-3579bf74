@@ -27,13 +27,14 @@ from .errors import (
 from .filters import FilterSet, apply as apply_filterset
 from .i18n import t, toggle as toggle_lang, set_language
 from .logging_config import get_logger, tail as tail_log
+from .media_scanner import DEFAULT_SCAN_MODE
 from .media_scanner import MAX_SCAN_MESSAGES as SCANNER_MAX_SCAN_MESSAGES  # canonical bound
 from .media_scanner import MEDIA_TYPES as SCANNER_MEDIA_TYPES
 from .media_scanner import SCAN_MODES as SCANNER_SCAN_MODES
-from .media_scanner import ScanRequest, scan_link
+from .media_scanner import ScanRequest, fields_for_mode, scan_link
 from .models import MediaItem
 from .redaction import redact
-from .telegram_links import parse as parse_link
+from .telegram_links import InvalidLink, parse as parse_link
 from .utils import human_bytes, human_duration, now_iso, safe_disk_free
 
 _log = get_logger("teledrive.services")
@@ -42,6 +43,23 @@ MAX_SCAN_MESSAGES = SCANNER_MAX_SCAN_MESSAGES
 # re-export for handlers/tests that import from services
 SCAN_MODES = SCANNER_SCAN_MODES
 MEDIA_TYPES = SCANNER_MEDIA_TYPES
+
+# Every message ScanRequest.validate() can raise maps to a translated key.
+# The fallback err.bad_scan_request must never silently become err.unknown.
+SCAN_VALIDATION_KEYS: dict[str, str] = {
+    "unsupported scan mode": "err.bad_scan_mode",
+    "unsupported media type": "err.scan_media_type",
+    "message mode requires a positive message id": "err.scan_message_id",
+    "range mode requires start and end ids": "err.scan_range_ids",
+    "invalid message range": "err.scan_range_invalid",
+    "message range is too large": "err.scan_range_too_large",
+    "latest mode requires a positive limit": "err.scan_limit",
+}
+
+# Link kinds that are never a scan source (parsed successfully but refused).
+NON_SCANNABLE_LINK_KINDS: dict[str, str] = {
+    "invite": "err.link_invite_unsupported",
+}
 
 
 # --------------------------------------------------------------------------
@@ -147,7 +165,7 @@ class ScannerService:
     def analyze(
         self,
         link: str,
-        mode: str = "chat",
+        mode: str = DEFAULT_SCAN_MODE,
         message_id: int | None = None,
         start_id: int | None = None,
         end_id: int | None = None,
@@ -158,7 +176,7 @@ class ScannerService:
     ) -> ScanResult:
         # Backward-compat: callers may pass `scope` as positional second arg or kwarg.
         # Spec calls it `mode`, but old tests use "auto". Map auto->chat.
-        if "scope" in kwargs and (not mode or mode == "chat"):
+        if "scope" in kwargs and (not mode or mode in ("chat", DEFAULT_SCAN_MODE)):
             # If caller supplied scope kwarg, prefer it.
             mode = kwargs.pop("scope", mode)
         # Also support legacy positional where second arg was scope string "auto"
@@ -178,21 +196,35 @@ class ScannerService:
         telegram_auth = self.ctx.telegram_auth
         if telegram_auth is None or not telegram_auth.authorized:
             raise TelegramNotReadyError("telegram is not authorized")
-        parsed = parse_link((link or "").strip())
-        requested_mode = str(mode or "chat").strip().lower()
+        try:
+            parsed = parse_link((link or "").strip())
+        except InvalidLink as exc:
+            raise TeleDriveError(str(exc), "err.bad_link") from exc
+        refusal_key = NON_SCANNABLE_LINK_KINDS.get(parsed.kind)
+        if refusal_key is not None:
+            raise TeleDriveError(
+                f"link kind {parsed.kind} is not scannable", refusal_key
+            )
+        requested_mode = str(mode or DEFAULT_SCAN_MODE).strip().lower()
         # Legacy alias: "auto" means whole chat scan (same as "chat")
         if requested_mode == "auto":
             requested_mode = "chat"
         if requested_mode == "message" and parsed.message_id is not None and message_id is None:
             message_id = parsed.message_id
-        request = ScanRequest(
-            mode=requested_mode,
-            message_id=message_id,
-            start_id=start_id,
-            end_id=end_id,
-            limit=limit,
-            media_types=frozenset(media_types or {"all"}),
-        ).validate()
+        try:
+            request = ScanRequest(
+                mode=requested_mode,
+                message_id=message_id,
+                start_id=start_id,
+                end_id=end_id,
+                limit=limit,
+                media_types=frozenset(media_types or {"all"}),
+            ).validate()
+        except ValueError as exc:
+            reason = str(exc)
+            raise TeleDriveError(
+                reason, SCAN_VALIDATION_KEYS.get(reason, "err.bad_scan_request")
+            ) from exc
         items = self.ctx.aio.run(
             scan_link(telegram_auth.client, parsed, request)
         )
@@ -209,6 +241,13 @@ class ScannerService:
             scope=request.mode,
             rows=rows_for(items),
         )
+
+    def mode_fields(self, mode: str = DEFAULT_SCAN_MODE) -> dict[str, bool]:
+        """Which scan inputs the chosen mode uses. Read-only, no Telegram call."""
+        try:
+            return fields_for_mode(mode)
+        except ValueError as exc:
+            raise TeleDriveError(str(exc), "err.bad_scan_mode") from exc
 
     # Backward-compat alias: older callers (and some tests) still use scope/limit names.
     # Keep it delegated to the new analyze to avoid duplication.

@@ -18,6 +18,29 @@ MEDIA_TYPES = ("all", "video", "audio", "document", "photo", "voice", "animation
 MAX_SCAN_MESSAGES = 1000
 MAX_RANGE_MESSAGES = 1000
 
+DEFAULT_SCAN_MODE = "message"
+
+SCAN_FIELDS = ("message_id", "start_id", "end_id", "limit")
+MODE_FIELDS: dict[str, tuple[str, ...]] = {
+    "message": ("message_id",),
+    "range": ("start_id", "end_id"),
+    "latest": ("limit",),
+    "chat": ("limit",),
+}
+
+
+def fields_for_mode(mode: str) -> dict[str, bool]:
+    """Return {field_name: is_used} for one scan mode. Pure lookup: no Telegram
+    call, no I/O, no side effects. ``auto`` is the documented legacy alias of
+    ``chat`` and is normalized here so callers never special-case it twice."""
+    normalized = str(mode or "").strip().lower()
+    if normalized == "auto":
+        normalized = "chat"
+    if normalized not in SCAN_MODES:
+        raise ValueError("unsupported scan mode")
+    used = MODE_FIELDS[normalized]
+    return {name: (name in used) for name in SCAN_FIELDS}
+
 
 @dataclass(frozen=True)
 class ScanRequest:

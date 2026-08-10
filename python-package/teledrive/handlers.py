@@ -13,6 +13,7 @@ from . import action_registry
 from .errors import TeleDriveError
 from .i18n import t
 from .logging_config import get_logger
+from .media_scanner import DEFAULT_SCAN_MODE
 from .redaction import redact, safe_exception
 from .services import rows_for
 from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
@@ -71,6 +72,7 @@ ERROR_ARITY: dict[str, int] = {
     "drive.select_folder": 2,
     "drive.refresh_quota": 2,
     "analyze.run": 2,
+    "analyze.set_mode": 4,
     "analyze.apply_filters": 2,
     "analyze.select_all": 2,
     "analyze.clear_selection": 2,
@@ -228,7 +230,7 @@ class Handlers:
     def h_analyze_run(
         self,
         link: str,
-        mode: str = "chat",
+        mode: str = DEFAULT_SCAN_MODE,
         message_id: int | None = None,
         start_id: int | None = None,
         end_id: int | None = None,
@@ -267,6 +269,22 @@ class Handlers:
         )
         summary = f"{result.total} · {human_bytes(result.total_bytes)} · {result.scope}"
         return summary, result.rows
+
+    @action("analyze.set_mode")
+    def h_analyze_set_mode(self, mode: str):
+        """Show only the numeric inputs the chosen scan mode consumes.
+
+        Visibility is derived from the scanner service, never from a copy of the
+        mapping kept in the layout, so the UI can never offer a field the
+        validator will ignore or hide one it requires.
+        """
+        fields = self.call("analyze.set_mode", mode)
+        return (
+            component_update(visible=fields["message_id"]),
+            component_update(visible=fields["start_id"]),
+            component_update(visible=fields["end_id"]),
+            component_update(visible=fields["limit"]),
+        )
 
     @action("analyze.apply_filters")
     def h_analyze_apply_filters(
@@ -435,6 +453,8 @@ def shell_seed(ctx) -> dict[str, Any]:
         "queue_header": queue_header,
         "queue_rows": queue_rows,
         "analyze_rows": rows_for(ctx.selection.visible()),
+        "analyze_mode": DEFAULT_SCAN_MODE,
+        "analyze_fields": ctx.scanner.mode_fields(DEFAULT_SCAN_MODE),
         "dashboard": ctx.stats.dashboard(),
         "logs": ctx.log_service.tail(300),
         "quota_line": quota_line,

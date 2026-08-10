@@ -32,6 +32,7 @@ from .app_context import ApplicationContext, get_context
 from .config import HARD_CONCURRENCY_CAP, SUPPORTED_LANGUAGES
 from .handlers import shell_seed
 from .i18n import set_language, t
+from .media_scanner import MAX_SCAN_MESSAGES
 
 try:
     import gradio as gr
@@ -337,25 +338,58 @@ def _render_shell(ctx: ApplicationContext, binder, lang_state: Any, lang: str) -
                     with gr.Row():
                         link = gr.Textbox(label=t("form.link"), scale=4)
                         analyze_btn = binder.button(gr, "analyze.run", variant="primary", scale=1)
+                    mode_ready = binder.is_ready("analyze.set_mode")
+                    mode = gr.Radio(
+                        choices=[
+                            (t("scan.mode.message"), "message"),
+                            (t("scan.mode.range"), "range"),
+                            (t("scan.mode.latest"), "latest"),
+                            (t("scan.mode.chat"), "chat"),
+                        ],
+                        value=seed["analyze_mode"],
+                        label=t("form.scan_mode"),
+                        interactive=mode_ready,
+                        visible=mode_ready,
+                    )
+                    media_types = gr.CheckboxGroup(
+                        choices=[
+                            (t("media.all"), "all"),
+                            (t("media.video"), "video"),
+                            (t("media.audio"), "audio"),
+                            (t("media.document"), "document"),
+                            (t("media.photo"), "photo"),
+                            (t("media.voice"), "voice"),
+                            (t("media.animation"), "animation"),
+                            (t("media.sticker"), "sticker"),
+                        ],
+                        value=["all"],
+                        label=t("form.media_types"),
+                    )
                     with gr.Row():
-                        mode = gr.Radio(
-                            choices=["message", "range", "latest", "chat"],
-                            value="chat",
-                            label=t("form.scan_mode"),
-                            scale=2,
+                        message_id = gr.Number(
+                            label=t("form.message_id"),
+                            precision=0,
+                            visible=seed["analyze_fields"]["message_id"],
                         )
-                        media_types = gr.CheckboxGroup(
-                            choices=["all", "video", "audio", "document", "photo", "voice", "animation", "sticker"],
-                            value=["all"],
-                            label=t("form.media_types"),
-                            scale=3,
+                        start_id = gr.Number(
+                            label=t("form.start_message"),
+                            precision=0,
+                            visible=seed["analyze_fields"]["start_id"],
                         )
-                    with gr.Row():
-                        message_id = gr.Number(label=t("form.message_id"), precision=0, minimum=1)
-                        start_id = gr.Number(label=t("form.start_message"), precision=0, minimum=1)
-                        end_id = gr.Number(label=t("form.end_message"), precision=0, minimum=1)
-                        limit = gr.Number(label=t("form.message_limit"), value=1000, precision=0, minimum=1, maximum=1000)
-                    analyze_message = gr.Textbox(label=t("btn.analyze"), interactive=False)
+                        end_id = gr.Number(
+                            label=t("form.end_message"),
+                            precision=0,
+                            visible=seed["analyze_fields"]["end_id"],
+                        )
+                        limit = gr.Number(
+                            label=t("form.message_limit"),
+                            value=MAX_SCAN_MESSAGES,
+                            precision=0,
+                            visible=seed["analyze_fields"]["limit"],
+                        )
+                    analyze_message = gr.Textbox(
+                        label=t("analyze.result"), interactive=False
+                    )
                     candidates_table = gr.Dataframe(
                         headers=_headers(),
                         value=seed["analyze_rows"] or None,
@@ -363,26 +397,35 @@ def _render_shell(ctx: ApplicationContext, binder, lang_state: Any, lang: str) -
                         wrap=True,
                         elem_classes=["td-table"],
                     )
-                    with gr.Accordion(t("form.filters"), open=False):
-                        filter_media_types = gr.CheckboxGroup(
-                            choices=["all", "video", "audio", "document", "photo", "voice", "animation", "sticker"],
-                            value=["all"],
-                            label=t("form.media_types"),
-                        )
-                        extensions = gr.Textbox(label=t("form.extensions"))
-                        with gr.Row():
-                            min_size = gr.Number(label=t("form.min_size_mb"), value=None)
-                            max_size = gr.Number(label=t("form.max_size_mb"), value=None)
-                        with gr.Row():
-                            date_from = gr.Textbox(label=t("form.date_from"))
-                            date_to = gr.Textbox(label=t("form.date_to"))
-                        include = gr.Textbox(label=t("form.include"))
-                        exclude = gr.Textbox(label=t("form.exclude"))
-                        filters_btn = binder.button(gr, "analyze.apply_filters", variant="secondary")
+                with gr.Accordion(t("form.filters"), open=False):
+                    filter_media_types = gr.CheckboxGroup(
+                        choices=[
+                            (t("media.all"), "all"),
+                            (t("media.video"), "video"),
+                            (t("media.audio"), "audio"),
+                            (t("media.document"), "document"),
+                            (t("media.photo"), "photo"),
+                            (t("media.voice"), "voice"),
+                            (t("media.animation"), "animation"),
+                            (t("media.sticker"), "sticker"),
+                        ],
+                        value=["all"],
+                        label=t("form.media_types"),
+                    )
+                    extensions = gr.Textbox(label=t("form.extensions"))
                     with gr.Row():
-                        select_all_btn = binder.button(gr, "analyze.select_all")
-                        clear_selection_btn = binder.button(gr, "analyze.clear_selection")
-                        enqueue_btn = binder.button(gr, "analyze.enqueue_selected", variant="primary")
+                        min_size = gr.Number(label=t("form.min_size_mb"), value=None)
+                        max_size = gr.Number(label=t("form.max_size_mb"), value=None)
+                    with gr.Row():
+                        date_from = gr.Textbox(label=t("form.date_from"))
+                        date_to = gr.Textbox(label=t("form.date_to"))
+                    include = gr.Textbox(label=t("form.include"))
+                    exclude = gr.Textbox(label=t("form.exclude"))
+                    filters_btn = binder.button(gr, "analyze.apply_filters", variant="secondary")
+                with gr.Row():
+                    select_all_btn = binder.button(gr, "analyze.select_all")
+                    clear_selection_btn = binder.button(gr, "analyze.clear_selection")
+                    enqueue_btn = binder.button(gr, "analyze.enqueue_selected", variant="primary")
 
             # ---------------- Connection Center ----------------
             with gr.Tab(t("nav.connection")):
@@ -531,6 +574,13 @@ def _render_shell(ctx: ApplicationContext, binder, lang_state: Any, lang: str) -
             "analyze.run",
             [link, mode, message_id, start_id, end_id, limit, media_types],
             analyze_outputs,
+        )
+        binder.wire_if_ready(
+            mode,
+            "analyze.set_mode",
+            [mode],
+            [message_id, start_id, end_id, limit],
+            event="change",
         )
         binder.wire_if_ready(
             filters_btn, "analyze.apply_filters",
