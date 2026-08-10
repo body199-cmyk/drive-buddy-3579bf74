@@ -41,6 +41,12 @@
 - `python -m teledrive.package_service --build --output teledrive_v4.5.zip` → `tests passed; archive: teledrive_v4.5.zip` (222699 بايت، sha256 `827e85660ee5e3ee57f6270526e23b78366afde98c967e40a0f5ab7762a832f6`) — الأرتيفاكت حُذف بعد التحقق ولم يُرفع ولم يُرفع إلى أي Release.
 - `npm run lint` (بديل محلي لـ`bun run lint` لأن bun.sh غير قابل للوصول من الساندبوكس — TLS reset، نفس قيد الشبكة الموثَّق في AI_HANDOFF): **0 errors** (6 warnings سابقة موجودة قبل التغيير) · `npm run build`: **success**. لم يُلمس `bun.lock`/`package.json` (npm install بـ `--no-package-lock`). البوابة الحرفية `bun run lint/build` تبقى على CI في الـPR.
 
+## النتيجة على GitHub
+
+- Commit: `4dcdadd3b98f21ff8e432de54dbae7127482ce21` ("M16-T01: unblock analyze, localize scan controls, mode-aware fields")
+- Push: SUCCESS على فرع الجلسة `arena/019fe96c-drive-buddy-3579bf74`
+- PR: **https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23** (ضد `main`)
+
 ## الحالة الصادقة
 
 - الحالة المعلنة للمهمة: **VERIFIED COMPLETE** على مستوى الكود والبوابات (دليل: مخرجات الأوامر أعلاه + commit SHA).

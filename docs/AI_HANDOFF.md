@@ -13,7 +13,8 @@
 | Fixed branch (Arena) | `arena/019fe96c-drive-buddy-3579bf74` (session-pinned; the MASTER-suggested name `arena/m16-t01-analyze-fix` is not usable on this platform — recorded in the report) |
 | Expected base SHA (MASTER) | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` — verified as ancestor of `origin/main`; everything after it is docs-only (PR #21 M15-T12 docs + PR #22 README) |
 | HEAD at session start | `612115941af6747fdf4719576cdf10f6fbd21a21` (= `origin/main`) |
-| Result SHA | (filled after push — follow-up docs commit, same pattern as M15-T11/M15-T12) |
+| Result SHA | `4dcdadd3b98f21ff8e432de54dbae7127482ce21` (M16-T01 commit) + follow-up docs commit |
+| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 |
 | Status | `VERIFIED COMPLETE` for the code task (gate evidence below); final product status remains `Code-complete candidate / NOT Colab-ready` |
 | Authority | M16 AUTHORITY: M16 MASTER is the ONLY execution file; DOC-18/21/23/25 (2kzn5jac-518 / 2kzn5jac-538 / 2kzn5jac-478 / 2kzn5jac-98) are cancelled for execution |
 | What was done | Added `DEFAULT_SCAN_MODE="message"`, `MODE_FIELDS`, `fields_for_mode()` (media_scanner.py); `ScannerService.mode_fields()`, `SCAN_VALIDATION_KEYS`, `NON_SCANNABLE_LINK_KINDS`, `InvalidLink→err.bad_link`, invite refusal→`err.link_invite_unsupported`, `validate()` errors→`err.scan_*`/`err.bad_scan_request` (services.py); `analyze.set_mode` action (action_registry.py); `h_analyze_set_mode` + `ERROR_ARITY=4` + `shell_seed` keys `analyze_mode`/`analyze_fields` (handlers.py); full Analyze-block rebuild in ui.py (localized tuple choices, mode-aware `visible=seed[...]`, no `minimum=`/`maximum=` on optional numbers, `limit=MAX_SCAN_MESSAGES`, `binder.is_ready("analyze.set_mode")` gate, `binder.wire_if_ready(mode, ..., event="change")`, `analyze.result` label); +10 locale keys each in ar/en; created `tests/test_analyze_ui_modes.py` (missing but required by the T01 gate); tightened `tests/test_analyze_ui_contract.py`; added the additive `ARGS` line in `tests/test_handlers_contract.py` |
@@ -30,13 +31,13 @@
 
 ```plain
 GitHub Status:
-Commit: SUCCESS (pending push of the M16-T01 commit)
-Push: (pending)
-Pull Request: (pending)
+Commit: SUCCESS — 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01)
+Push: SUCCESS — branch arena/019fe96c-drive-buddy-3579bf74 pushed
+Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
 Branch: arena/019fe96c-drive-buddy-3579bf74
 Base SHA: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93 (expected) / 612115941af6747fdf4719576cdf10f6fbd21a21 (actual origin/main at start)
-Result SHA: (filled after push)
-PR URL: (filled after creation)
+Result SHA: 4dcdadd3b98f21ff8e432de54dbae7127482ce21
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
 Operation error, if any: bun.sh TLS reset from sandbox (documented; bun gates deferred to CI); initial self-authored test bug (shell_seed is a module function, not a Handlers method) fixed before the gate run
 Current repository state: clean tree after commit (memory files updated in the same commit)
 Recovery recommendation: if any gate fails on CI, fix forward on the session branch; never force-push/rebase/amend

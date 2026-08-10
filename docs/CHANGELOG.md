@@ -15,7 +15,7 @@
 - ذاكرة: `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` + `docs/PHASE_REPORTS/PHASE_M16_T01.md`.
 
 ### Delivery
-- PR: (يُملأ بعد الإنشاء) · فرع الجلسة: `arena/019fe96c-drive-buddy-3579bf74` (المنصة تثبّت الجلسة على فرعها؛ اسم فرع MASTER `arena/m16-t01-analyze-fix` غير قابل للاستخدام — موثَّق في التقرير).
+- PR: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 · Commit: `4dcdadd3b98f21ff8e432de54dbae7127482ce21` · فرع الجلسة: `arena/019fe96c-drive-buddy-3579bf74` (المنصة تثبّت الجلسة على فرعها؛ اسم فرع MASTER `arena/m16-t01-analyze-fix` غير قابل للاستخدام — موثَّق في التقرير).
 
 ### Not changed — عمدًا
 - سطر نتيجة `h_analyze_run` بقي بصيغته (M16 MASTER لا يطلب تغييره، و`test_scoped_scan.py` — غير مسموح بتعديله — يثبّت الصيغة الحالية). يُرفع كملاحظة لـBrain.
