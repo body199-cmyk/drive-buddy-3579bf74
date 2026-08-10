@@ -2,6 +2,27 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T12] — 2026-08-10 — نشر حزمة الـmain الحالية (تضم M15-T11) على التاج المثبَّت `pkg-2026.08.09-m15t07` لبوابة تحديث Cell 1
+
+### Verified
+- الـrelease `pkg-2026.08.09-m15t07` **أُعيد نشره** من الـmain الحالي `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` (تحقق `gh release view` من هذه الجلسة): `target_commitish=f8c0ec2…`، غير draft وغير prerelease، `publishedAt 2026-08-10T01:00:50Z`، وأصلان بحالة `uploaded`: `teledrive_v4.5.zip` (**212474 بايت**) و`teledrive_manifest.json` (378 بايت، schema 1).
+- run النشر: **`31345898521`** (workflow `Publish current TeleDrive package` · `workflow_dispatch` · `headSha=f8c0ec2…`) → `conclusion=success`. الخطوة الأخيرة `Verify public manifest and archive` أكّدت `commit == CURRENT_SHA` و`size_bytes == len(archive)` و`sha256 == sha256(archive)` من البايتات المقدَّمة فعلًا (`PUBLIC VERIFICATION OK`).
+- هوية البايتات مؤكَّدة أيضًا بـ Releases API: digest أصل الـzip = `sha256:167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3` (مطابق لـsha256 في الـmanifest وسطر الـrelease body)، وأصل الـmanifest = `sha256:bdba64a0…b426`.
+- بوابة تحديث Cell 1 تقرأ الآن حزمة الـmain الحالية (تضم M15-T11: مسح مُقيَّد 1000، فلاتر وسائط، واجهة Analyze بمدخلات message/range/latest/chat).
+- إعادة إنتاج البوابات محليًا على Python 3.11: compileall OK · **419 passed** · launcher `25/41 ready` · notebooks in sync · cmp OK.
+
+### Changed
+- `.github/workflows/release-current.yml` (جديد، manual `workflow_dispatch`): يبني من الـmain الحالي، يثبّت Python 3.11 (`setup-python@v5` + `cache: pip`)، يمرر بوابات الدستور، يبني الأرشيف، يقيس البايتات، يولّد الـmanifest من نفس البايتات في نفس job، يعيد نشر التاج بنفس الأصول، ويتحقق عبر النقاط العامة. **طُبِّق بيد المالك على `main`** عبر محرر الويب (commits `09c170d`, `0b561df`, `f8c0ec2`) لأن App الوكيل بلا `workflows:write` (KNOWN_ISSUES #15) — لم يجرِ أي تعديل من الوكيل على `.github/workflows/**`.
+- ذاكرة: `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,CHANGELOG,AI_HANDOFF}.md` + التقرير `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md`.
+
+### Delivery
+- Release: https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07
+- Run النشر: https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31345898521
+
+### Not changed — عمدًا
+- في هذه الجلسة لم يُمس من الوكيل أي شيء خارج `docs/` و`python-package/docs/`: لا `.github/workflows/**` (بلا `workflows:write`، والملف طبَّقه المالك)، لا `requirements.lock`/`bun.lock`، لا كود منتج ولا نوت‌بوك.
+- لا ادعاء `Colab-ready` — بوابة تحديث Cell 1 تستقبل الآن حزمة الـmain الحالية، لكن التفعيل على Colab حقيقي لم يُختبر بعد (M15-T01 بيد المالك). الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M15-T08] — 2026-08-10 — نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` عبر GitHub Actions + تصحيح الـworkflow والتوثيق النهائي
 
 ### Verified

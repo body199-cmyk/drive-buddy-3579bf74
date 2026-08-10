@@ -23,6 +23,7 @@
 | M15-T07 | إصلاح CI بعد الدمج (بناء الحزمة) + مسار تحديث Colab دستوري آمن (manifest + sha256 + استبدال ذري، رفض أثناء تشغيل الـruntime) | VERIFIED COMPLETE | PHASE_M15_T07 · PR #15 · run 31329502070 success · main `10b5d3b` |
 | M15-T08 | نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` مع الأرشيف الداخلي وmanifest العام | VERIFIED COMPLETE | PHASE_M15_T08 · run `31343436790` success (workflow_dispatch على `6408f7c`) · release منشور: target `10b5d3b` + أصلان `teledrive_v4.5.zip` (`sha256 0179970f…`/`188695` بايت ببوابة byte-identity fail-closed) و`teledrive_manifest.json` (378 بايت، schema 1) · نقطتا التنزيل العامتان تجيبان بلا مصادقة (302→CDN) |
 | M15-T11 | Scoped Telegram scan, media filters, and selection queue (message/range/latest/chat + media types + bounded) | VERIFIED COMPLETE | PHASE_M15_T11 · `419 passed` · `25/41 ready` · ui/services/scanner/handlers/locale + 16 new contract tests |
+| M15-T12 | نشر حزمة الـmain الحالية (التي تحوي M15-T11) على نفس التاج المثبَّت `pkg-2026.08.09-m15t07` لبوابة تحديث Cell 1 | VERIFIED COMPLETE | PHASE_M15_T12 · workflow `.github/workflows/release-current.yml` (طُبِّق بيد المالك لعدم `workflows:write`) · run `31345898521` success · release أُعيد نشره target `f8c0ec2` + أصلان `teledrive_v4.5.zip` (`sha256 167d25d4…cce3`/`212474` بايت) و`teledrive_manifest.json` (378 بايت) · `PUBLIC VERIFICATION OK` داخل الـrun |
 
 ## ملاحظات أمان
 
