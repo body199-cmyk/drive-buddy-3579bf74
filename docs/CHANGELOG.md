@@ -2,6 +2,23 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M17-T01] — 2026-08-10 — جرد صادق لكل الأزرار/الإجراءات (بلا تعديل كود، من ملف M17 MASTER)
+
+### Verified
+- بوابة T01 من `python-package`: `compileall` OK · `pytest -q tests/test_bindings.py tests/test_action_proofs.py tests/test_ui_shell_contract.py` → **61 passed** · `teledrive_launcher.py --check` → **26/42 ready actions resolve** · (إضافي) `pytest -q tests` → **443 passed** — على venv محلي بمثبّتات `requirements.lock` حرفيًا (gradio 6.20.0 / pytest 9.1.1).
+- فحص آلي متقاطع (سكربت عابر غير محفوظ): 42/42 `ctx.resolve(service_path)` ناجح · 42/42 handler مسمّى ومزخرف · كل `proof_test` المعلنة موجودة · 0 `label_key` ناقص في ar/en · `ui.py` بلا lambda/.click مباشر (39 `binder.button` + 3 `is_ready` = 42).
+- نتيجة الجرد: **26/42 جاهزًا وظاهرًا وموصولًا · 16/42 منفذًا لكن `tested=False` فمخفي عمدًا (15 منها بلا شرح ظاهر)** · لا أزرار ميتة ولا fake data.
+- `gh release view pkg-2026.08.09-m15t07`: التاج أُعيد نشره على `4a2dac62` (دمج M16-T01) — ملاحظة M17 MASTER عن «إصدار قديم» لم تعد دقيقة.
+
+### Created
+- `python-package/docs/UI_ACTION_INVENTORY.md` (جرد 42 إجراءً بـ17 حقلًا لكل إجراء) · `docs/PHASE_REPORTS/PHASE_M17_T01.md`.
+
+### Changed (ذاكرة فقط)
+- `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` — KNOWN_ISSUES زيدت بنودًا #27–#30 من نتائج الجرد. **لا تعديل على أي كود منتج أو ملفات محمية.**
+
+### Not done (بالالتزام)
+- M17-T02/T03/T04 لم تُبدأ — بانتظار موافقة Brain على الجرد.
+
 ## [M16-T01] — 2026-08-10 — إصلاح تبويب Analyze الحي: رفع حاجز `minimum=1`، وضع افتراضي `message`، حقول حسب النمط، تعريب كامل، وأخطاء مترجمة بدل `err.unknown` (من ملف M16 MASTER)
 
 ### Verified

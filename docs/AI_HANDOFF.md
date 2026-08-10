@@ -1,51 +1,54 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M16_T01.md` (and `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md`, `PHASE_M15_T08.md`, `PHASE_M15_T11.md`, ...).
+> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M17_T01.md` (and the older phase reports).
 
 ## Session card
 
 | Field | Value |
 |---|---|
-| UTC date | 2026-08-10T02:45Z |
-| Session type | M16-T01 — unblock the live Analyze tab (mode-aware fields, localized choices, localized errors) from the M16 MASTER file |
-| TASK ID | `M16-T01` |
+| UTC date | 2026-08-10 |
+| Session type | M17-T01 — honest inventory of every UI button/action from the M17 MASTER file (no product-code changes) |
+| TASK ID | `M17-T01` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` (public) |
-| Fixed branch (Arena) | `arena/019fe96c-drive-buddy-3579bf74` (session-pinned; the MASTER-suggested name `arena/m16-t01-analyze-fix` is not usable on this platform — recorded in the report) |
-| Expected base SHA (MASTER) | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` — verified as ancestor of `origin/main`; everything after it is docs-only (PR #21 M15-T12 docs + PR #22 README) |
-| HEAD at session start | `612115941af6747fdf4719576cdf10f6fbd21a21` (= `origin/main`) |
-| Result SHA | `4dcdadd3b98f21ff8e432de54dbae7127482ce21` (M16-T01 commit) + follow-up docs commit |
-| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 |
-| Status | `VERIFIED COMPLETE` for the code task (gate evidence below); final product status remains `Code-complete candidate / NOT Colab-ready` |
-| Authority | M16 AUTHORITY: M16 MASTER is the ONLY execution file; DOC-18/21/23/25 (2kzn5jac-518 / 2kzn5jac-538 / 2kzn5jac-478 / 2kzn5jac-98) are cancelled for execution |
-| What was done | Added `DEFAULT_SCAN_MODE="message"`, `MODE_FIELDS`, `fields_for_mode()` (media_scanner.py); `ScannerService.mode_fields()`, `SCAN_VALIDATION_KEYS`, `NON_SCANNABLE_LINK_KINDS`, `InvalidLink→err.bad_link`, invite refusal→`err.link_invite_unsupported`, `validate()` errors→`err.scan_*`/`err.bad_scan_request` (services.py); `analyze.set_mode` action (action_registry.py); `h_analyze_set_mode` + `ERROR_ARITY=4` + `shell_seed` keys `analyze_mode`/`analyze_fields` (handlers.py); full Analyze-block rebuild in ui.py (localized tuple choices, mode-aware `visible=seed[...]`, no `minimum=`/`maximum=` on optional numbers, `limit=MAX_SCAN_MESSAGES`, `binder.is_ready("analyze.set_mode")` gate, `binder.wire_if_ready(mode, ..., event="change")`, `analyze.result` label); +10 locale keys each in ar/en; created `tests/test_analyze_ui_modes.py` (missing but required by the T01 gate); tightened `tests/test_analyze_ui_contract.py`; added the additive `ARGS` line in `tests/test_handlers_contract.py` |
-| Verification (raw) | `compileall` OK · T01 gate (6 files) `97 passed` · full `pytest -q tests` `443 passed` · `launcher --check` `26/42 ready actions resolve` · `notebook_cells --check` in sync · `cmp` identical · `package_service --build` OK (222699 B, sha256 `827e8566…a832f6`, artifact deleted) · `npm run lint` 0 errors / `npm run build` success (bun.sh unreachable from sandbox — TLS reset; canonical `bun run lint/build` deferred to CI on the PR, same known sandbox limit as M15-T04) |
-| Protected files touched | NONE — no notebooks, no `PKG_RELEASE_TAG`, no workflows, no lockfiles, no `package.json`, no Release, no ZIP upload |
-| Known deviations (recorded) | (1) branch name pinned by platform; (2) `test_handlers_contract.py` +1 additive ARGS line (its contract parametrizes over every ACTION_SPEC — adding an action requires it); (3) `h_analyze_run` summary line left unchanged on purpose: M16 MASTER does not require changing it and `test_scoped_scan.py` (not in the allowed-modify list) pins the current format — flagged for Brain; (4) `test_analyze_ui_modes.py` created per AUTHORITY instruction |
+| Fixed branch (Arena) | `arena/019febba-drive-buddy-3579bf74` (session-pinned by the platform) |
+| Base SHA | `4a2dac62e0aa57092100d35a1726d464b742e48c` (= `origin/main` at session start = merge of PR #23/M16-T01) → **RESUME_VERIFIED** |
+| HEAD at session start | `4a2dac62e0aa57092100d35a1726d464b742e48c` |
+| Result SHA | this commit (+ possible follow-up docs commit recording the PR URL, same pattern as M16-T01) |
+| PR | see "GitHub handoff" block below |
+| Status | `VERIFIED COMPLETE` for the T01 scope (inventory + docs; gate evidence below); product status unchanged: `Code-complete candidate / NOT Colab-ready` |
+| Authority | M17 MASTER §1 rules read and followed; memory files read in the mandated order; M16 plan superseded by M17 MASTER per the owner's current instruction |
+| What was done | Read the 10 mandated memory files; inspected the 13 mandated source/test files; built `python-package/docs/UI_ACTION_INVENTORY.md` (42 actions × the 17 mandated fields) using a throwaway cross-check script (not committed); ran the T01 gate raw; wrote `docs/PHASE_REPORTS/PHASE_M17_T01.md`; updated `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` (KNOWN_ISSUES +rows #27–#30). **Zero product-code edits.** |
+| Inventory headline | 42 declared actions · 26 ready (implemented+tested, visible, wired through UIBinder) · 16 implemented but `tested=False` → rendered hidden+disabled by design (15 of them silently, i.e. without a visible explanation — tracked as KNOWN_ISSUES #27) · 0 dead buttons · 0 missing handlers · 0 unresolvable service paths · 0 missing ar/en labels · no fake data on first render |
+| Verification (raw) | `git branch/rev-parse/status` block matches base SHA · `compileall teledrive` exit 0 · T01 gate (3 files) **61 passed** · `teledrive_launcher.py --check` → `binding check ok: 26/42 ready actions resolve` exit 0 · (extra) `pytest -q tests` **443 passed** · cross-check script: 42/42 `ctx.resolve` OK, 42/42 decorated handlers, all proof_tests exist, `missing_label_keys: NONE` |
+| Environment note | Sandbox had no pytest/gradio: created local venv `python-package/.venv` from `requirements.lock` pins verbatim (gradio 6.20.0 / pytest 9.1.1 / telethon 1.44.0); venv excluded via `.git/info/exclude` (local-only, not committed); no lockfile touched |
+| Protected files touched | NONE — no notebooks, no `PKG_RELEASE_TAG`, no workflows, no lockfiles, no `package.json`, no Release, no product code |
+| Notable checks | PR #23 = MERGED at `4a2dac62` (2026-08-10T02:52:31Z). Release `pkg-2026.08.09-m15t07` re-targeted to `4a2dac62` at 2026-08-10T11:55:10Z (assets: `teledrive_v4.5.zip` 222699 B + manifest 378 B) — the M17 masthead note "published release is stale" is outdated; only the live Colab consumption is still unproven (M15-T01, owner-side) |
+| Known deviations (recorded) | (1) `KNOWN_ISSUES.md` gained new rows #27–#30 — allowed and required by its own header ("مشاكل مؤكدة بفحص مباشر"); (2) the T01 gate was run inside a local venv because the sandbox image lacks the pinned deps — versions are exactly `requirements.lock`; (3) `MIGRATION.md` untouched (no migration happened) |
 | Honest status | `Code-complete candidate / NOT Colab-ready` |
 
 ## Next action
 
-**STOP — await Brain review of the mandatory M16-T01 report and explicit approval before starting M16-T02.** Per M16 MASTER §1.4: one phase per session; do not start T02/T03/T04 without approval. After Brain approval and owner merge of the PR, the owner must re-run the `Publish current TeleDrive package` workflow on the SAME tag `pkg-2026.08.09-m15t07` and restart Colab (Cell 1 → 4) for the live proof.
+**STOP — await Brain review of the M17-T01 inventory and explicit approval before starting M17-T02.** Per M17 MASTER §0/§2: one phase at a time; T02 (action fixes by priority) must not start from this file alone.
 
 ## GitHub handoff (this session)
 
 ```plain
 GitHub Status:
-Commit: SUCCESS — 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01)
-Push: SUCCESS — branch arena/019fe96c-drive-buddy-3579bf74 pushed
-Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
-Branch: arena/019fe96c-drive-buddy-3579bf74
-Base SHA: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93 (expected) / 612115941af6747fdf4719576cdf10f6fbd21a21 (actual origin/main at start)
-Result SHA: 4dcdadd3b98f21ff8e432de54dbae7127482ce21
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
-Operation error, if any: bun.sh TLS reset from sandbox (documented; bun gates deferred to CI); initial self-authored test bug (shell_seed is a module function, not a Handlers method) fixed before the gate run
+Commit: this commit — see git log on branch arena/019febba-drive-buddy-3579bf74
+Push: see PR / branch tip
+Pull Request: (recorded below after creation, via follow-up docs commit — same pattern as M16-T01)
+Branch: arena/019febba-drive-buddy-3579bf74
+Base SHA: 4a2dac62e0aa57092100d35a1726d464b742e48c
+Result SHA: see git log
+PR URL: (see follow-up note below)
+Operation error, if any: none; sandbox lacked pinned Python deps (venv created locally, not committed)
 Current repository state: clean tree after commit (memory files updated in the same commit)
-Recovery recommendation: if any gate fails on CI, fix forward on the session branch; never force-push/rebase/amend
-Tests and gates: compileall OK · T01 gate 97 passed · full 443 passed · launcher 26/42 · notebook_cells in sync · cmp identical · package build OK (222699 B) · npm lint 0 errors / npm build success
-Documentation: docs/TODO.md, docs/CHANGELOG.md, docs/ACTIVE_TASK.md, docs/KNOWN_ISSUES.md (#25 fixed, #26 open-by-design), docs/AI_HANDOFF.md, docs/PHASE_REPORTS/PHASE_M16_T01.md
-Known limitations: agent lacks workflows:write (owner applies); bun.sh/CDN unreachable from sandbox; real Colab proof (M15-T01 live run) still pending by the owner
+Recovery recommendation: docs-only change — closing the PR / reverting the merge commit restores the prior state; never force-push/rebase/amend
+Tests and gates: compileall OK · T01 gate 61 passed · full 443 passed · launcher 26/42 · i18n missing keys NONE
+Documentation: python-package/docs/UI_ACTION_INVENTORY.md, docs/PHASE_REPORTS/PHASE_M17_T01.md, docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md
+Known limitations: no live Colab proof (M15-T01, owner-side); bun gates not in T01 scope; 16 hidden actions await T02 proofs + Brain decision on binding the existing fake-factory Drive gate tests (KNOWN_ISSUES #29)
 Honest status: Code-complete candidate / NOT Colab-ready
-Next action: STOP and await Brain approval for M16-T02
+Next action: STOP and await Brain approval for M17-T02
 ```
 
 No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made.
