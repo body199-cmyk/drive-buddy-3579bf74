@@ -94,7 +94,11 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         lang_state = gr.State(language)
         active_tab = gr.State("dashboard")
 
-        @gr.render(inputs=[lang_state], triggers=[lang_state.change])
+        # Do not restrict this render to State.change: Gradio's default render
+        # trigger performs the initial page-load render as well as re-rendering
+        # when lang_state changes. Restricting it left a blank shell on first
+        # opening the Colab URL.
+        @gr.render(inputs=[lang_state])
         def _language_root(lang: str) -> None:
             _render_shell(ctx, binder, lang_state, active_tab, theme_host, lang)
 

@@ -84,6 +84,30 @@ def test_rtl_is_default(ctx):
     assert ui_module.build() is not None  # builds without exception
 
 
+def test_language_render_runs_on_initial_page_load_and_language_change():
+    """The shell must be rendered when the page first loads, not only after
+    a user toggles its language state.
+
+    ``gr.render(inputs=...)`` uses Gradio's default load + input-change trigger.
+    Passing ``triggers=[lang_state.change]`` opts out of the load trigger and
+    produces an otherwise-empty first page.
+    """
+    root = next(
+        node for node in ast.walk(_tree())
+        if isinstance(node, ast.FunctionDef) and node.name == "_language_root"
+    )
+    render = next(
+        decorator for decorator in root.decorator_list
+        if isinstance(decorator, ast.Call)
+        and isinstance(decorator.func, ast.Attribute)
+        and decorator.func.attr == "render"
+    )
+    assert not any(keyword.arg == "triggers" for keyword in render.keywords)
+    inputs = next(keyword.value for keyword in render.keywords if keyword.arg == "inputs")
+    assert isinstance(inputs, ast.List)
+    assert len(inputs.elts) == 1
+
+
 def test_seven_nav_sections_present_in_required_order():
     names = [label_key for (label_key, _section) in NAV_SECTIONS]
     assert len(names) == 7
