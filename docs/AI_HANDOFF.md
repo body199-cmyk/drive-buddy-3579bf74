@@ -12,8 +12,8 @@
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
 | Fixed branch (Arena) | `arena/019fed9c-drive-buddy-3579bf74` (platform-pinned) |
 | Base SHA | `27355232f15d07761fb9a226f8161dd22b5e0e82` (`origin/main`, PR #29) |
-| Result SHA | see PR (single PR from `arena/019fed9c-…`, not merged) |
-| Status | **PARTIALLY COMPLETE** — code + all gates green (580 passed, launcher 45/45); live-Colab pixel proof needs the owner's browser/session (sandbox has no browser); live preview served in-session on port 7860 |
+| Result SHA | `faff35a3af12adb1adf891049917f7add8dc7751` (main, squash of PR #30) — source commit `917257f` |
+| Status | **VERIFIED COMPLETE (code gates) — MERGED** — PR #30 merged into main `faff35a` (squash) on 2026-08-10; all CI green on the PR (Python 1m28s + Frontend 16s) and on the merge; live-Colab pixel proof still owner-side (sandbox has no browser) |
 | Launcher | `binding check ok: 45/45 ready actions resolve` (was 42/42) |
 
 ## What was done (DOC-39 §3–§7)
@@ -57,9 +57,9 @@ All verified untouched per-path: `notebook/TeleDrive.ipynb`, `public/TeleDrive.i
 - `bun run lint`/`bun run build` not run — no bun in sandbox; no React/frontend file touched.
 
 ## Next action
-**STOP — await Brain/owner review of this PR.** Do NOT merge. M17-T04 (React) must not start before Brain approval per DOC-39 §2/§9.
+**MERGED — STOP.** PR #30 merged into main by owner instruction (squash `faff35a`). M17-T04 (React) must NOT start before Brain approval per DOC-39 §2/§9. Remaining owner-side: live Colab smoke (steps in PHASE_M18_T01.md).
 
 ## GitHub handoff (this session)
 - Branch: `arena/019fed9c-drive-buddy-3579bf74`
-- PR: opened from this branch (see PR URL in the report)
-- Commits: code+tests+docs in a single PR (M18-T01)
+- PR: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/30 — **MERGED** (squash) into main `faff35a` on 2026-08-10T22:43Z
+- CI: both jobs green on the PR and after merge

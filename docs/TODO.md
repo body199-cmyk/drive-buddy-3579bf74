@@ -30,7 +30,7 @@
 | M17-T02-REST | بقية أولويات M17-T02 الأصلية: Dashboard (P2) · Logs (P4) · Settings (P5) · Export/Recovery (P6) | VERIFIED COMPLETE | PHASE_M17_T02_REST · 505 passed · launcher 42/42 · notebooks identical |
 | M17-T03 | إعادة بناء Gradio بصريًا ووظيفيًا (rail/status bar/ثيمات فعلية/empty states) | VERIFIED COMPLETE | PHASE_M17_T03 · RTL default · 7 sections ordered · theme CSS vars · zero hardcoded colors · zero fake data · الإثبات الحي بيد المالك |
 | M17-T04 | React اختياري (ADR + bridge + parity gate) — منفصل عن T02 | PLANNED — بعد M18-T01 + Colab live proof | ممنوع قبل parity؛ يحتاج ADR مستقلًا — DOC-39 §2: لا يبدأ قبل مراجعة Brain |
-| M18-T01 | **DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)** — مظهر graphite داكن افتراضي + RTL + شريط علوي حقيقي + لوحة مجلد Drive داخل التحويلات/لوحة التحكم (4 لوحات من مصدر واحد) + مرحلة اختيار قبل الطابور (جدول 8 أعمدة ☑/☐، تحديد الكل/يدوي/نطاق/مجموعة، معاينة، بوابات enqueue) | PARTIALLY COMPLETE — الكود والبوابات خضراء (`580 passed` · launcher `45/45` · notebooks identical · cmp ok) | PHASE_M18_T01.md · PR من `arena/019fed9c-…` · دليل بصري مولّد + خادم حي في الجلسة · **اللقطة الحية بمتصفح Colab بيد المالك** |
+| M18-T01 | **DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)** — مظهر graphite داكن افتراضي + RTL + شريط علوي حقيقي + لوحة مجلد Drive داخل التحويلات/لوحة التحكم (4 لوحات من مصدر واحد) + مرحلة اختيار قبل الطابور (جدول 8 أعمدة ☑/☐، تحديد الكل/يدوي/نطاق/مجموعة، معاينة، بوابات enqueue) | **VERIFIED COMPLETE — مدموج في main `faff35a` (PR #30)** | `580 passed` · launcher `45/45` · CI أخضر قبل/بعد الدمج · PHASE_M18_T01.md · **اللقطة الحية بمتصفح Colab بيد المالك (M15-T01)** |
 
 ## ملاحظات أمان
 

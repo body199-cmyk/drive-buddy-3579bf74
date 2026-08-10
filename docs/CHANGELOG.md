@@ -1,6 +1,6 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
-## [M18-T01] — 2026-08-10 — DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)
+## [M18-T01] — 2026-08-10 — DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React) — **MERGED في main `faff35a` (PR #30)**
 
 ### Verified
 - بوابة DOC-39 من `python-package`: `compileall` OK · `pytest -q tests` → **580 passed** (كان 536) · `teledrive_launcher.py --check` → **45/45 ready actions resolve** (كان 42/42) · `python -m teledrive.notebook_cells --check` → `notebooks are in sync` · `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` → متطابقان (صفر تعديل على ملفات محمية).
