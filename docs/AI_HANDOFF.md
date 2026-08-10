@@ -1,62 +1,50 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M16_T01.md` (and `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md`, `PHASE_M15_T08.md`, `PHASE_M15_T11.md`, ...).
+> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M17_T02.md` (and the older phase reports).
 
 ## Session card
 
 | Field | Value |
 |---|---|
-| UTC date | 2026-08-10T02:45Z |
-| Session type | M16-T01 — unblock the live Analyze tab (mode-aware fields, localized choices, localized errors) from the M16 MASTER file |
-| TASK ID | `M16-T01` |
+| UTC date | 2026-08-10 |
+| Session type | M17-T02 — prove and expose the seven Google Drive actions (Drive-only slice per Brain's latest instruction); no React, no T03/T04, no protected files |
+| TASK ID | `M17-T02` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` (public) |
-| Fixed branch (Arena) | `arena/019fe96c-drive-buddy-3579bf74` (session-pinned; the MASTER-suggested name `arena/m16-t01-analyze-fix` is not usable on this platform — recorded in the report) |
-| Expected base SHA (MASTER) | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` — verified as ancestor of `origin/main`; everything after it is docs-only (PR #21 M15-T12 docs + PR #22 README) |
-| HEAD at session start | `612115941af6747fdf4719576cdf10f6fbd21a21` (= `origin/main`) |
-| Result SHA | `4dcdadd3b98f21ff8e432de54dbae7127482ce21` (M16-T01 commit) + follow-up docs commit |
-| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 — **MERGED** into `main` (`4a2dac6`, merge commit) per Brain approval · docs follow-up PR #24 — **MERGED** (`5956c1e`) |
-| Publish dispatch | **Agent dispatch BLOCKED by platform permission** — `gh workflow run … --ref main` → `HTTP 403: Resource not accessible by integration` (arena bot token lacks `actions:write`; KNOWN_ISSUES #27, same family as #15). **Owner executed it manually**: run `31385543199` (2026-08-10T11:54:04Z, `workflow_dispatch`, branch `main` @ `4a2dac6`) → **success**, including the in-run `PUBLIC VERIFICATION OK` gate (unauthenticated download + sha256/size assert, executed on the GitHub runner). Remaining: owner restarts Colab and runs Cells 1→4. |
-| Release state after merge | **NEW — verified**: `pkg-2026.08.09-m15t07` re-published, target `4a2dac6` · `teledrive_v4.5.zip` **222699 B** (= the documented M16-T01 build size; the old asset was 212474 B on `f8c0ec2`) + `teledrive_manifest.json` 378 B — assets uploaded 2026-08-10T11:55:09Z → **the release now CONTAINS M16-T01** (verified via `gh run list`/`gh release view` API; direct asset download is blocked from the sandbox by the known TLS limit — does not affect Colab) |
-| Status | `VERIFIED COMPLETE` for the code task (gate evidence below); final product status remains `Code-complete candidate / NOT Colab-ready` |
-| Authority | M16 AUTHORITY: M16 MASTER is the ONLY execution file; DOC-18/21/23/25 (2kzn5jac-518 / 2kzn5jac-538 / 2kzn5jac-478 / 2kzn5jac-98) are cancelled for execution |
-| What was done | Added `DEFAULT_SCAN_MODE="message"`, `MODE_FIELDS`, `fields_for_mode()` (media_scanner.py); `ScannerService.mode_fields()`, `SCAN_VALIDATION_KEYS`, `NON_SCANNABLE_LINK_KINDS`, `InvalidLink→err.bad_link`, invite refusal→`err.link_invite_unsupported`, `validate()` errors→`err.scan_*`/`err.bad_scan_request` (services.py); `analyze.set_mode` action (action_registry.py); `h_analyze_set_mode` + `ERROR_ARITY=4` + `shell_seed` keys `analyze_mode`/`analyze_fields` (handlers.py); full Analyze-block rebuild in ui.py (localized tuple choices, mode-aware `visible=seed[...]`, no `minimum=`/`maximum=` on optional numbers, `limit=MAX_SCAN_MESSAGES`, `binder.is_ready("analyze.set_mode")` gate, `binder.wire_if_ready(mode, ..., event="change")`, `analyze.result` label); +10 locale keys each in ar/en; created `tests/test_analyze_ui_modes.py` (missing but required by the T01 gate); tightened `tests/test_analyze_ui_contract.py`; added the additive `ARGS` line in `tests/test_handlers_contract.py` |
-| Verification (raw) | `compileall` OK · T01 gate (6 files) `97 passed` · full `pytest -q tests` `443 passed` · `launcher --check` `26/42 ready actions resolve` · `notebook_cells --check` in sync · `cmp` identical · `package_service --build` OK (222699 B, sha256 `827e8566…a832f6`, artifact deleted) · `npm run lint` 0 errors / `npm run build` success (bun.sh unreachable from sandbox — TLS reset; canonical `bun run lint/build` deferred to CI on the PR, same known sandbox limit as M15-T04) |
-| Protected files touched | NONE — no notebooks, no `PKG_RELEASE_TAG`, no workflows, no lockfiles, no `package.json`, no Release, no ZIP upload |
-| Known deviations (recorded) | (1) branch name pinned by platform; (2) `test_handlers_contract.py` +1 additive ARGS line (its contract parametrizes over every ACTION_SPEC — adding an action requires it); (3) `h_analyze_run` summary line left unchanged on purpose: M16 MASTER does not require changing it and `test_scoped_scan.py` (not in the allowed-modify list) pins the current format — flagged for Brain; (4) `test_analyze_ui_modes.py` created per AUTHORITY instruction |
-| Honest status | `Code-complete candidate / NOT Colab-ready` |
+| Fixed branch (Arena) | `arena/019febba-drive-buddy-3579bf74` (session-pinned; DOC-suggested `arena/m17-t02-drive-actions` not usable on this platform — same deviation as M16-T01) |
+| Base SHA | `e097b3d6391c0cb85ac785c605ea76f017d23f0b` (head of PR #26 at session start) |
+| Recorded deviation | PR #26 (M17-T01) was still **OPEN** when this session started — `origin/main` was `37377cb`. The precondition "main after PR #26 merged" held by CONTENT, not by merge SHA: this branch contains 37377cb + exactly the 7 docs files of PR #26, and `git diff origin/main..HEAD -- python-package/teledrive python-package/tests` was EMPTY before work began. Recommendation: merge PR #26 first, then this phase's PR (no conflicts expected — same base content). |
+| Result SHA | `8325ac3c4b755ce572a9bc3c9b1367602b5a4fba` (M17-T02 code+memory) + one follow-up docs commit recording these GitHub ids (same pattern as M16/M17-T01) |
+| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 — **PR #26 absorbs M17-T02**: the platform allows only one OPEN PR per session branch and #26 was still open; title/body updated to cover both phases (commits stay cleanly separated per phase) |
+| Status | `VERIFIED COMPLETE` for the Drive slice; product status unchanged: `Code-complete candidate / NOT Colab-ready` |
+| What was done | (1) Flipped 6 Drive specs to `tested=True` with named `proof_test` each in `action_registry.py` (`drive.connect/reconnect/status/list_folders/create_folder/select_folder`); refreshed the stale P0-6 comment honestly (live Colab still unproven). (2) Real product fix: `h_drive_list_folders` returned a bare list to a `gr.Dropdown` (read as the *selected value*, leaving the menu empty) — now returns `component_update(choices=…)`. (3) `tests/test_drive_connection_gate.py`: updated docstring + `PROVES` (4) + 7 handler-level proofs with the fake factory through the REAL `about().get()` gate. (4) NEW `tests/test_drive_folders.py`: `PROVES` (3) + full fake Drive v3 service (about+files) proving real-shaped dropdown choices, name/parent validation with zero API call on invalid names, mimeType validation, folder-ID persistence. + secrets-not-persisted check. (5) `tests/test_bindings.py`: AST test — no `lambda`, no real `.click/.change/.submit` in `ui.py`. (6) Memory: TODO / CHANGELOG / ACTIVE_TASK / KNOWN_ISSUES (#28 updated→9 silently hidden; #30 closed) / AI_HANDOFF / phase report (+python-package pointer). |
+| Drive proof map | connect→`test_connect_action_reports_connected_only_after_about_get` · reconnect→`test_reconnect_action_clears_stale_service_and_auth_state` · status→`test_status_action_is_read_only_and_never_calls_the_service` (all in `tests/test_drive_connection_gate.py`) · list_folders→`test_list_folders_action_returns_real_shaped_dropdown_choices` · create_folder→`test_create_folder_action_validates_name_and_parent` · select_folder→`test_select_folder_action_validates_mimetype_and_stores_the_id` (all in `tests/test_drive_folders.py`) · refresh_quota→unchanged `tests/test_drive_quota.py::test_warn_90` (+new shape coverage `test_refresh_quota_action_maps_the_real_storage_quota_shape`) |
+| Verification (raw) | `compileall` exit 0 · Drive trio `19 passed` · T02 five-file gate `69 passed` · full `pytest -q tests` **462 passed** · `teledrive_launcher.py --check` → `binding check ok: 32/42 ready actions resolve` (was 26/42) · Arabic smoke run of the seven handlers: all return localized tuples, invalid inputs return translated errors with correlation ids · post-render check: all seven wired (32 total), all buttons `visible=True, interactive=True` |
+| Protected files | ALL verified untouched per-path (notebooks, `notebook_cells.py`, `colab_cells.json`, `telegram_auth.py`, `queue_manager.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `requirements.*`, `bun.lock`, `package.json`, workflows). Locale files not needed (all keys already present ar/en). `drive.refresh_quota` registry entry untouched as instructed. |
+| Known limitations | Live native Colab auth is unprovable from the sandbox — all proofs are fake-factory through the REAL about() gate (exactly as M17-T02 §4.4 mandates); Gradio Dropdown visual rendering itself is browser-side; the 10 remaining unready actions (dashboard/logs×3/settings×2/export×2/recovery/maintenance) are outside the Drive-only scope. |
+| Honest status | `Code-complete candidate / NOT Colab-ready` — 32/42 actions ready, visible and wired |
 
 ## Next action
 
-M16-T01 is MERGED (Brain approved; `4a2dac6`), the docs follow-up PR #24 is MERGED (`5956c1e`), and the publish step is **DONE by the owner** — run `31385543199` (2026-08-10T11:54Z, success): the tag `pkg-2026.08.09-m15t07` now serves the 222699 B build from `4a2dac6` (in-run `PUBLIC VERIFICATION OK`).
-
-Remaining live path (owner):
-
-1. **Owner**: In Colab — Runtime → Restart session, then run Cell 1 (expect `Package update: SUCCESS` with the new sha256 ≠ `167d25d4…`), then Cells 2 → 3 → 4, then the live test: single-message link, mode "رسالة واحدة", one item, enqueue, transfer, verify the file on Drive.
-2. Send the Cell 1–4 outputs + transfer result to Brain.
-3. **M16-T02 remains STOPPED** until a separate approval arrives after the live Colab success.
+**STOP — await Brain review of this report and owner merges (PR #26, then this PR).** M17-T02-REST (Dashboard/Logs/Settings/Export-Recovery), M17-T03 and M17-T04/React must not start without explicit approval.
 
 ## GitHub handoff (this session)
 
 ```plain
 GitHub Status:
-Commit: SUCCESS — 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01)
-Push: SUCCESS — branch arena/019fe96c-drive-buddy-3579bf74 pushed
-Pull Request: CREATED then MERGED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23 (merge commit 4a2dac6 into main)
-Branch: arena/019fe96c-drive-buddy-3579bf74
-Base SHA: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93 (expected) / 612115941af6747fdf4719576cdf10f6fbd21a21 (actual origin/main at start)
-Result SHA: 4dcdadd3b98f21ff8e432de54dbae7127482ce21 (M16-T01) · main now 4a2dac6
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/23
-Publish workflow dispatch: agent FAILED (HTTP 403 — bot lacks actions:write) → owner ran it manually: run 31385543199 (2026-08-10T11:54:04Z, main @ 4a2dac6) SUCCESS incl. the in-run PUBLIC VERIFICATION OK gate
-Release after merge: RE-PUBLISHED (run 31385543199) — tag pkg-2026.08.09-m15t07 target 4a2dac6 · teledrive_v4.5.zip 222699 B (= M16-T01 build; API-verified) · teledrive_manifest.json 378 B · assets uploaded 2026-08-10T11:55:09Z
-Docs follow-up: PR #24 MERGED into main (merge commit 5956c1e) — recorded the #23 merge and the publish step
-Operation error, if any: bun.sh TLS reset from sandbox (documented; bun gates deferred to CI); initial self-authored test bug (shell_seed is a module function, not a Handlers method) fixed before the gate run
+Commit: SUCCESS — 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba
+Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74 (head 8325ac3 + follow-up docs commit)
+Pull Request: UPDATED (not created-new — one open PR per pinned branch) — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
+Branch: arena/019febba-drive-buddy-3579bf74
+Base SHA: e097b3d6391c0cb85ac785c605ea76f017d23f0b
+Result SHA: 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba (+ follow-up docs commit)
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
+Operation error, if any: none (one throwaway smoke-script rerun after adding migrations.apply(); measurement-harness issue, not product)
 Current repository state: clean tree after commit (memory files updated in the same commit)
-Recovery recommendation: if any gate fails on CI, fix forward on the session branch; never force-push/rebase/amend
-Tests and gates: compileall OK · T01 gate 97 passed · full 443 passed · launcher 26/42 · notebook_cells in sync · cmp identical · package build OK (222699 B) · npm lint 0 errors / npm build success
-Documentation: docs/TODO.md, docs/CHANGELOG.md, docs/ACTIVE_TASK.md, docs/KNOWN_ISSUES.md (#25 fixed, #26 open-by-design), docs/AI_HANDOFF.md, docs/PHASE_REPORTS/PHASE_M16_T01.md
-Known limitations: agent lacks workflows:write (owner applies); bun.sh/CDN unreachable from sandbox; real Colab proof (M15-T01 live run) still pending by the owner
+Recovery recommendation: revert the merge commit / close the PR — no protected files touched; never force-push/rebase/amend
+Tests and gates: compileall OK · Drive trio 19 passed · T02 gate 69 passed · full 462 passed · launcher 32/42 · smoke OK
+Documentation: docs/PHASE_REPORTS/PHASE_M17_T02.md (+ python-package pointer), docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md
 Honest status: Code-complete candidate / NOT Colab-ready
-Next action: STOP and await Brain approval for M16-T02
+Next action: STOP and await Brain approval
 ```
 
 No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made.

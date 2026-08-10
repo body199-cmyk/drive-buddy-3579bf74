@@ -119,8 +119,10 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ),
 
     # ---- Connection Center: Google Drive (native Colab auth only) ----
-    # No real-Drive test exists yet (audit P0-6): status() returns cached state
-    # with no about().get() call, so none of these may claim tested=True.
+    # M17-T02: handler-level proofs now run a FAKE Drive service through the
+    # REAL DriveAuth about().get() gate, so tested=True is honestly earned for
+    # these six. Still NOT proven: the live native Colab flow (owner-side,
+    # M15-T01) — no fake test ever claims that.
     ActionSpec(
         action_id="drive.connect",
         handler_name="h_drive_connect",
@@ -128,7 +130,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.link_drive",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_connection_gate.py::test_connect_action_reports_connected_only_after_about_get",
     ),
     ActionSpec(
         action_id="drive.reconnect",
@@ -137,7 +140,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.drive_reconnect",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_connection_gate.py::test_reconnect_action_clears_stale_service_and_auth_state",
     ),
     ActionSpec(
         action_id="drive.status",
@@ -146,7 +150,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="dash.drive_status",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_connection_gate.py::test_status_action_is_read_only_and_never_calls_the_service",
     ),
     ActionSpec(
         action_id="drive.list_folders",
@@ -155,7 +160,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.drive_list_folders",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_folders.py::test_list_folders_action_returns_real_shaped_dropdown_choices",
     ),
     ActionSpec(
         action_id="drive.create_folder",
@@ -164,7 +170,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.drive_create_folder",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_folders.py::test_create_folder_action_validates_name_and_parent",
     ),
     ActionSpec(
         action_id="drive.select_folder",
@@ -173,7 +180,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         label_key="btn.drive_select_folder",
         section="connection",
         implemented=True,
-        tested=False,
+        tested=True,
+        proof_test="tests/test_drive_folders.py::test_select_folder_action_validates_mimetype_and_stores_the_id",
     ),
     ActionSpec(
         action_id="drive.refresh_quota",
