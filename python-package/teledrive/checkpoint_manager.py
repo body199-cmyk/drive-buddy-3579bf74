@@ -108,6 +108,47 @@ def latest_local() -> Optional[Path]:
     return files[-1] if files else None
 
 
+class InvalidCheckpointError(Exception):
+    """Raised when a checkpoint fails structural validation."""
+
+
+def validate_snapshot(snap: Any) -> dict[str, Any]:
+    """Reject malformed/corrupt checkpoints; redact secrets before return.
+
+    Returns the snapshot unmodified on success. Never mutates persistent state.
+    """
+    from .errors import CheckpointError
+    from .redaction import redact_mapping, scan_for_secrets
+
+    if not isinstance(snap, dict):
+        raise InvalidCheckpointError("checkpoint must be a JSON object")
+    if "items" not in snap or not isinstance(snap["items"], list):
+        raise InvalidCheckpointError("checkpoint missing 'items' list")
+    if "generated" not in snap:
+        raise InvalidCheckpointError("checkpoint missing 'generated' timestamp")
+    payload = json.dumps(snap, ensure_ascii=False)
+    hits = scan_for_secrets(payload)
+    if hits:
+        raise CheckpointError(
+            f"checkpoint refused: {len(hits)} secret pattern(s) matched"
+        )
+    # Re-parse after a defensive redaction pass so callers never re-emit secrets
+    return json.loads(json.dumps(redact_mapping(snap), ensure_ascii=False))
+
+
+def restore_latest_local() -> Optional[dict[str, Any]]:
+    """Load and validate the newest local checkpoint (for unit tests / no-Drive)."""
+    path = latest_local()
+    if path is None:
+        return None
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+        return validate_snapshot(snap)
+    except (OSError, json.JSONDecodeError, InvalidCheckpointError) as e:
+        _log.warning("local checkpoint unreadable, skipping: %s", e)
+        return None
+
+
 def restore_from_drive(drive) -> Optional[dict[str, Any]]:
     """Pull newest checkpoint from Drive, return parsed dict."""
     try:

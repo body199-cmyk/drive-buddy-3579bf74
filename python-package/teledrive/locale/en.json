@@ -193,5 +193,22 @@
   "media.photo": "Photos",
   "media.voice": "Voice",
   "media.animation": "Animation",
-  "media.sticker": "Stickers"
+  "media.sticker": "Stickers",
+  "settings.concurrency.label": "Concurrent workers",
+  "settings.concurrency.info": "1–4, default 2",
+  "settings.concurrency.invalid": "Invalid value — enter a number between 1 and 4",
+  "settings.concurrency.out_of_range": "Allowed range is 1–4 only",
+  "settings.concurrency.saved": "Worker count saved",
+  "settings.concurrency.title": "Concurrent workers",
+  "settings.theme.dark": "Dark",
+  "settings.theme.light": "Light",
+  "settings.theme.applied": "Theme applied",
+  "msg.logs_refreshed": "Logs refreshed",
+  "msg.recovery_corrupt": "Checkpoint is corrupt — no data was changed",
+  "logs.level": "Log level",
+  "queue.empty": "No transfers yet",
+  "analyze.empty": "No results yet — analyze a link first",
+  "dash.engine_colab": "Colab Native · SQLite WAL",
+  "nav.analyze": "Analyze & links",
+  "blocked.colab_only": "Requires a live Colab session"
 }

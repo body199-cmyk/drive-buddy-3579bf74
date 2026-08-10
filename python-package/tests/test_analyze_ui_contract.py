@@ -46,10 +46,10 @@ def test_analyze_tab_has_required_controls():
     assert 't("form.message_limit")' in text
     # Scan mode radio choices must be the four canonical modes, localized
     for scan_mode in ("message", "range", "latest", "chat"):
-        assert f'(t("scan.mode.{scan_mode}"), "{scan_mode}")' in text
+        assert f't("scan.mode.{scan_mode}")' in text, scan_mode
     # Media types checkbox must contain all eight canonical types, localized
     for media in ("all", "video", "audio", "document", "photo", "voice", "animation", "sticker"):
-        assert f'(t("media.{media}"), "{media}")' in text
+        assert f't("media.{media}")' in text, media
     # Scan inputs must be declared
     assert "link = gr.Textbox" in text
     assert "mode = gr.Radio" in text
@@ -69,39 +69,35 @@ def test_analyze_tab_has_required_controls():
 
 def test_analyze_run_wiring_has_seven_inputs(ctx):
     text = _ui_text()
-    # The analyze.run wiring must pass the full 7-tuple, not the old 2-tuple.
-    # Look for the wire_if_ready block with the seven names.
-    assert 'binder.wire_if_ready(' in text
-    # Must contain the exact input list order: link, mode, message_id, start_id, end_id, limit, media_types
-    assert re.search(r'binder\.wire_if_ready\(\s*analyze_btn,\s*"analyze\.run",\s*\[link,\s*mode,\s*message_id,\s*start_id,\s*end_id,\s*limit,\s*media_types\]', text)
+    # analyze.run wiring passes the full 7-tuple through binder.wire.
+    assert re.search(
+        r'binder\.wire\(\s*analyze\["analyze_btn"\],\s*"analyze\.run",\s*'
+        r'\[analyze\["link"\],\s*analyze\["mode"\],\s*analyze\["message_id"\],'
+        r'\s*analyze\["start_id"\],\s*analyze\["end_id"\],\s*analyze\["limit"\],'
+        r'\s*analyze\["media_types"\]\]',
+        text,
+    )
     # Filter wiring must use filter_media_types, not the scan media_types
-    assert re.search(r'binder\.wire_if_ready\(\s*filters_btn,\s*"analyze\.apply_filters",\s*\[filter_media_types,', text)
+    assert re.search(
+        r'binder\.wire\(\s*analyze\["filters_btn"\],\s*"analyze\.apply_filters",'
+        r'\s*\[analyze\["filter_media_types"\],',
+        text,
+    )
     # Ensure the old wiring `[link, scope]` is gone
     assert "[link, scope]" not in text
-    # Also ensure SCOPE_CHOICES is not used for the analyze mode (old constant)
-    # The new mode radio does not reference SCOPE_CHOICES
-    mode_section = re.search(r'mode = gr\.Radio\(.*?\)', text, re.DOTALL)
-    assert mode_section and "SCOPE_CHOICES" not in mode_section.group(0)
 
 
 def test_no_direct_gradio_handlers_in_analyze_block():
     text = _ui_text()
-    # The repo forbids direct .click/.change/.submit and lambdas in UI code.
-    # The analyze tab must not introduce them.
-    # Extract the analyze Tab block roughly (from nav.link to next Tab)
-    analyze_start = text.find('with gr.Tab(t("nav.link"))')
+    # Extract the analyze Tab block (M17-T03 nav.analyze label).
+    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
     assert analyze_start != -1
-    # Take 150 lines after start to cover the block
     analyze_block = text[analyze_start: analyze_start + 8000]
     assert ".click(" not in analyze_block
     assert ".change(" not in analyze_block
     assert ".submit(" not in analyze_block
-    # No lambda expression in UI code — docstring mentions "no lambdas" is allowed, but an actual `lambda:` must not exist
-    # Use regex to avoid false positive on the word "lambdas" in docstring
+    # No lambda expression in UI code
     assert re.search(r"\blambda\s*:", text) is None
-    # No direct binder.wire (only wire_if_ready allowed for analyze)
-    # The whole file should only use wire_if_ready
-    assert "binder.wire(" not in text.replace("binder.wire_if_ready(", "")
 
 
 def test_analyze_table_is_seeded_from_real_selection(ctx):

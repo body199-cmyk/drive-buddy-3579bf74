@@ -18,7 +18,16 @@ from .redaction import redact, safe_exception
 from .services import rows_for
 from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
 from .ui_binder import component_update
+from .ui_theme import theme_style_block
 from .utils import human_bytes
+
+
+def status_ok(message: str) -> str:
+    return f"✅ {message}"
+
+
+def status_error(message: str) -> str:
+    return f"⚠️ {message}"
 
 _log = get_logger("teledrive.handlers")
 
@@ -77,15 +86,15 @@ ERROR_ARITY: dict[str, int] = {
     "analyze.select_all": 2,
     "analyze.clear_selection": 2,
     "analyze.enqueue_selected": 2,
-    "logs.refresh": 1,
-    "logs.search": 1,
-    "logs.download": 1,
-    "dashboard.refresh": 1,
-    "settings.set_concurrency": 1,
-    "settings.toggle_language": 1,
-    "settings.set_theme": 1,
-    "export.build_zip": 2,
-    "export.colab_cells": 1,
+    "logs.refresh": 2,       # (logs_text, status)
+    "logs.search": 2,        # (logs_text, status)
+    "logs.download": 2,      # (file_component, status)
+    "dashboard.refresh": 1,  # (dashboard_json)
+    "settings.set_concurrency": 2,  # (slider_value, status)
+    "settings.toggle_language": 1,  # (lang_state)
+    "settings.set_theme": 2,        # (theme_style_html, status)
+    "export.build_zip": 2,          # (message, file)
+    "export.colab_cells": 2,        # (text, status)
     "recovery.restore": 1,
     "maintenance.checkpoint": 1,
 }
@@ -364,26 +373,53 @@ class Handlers:
 
     @action("dashboard.refresh")
     def h_dashboard_refresh(self):
-        return self.call("dashboard.refresh")
+        # service_path is stats.dashboard; Handlers.call resolves via the
+        # declared action_id -> spec.service_path, so we pass the action_id.
+        data = self.call("dashboard.refresh")
+        return component_update(value=data)
 
     @action("logs.refresh")
-    def h_logs_refresh(self):
-        return self.call("logs.refresh", 300)
+    def h_logs_refresh(self, level: str = "ALL"):
+        text = self.call("logs.refresh", 300, str(level or "ALL"))
+        return component_update(value=text), status_ok(t("msg.logs_refreshed"))
 
     @action("logs.search")
-    def h_logs_search(self, query: str):
-        return self.call("logs.search", query)
+    def h_logs_search(self, query: str, level: str = "ALL"):
+        text = self.call("logs.search", str(query or ""), 2000, str(level or "ALL"))
+        lines = 0 if not text else text.count("\n") + 1
+        return component_update(value=text), status_ok(f"{t('msg.logs_refreshed')} · {lines}")
 
     @action("logs.download")
-    def h_logs_download(self):
-        return self.call("logs.download")
+    def h_logs_download(self, level: str = "ALL"):
+        path = self.call("logs.download", str(level or "ALL"))
+        return component_update(value=path, visible=True), status_ok(t("msg.zip_ready"))
 
     # ---- Settings ----
 
     @action("settings.set_concurrency")
-    def h_settings_set_concurrency(self, level: str):
-        result = self.call("settings.set_concurrency", level)
-        return f"{result['level']} · {result['workers']}/{result['cap']}"
+    def h_settings_set_concurrency(self, value):
+        # Per the constitution: default 2, cap 4. Accept integer 1..4 or a
+        # named level (safe/balanced/fast) from the service. Invalid values
+        # return the slider to its previous value with a localized error.
+        from .config import CONCURRENCY_LEVELS
+        current = self.ctx.settings.current()
+        n = None
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            key = str(value or "").strip().lower()
+            if key in CONCURRENCY_LEVELS:
+                n = CONCURRENCY_LEVELS[key]
+        if n is None or n < 1 or n > 4:
+            return (
+                component_update(value=current),
+                status_error(t("settings.concurrency.invalid")),
+            )
+        result = self.call("settings.set_concurrency", n)
+        return (
+            component_update(value=result.get("workers", n)),
+            status_ok(t("settings.concurrency.saved")),
+        )
 
     @action("settings.toggle_language")
     def h_settings_toggle_language(self):
@@ -391,30 +427,40 @@ class Handlers:
 
     @action("settings.set_theme")
     def h_settings_set_theme(self, theme: str):
-        return self.call("settings.set_theme", theme)
+        chosen = self.call("settings.set_theme", theme)
+        return (
+            component_update(value=theme_style_block(chosen)),
+            status_ok(t(f"settings.theme.{chosen}")),
+        )
 
     # ---- Export ----
 
     @action("export.build_zip")
     def h_export_build_zip(self):
         result = self.call("export.build_zip")
-        return f"{t('msg.zip_ready')} · {result.zip_path}", result.zip_path
+        return (
+            status_ok(f"{t('msg.zip_ready')} · {result.zip_path}"),
+            component_update(value=result.zip_path, visible=True),
+        )
 
     @action("export.colab_cells")
     def h_export_colab_cells(self):
-        return redact(self.call("export.colab_cells"))
+        text = redact(self.call("export.colab_cells"))
+        return component_update(value=text), status_ok(t("msg.zip_ready"))
 
     # ---- Maintenance ----
 
     @action("recovery.restore")
     def h_recovery_restore(self):
         result = self.call("recovery.restore")
-        return f"{t(result['message_key'])} · imported={result['imported']}"
+        return status_ok(
+            f"{t(result['message_key'])} · imported={result['imported']}"
+        )
 
     @action("maintenance.checkpoint")
     def h_maintenance_checkpoint(self):
         result = self.call("maintenance.checkpoint")
-        return f"{t('msg.checkpoint_saved')} · {result['at']}"
+        return status_ok(f"{t('msg.checkpoint_saved')} · {result['at']}")
 
 
 def _quota_view(quota: dict[str, Any]) -> tuple[str, dict[str, Any]]:

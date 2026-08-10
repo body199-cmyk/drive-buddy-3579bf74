@@ -55,9 +55,11 @@ class UIBinder:
     def __init__(self, ctx, handlers) -> None:
         self.ctx = ctx
         self.handlers = handlers
-        self.wired: dict[str, WireRecord] = {}
-        # action_id -> component, for every control created through button()
-        self.rendered: dict[str, Any] = {}
+        # Multiple controls may map to the same action (e.g. a top-bar zip
+        # button and a prominent export-section button), so these are lists.
+        self.wired: dict[str, list[WireRecord]] = {}
+        # action_id -> list[component], one entry per button/register call
+        self.rendered: dict[str, list[Any]] = {}
         # action_ids rendered as hidden+disabled because the spec is not ready
         self.disabled: list[str] = []
 
@@ -96,8 +98,10 @@ class UIBinder:
         """Create a Gradio button for a declared action.
 
         Ready spec  -> normal, localized button (the caller must still wire it).
-        Unready spec-> hidden, non-interactive `common.unavailable` placeholder
-                       that is never passed to wire().
+        Unready with blocked_reason_key -> VISIBLE but disabled, localized label
+                                            explaining why (no silent hiding).
+        Unready without a key -> legacy hidden placeholder (defensive; forbidden
+                                 by assert_complete).
         """
         spec = action_registry.get(action_id)
         if spec is None:
@@ -105,6 +109,17 @@ class UIBinder:
         if spec.ready:
             kwargs.setdefault("value", t(spec.label_key))
             component = gr.Button(**kwargs)
+        elif spec.blocked_reason_key:
+            kwargs.pop("value", None)
+            kwargs["interactive"] = False
+            kwargs["visible"] = True
+            label = f"{t(spec.label_key)} — {t(spec.blocked_reason_key)}"
+            component = gr.Button(value=label, **kwargs)
+            self.disabled.append(action_id)
+            _log.info(
+                "control visible-disabled action=%s reason=%s",
+                action_id, spec.blocked_reason_key,
+            )
         else:
             kwargs.pop("value", None)
             kwargs["interactive"] = False
@@ -112,17 +127,16 @@ class UIBinder:
             component = gr.Button(value=t("common.unavailable"), **kwargs)
             self.disabled.append(action_id)
             _log.info(
-                "control hidden (not ready) action=%s implemented=%s tested=%s",
-                action_id, spec.implemented, spec.tested,
+                "control hidden (not ready, no reason key) action=%s", action_id,
             )
-        self.rendered[action_id] = component
+        self.rendered.setdefault(action_id, []).append(component)
         return component
 
     def register(self, component: Any, action_id: str) -> Any:
         """Register a non-button component (radio, dropdown, timer) for orphan checks."""
         if action_registry.get(action_id) is None:
             raise UnknownActionError(f"undeclared action_id: {action_id!r}")
-        self.rendered[action_id] = component
+        self.rendered.setdefault(action_id, []).append(component)
         return component
 
     # ---- wiring ----
@@ -142,13 +156,14 @@ class UIBinder:
         if emitter is None:
             raise DeadControlError(f"component has no {event!r} event for {action_id!r}")
         emitter(handler, list(inputs or []), list(outputs or []))
-        self.wired[action_id] = WireRecord(
+        rec = WireRecord(
             action_id=action_id,
             handler_name=spec.handler_name,
             service_path=spec.service_path,
             event=event,
             component=type(component).__name__,
         )
+        self.wired.setdefault(action_id, []).append(rec)
         _log.info("wired action=%s event=%s service=%s", action_id, event, spec.service_path)
         return handler
 
@@ -185,6 +200,7 @@ class UIBinder:
         ]
 
     def assert_complete(self) -> None:
+        action_registry.assert_complete()
         missing = self.missing()
         if missing:
             raise IncompleteBindingError("ready but unwired actions: " + ", ".join(sorted(missing)))
@@ -193,10 +209,15 @@ class UIBinder:
             raise IncompleteBindingError(
                 "rendered but never wired controls: " + ", ".join(sorted(orphans))
             )
+        wired_count = sum(len(v) for v in self.wired.values())
         _log.info(
-            "binder complete: %d actions wired, %d controls hidden as not ready",
-            len(self.wired), len(self.disabled),
+            "binder complete: %d action kinds wired (%d controls), %d visible-disabled/hidden",
+            len(self.wired), wired_count, len(self.disabled),
         )
 
     def inventory(self) -> list[dict[str, str]]:
-        return [vars(record) for record in self.wired.values()]
+        out: list[dict[str, str]] = []
+        for records in self.wired.values():
+            for rec in records:
+                out.append(vars(rec))
+        return out

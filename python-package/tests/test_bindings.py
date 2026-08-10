@@ -42,13 +42,40 @@ class FakeGradio:
             self.visible = kwargs.get("visible", True)
 
 
+def _inject_fake_unready(key: str, reason: str = "blocked.colab_only"):
+    """Temporarily register a synthetic unready ActionSpec for guard tests."""
+    spec = action_registry.ActionSpec(
+        action_id=key,
+        handler_name="h_nonexistent",
+        service_path="__nonexistent__.noop",
+        label_key="common.unavailable",
+        section="settings",
+        implemented=False,
+        tested=False,
+        blocked_reason_key=reason,
+    )
+    action_registry.ACTION_SPECS = (*action_registry.ACTION_SPECS, spec)
+    action_registry._BY_ID[key] = spec
+    return spec
+
+
+def _remove_fake_unready(key: str):
+    action_registry.ACTION_SPECS = tuple(
+        s for s in action_registry.ACTION_SPECS if s.action_id != key
+    )
+    action_registry._BY_ID.pop(key, None)
+
+
 def test_every_spec_resolves_on_the_live_context(ctx):
     for spec in action_registry.ACTION_SPECS:
-        assert callable(ctx.resolve(spec.service_path)), spec.action_id
+        if spec.ready:
+            assert callable(ctx.resolve(spec.service_path)), spec.action_id
 
 
 def test_every_spec_has_a_named_decorated_handler(ctx):
     for spec in action_registry.ACTION_SPECS:
+        if not spec.ready:
+            continue
         handler = getattr(ctx.handlers, spec.handler_name, None)
         assert callable(handler), spec.handler_name
         assert handler.action_id == spec.action_id
@@ -62,29 +89,42 @@ def test_wire_rejects_unknown_action(ctx):
 
 
 def test_wire_rejects_not_ready_action(ctx):
-    unready = next(action_registry.unready_specs())
-    binder = UIBinder(ctx, ctx.handlers)
-    with pytest.raises(DeadControlError):
-        binder.wire(FakeComponent(), unready.action_id)
+    key = "__test__.fake_unready_wire"
+    _inject_fake_unready(key)
+    try:
+        binder = UIBinder(ctx, ctx.handlers)
+        with pytest.raises(DeadControlError):
+            binder.wire(FakeComponent(), key)
+    finally:
+        _remove_fake_unready(key)
 
 
 def test_wire_if_ready_skips_an_unready_action_but_still_rejects_unknown(ctx):
-    unready = next(action_registry.unready_specs())
-    binder = UIBinder(ctx, ctx.handlers)
-    assert binder.wire_if_ready(FakeComponent(), unready.action_id) is None
-    assert binder.wired == {}
-    with pytest.raises(UnknownActionError):
-        binder.wire_if_ready(FakeComponent(), "does.not.exist")
+    key = "__test__.fake_unready_skip"
+    _inject_fake_unready(key)
+    try:
+        binder = UIBinder(ctx, ctx.handlers)
+        assert binder.wire_if_ready(FakeComponent(), key) is None
+        assert binder.wired == {}
+        with pytest.raises(UnknownActionError):
+            binder.wire_if_ready(FakeComponent(), "does.not.exist")
+    finally:
+        _remove_fake_unready(key)
 
 
-def test_button_factory_hides_and_disables_unready_controls(ctx):
-    binder = UIBinder(ctx, ctx.handlers)
-    unready = next(action_registry.unready_specs())
-    button = binder.button(FakeGradio, unready.action_id)
-    assert button.interactive is False
-    assert button.visible is False
-    assert unready.action_id in binder.disabled
-    assert unready.action_id not in binder.wired
+def test_button_factory_visible_disables_blocked_controls(ctx):
+    """DOC-37 §5.0: unready controls render visible+disabled, not hidden."""
+    key = "__test__.fake_unready_btn"
+    _inject_fake_unready(key)
+    try:
+        binder = UIBinder(ctx, ctx.handlers)
+        button = binder.button(FakeGradio, key)
+        assert button.interactive is False
+        assert button.visible is True  # visible-disabled (KNOWN_ISSUES #28 fix)
+        assert key in binder.disabled
+        assert key not in binder.wired
+    finally:
+        _remove_fake_unready(key)
 
 
 def test_button_factory_renders_ready_controls_normally(ctx):
@@ -108,7 +148,7 @@ def test_assert_complete_detects_an_orphan_rendered_control(ctx):
         binder.wire(FakeComponent(), spec.action_id)
     orphan = next(action_registry.ready_specs())
     binder.wired.pop(orphan.action_id)
-    binder.rendered[orphan.action_id] = FakeComponent()
+    binder.rendered[orphan.action_id] = [FakeComponent()]
     with pytest.raises(IncompleteBindingError):
         binder.assert_complete()
 
@@ -125,23 +165,21 @@ def test_ui_module_renders_every_declared_action():
     text = UI_SOURCE.read_text(encoding="utf-8")
     rendered = set(re.findall(r'binder\.(?:button\(gr|is_ready\(),?\s*"([^"]+)"', text))
     rendered |= set(re.findall(r'binder\.is_ready\("([^"]+)"\)', text))
+    # binder.wire(component, "action"..) calls for non-button components too
+    rendered |= set(re.findall(r'binder\.wire\([^,]+,\s*"([^"]+)"', text))
     declared = {s.action_id for s in action_registry.ACTION_SPECS}
-    assert declared - rendered == set()
+    assert declared - rendered == set(), f"missing renders: {declared - rendered}"
 
 
-def test_ui_module_wires_exactly_the_ready_actions():
+def test_ui_module_wires_every_ready_action():
     text = UI_SOURCE.read_text(encoding="utf-8")
-    wired = set(re.findall(r'binder\.wire_if_ready\(\s*[^,]+,\s*"([^"]+)"', text))
-    declared = {s.action_id for s in action_registry.ACTION_SPECS}
-    assert wired == declared, "every declared action must go through wire_if_ready"
-    assert "binder.wire(" not in text.replace("binder.wire_if_ready(", "")
+    wired = set(re.findall(r'binder\.wire(?:_if_ready)?\(\s*[^,]+,\s*"([^"]+)"', text))
+    declared = {s.action_id for s in action_registry.ready_specs()}
+    assert wired >= declared, f"unwired ready actions: {declared - wired}"
 
 
 def test_ui_module_has_no_lambdas_or_direct_event_attachment():
-    """Layout purity (M17-T02 §4.4): enforced on the AST, not by convention.
-
-    Docstrings may *mention* lambda/.click — only real syntax nodes count.
-    """
+    """Layout purity (M17-T02 §4.4): enforced on the AST, not by convention."""
     tree = ast.parse(UI_SOURCE.read_text(encoding="utf-8"))
     assert not any(isinstance(node, ast.Lambda) for node in ast.walk(tree)), \
         "lambda found in ui.py"
@@ -156,7 +194,7 @@ def test_ui_module_has_no_lambdas_or_direct_event_attachment():
 
 
 def test_wire_rejects_an_unresolvable_service_path(ctx, monkeypatch):
-    """A ready spec whose service vanished must fail the build, not render."""
+    """A ready spec whose service vanished must fail the build."""
     from teledrive.errors import ServicePathError
 
     spec = next(iter(action_registry.ready_specs()))

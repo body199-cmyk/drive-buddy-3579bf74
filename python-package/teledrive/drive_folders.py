@@ -88,3 +88,10 @@ class DriveFolders:
         if ref is None:
             raise TeleDriveError("no destination folder selected", "err.no_folder")
         return ref
+
+    def current_folder_name(self) -> str:
+        """Return the cached name of the selected folder, or the id as LTR fallback."""
+        ref = self.selected()
+        if ref is None:
+            return ""
+        return ref.name or ref.id
