@@ -14,10 +14,39 @@
 - `python-package/docs/UI_ACTION_INVENTORY.md` (جرد 42 إجراءً بـ17 حقلًا لكل إجراء) · `docs/PHASE_REPORTS/PHASE_M17_T01.md`.
 
 ### Changed (ذاكرة فقط)
-- `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` — KNOWN_ISSUES زيدت بنودًا #27–#30 من نتائج الجرد. **لا تعديل على أي كود منتج أو ملفات محمية.**
+- `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` — KNOWN_ISSUES زيدت بنودًا #28–#31 من نتائج الجرد. **لا تعديل على أي كود منتج أو ملفات محمية.**
 
 ### Not done (بالالتزام)
 - M17-T02/T03/T04 لم تُبدأ — بانتظار موافقة Brain على الجرد.
+
+## [M16-T01 published] — 2026-08-10 — دمج PR #24 (docs) + إعادة نشر التاج `pkg-2026.08.09-m15t07` بيد المالك — متحقَّقة عبر API
+
+### Verified
+- PR #24 (docs-only — ملفات الذاكرة الخمسة) مدمج في `main` (merge commit `5956c1e`)؛ CI على الـPR كان أخضر (Frontend build + Python package)؛ و`origin/main` بعد الدمج = `5956c1e266a354194e9f16edcc739d3ac1b81a30`.
+- المالك شغّل `Publish current TeleDrive package` يدويًا بعد دمج #23 (الوكيل محظور 403 — KNOWN_ISSUES #27): run `31385543199` (`workflow_dispatch`، فرع `main` @ `4a2dac6`,‎ 2026-08-10T11:54:04Z) → **success** — وبوابة `PUBLIC VERIFICATION OK` داخل الـrun (تنزيل عام بلا مصادقة + مطابقة sha256/الحجم من runner جيتهاب نفسه).
+- الإصدار أُعيد نشره فعليًا: أصول `pkg-2026.08.09-m15t07` رُفعت 2026-08-10T11:55:09Z — `teledrive_v4.5.zip` **222699 بايت** (= حجم بناء M16-T01 الموثَّق في PR #23؛ القديم كان 212474 بايت على `f8c0ec2`) + `teledrive_manifest.json` 378 بايت، target = `4a2dac6` — **الإصدار الحي يحوي M16-T01 الآن** (تحقق عبر `gh run list` / `gh release view`؛ التنزيل المباشر من الساندبوكس محجوب بقيد TLS المعروف — لا يؤثر على Colab ولا runners).
+
+### Next (بيد المالك)
+1. Colab: Restart session → Cell 1 (توقع `Package update: SUCCESS` وsha256 مختلف عن `167d25d4…`) → Cells 2–4 → اختبار حي بنقل ملف واحد (نمط «رسالة واحدة»).
+2. إرسال مخرجات Cells 1–4 إلى Brain → موافقة منفصلة لـM16-T02.
+
+### Not changed — عمدًا
+- M16-T02/T03/T04 لم تبدأ (بانتظار الموافقة المنفصلة بعد نجاح Colab الحي). الحالة تبقى `Code-complete candidate / NOT Colab-ready`.
+
+## [M16-T01 merged] — 2026-08-10 — دمج PR #23 في main بعد موافقة Brain + خطوة إعادة النشر (بيد المالك)
+
+### Verified
+- PR #23 مدمج في `main` (merge commit `4a2dac6`): كود M16-T01 أصبح على main (`analyze.set_mode` موجود في `action_registry.py`، و`DEFAULT_SCAN_MODE` في `media_scanner.py` — تحقّق `git show origin/main:...`).
+- محاولة تشغيل workflow النشر من الوكيل: `gh workflow run "Publish current TeleDrive package" --ref main` → **HTTP 403: Resource not accessible by integration** (توكن الوكيل بلا `actions:write` — امتداد لـKNOWN_ISSUES #15). **خطوة المالك إلزامية.**
+- الإصدار الحالي بعد الدمج ما زال قديمًا: `pkg-2026.08.09-m15t07` target `f8c0ec2` · zip `212474` بايت — **لا يحتوي M16-T01** (مطابق لملاحظة المالك).
+
+### Next (بيد المالك)
+1. Actions → `Publish current TeleDrive package` → Run workflow → branch `main` (يعيد نشر نفس التاج `pkg-2026.08.09-m15t07` بمعرّف sha256 جديد).
+2. Colab: Restart session → Cell 1 (توقع `Package update: SUCCESS` وsha256 مختلف عن `167d25d4…`) → Cells 2–4 → اختبار حي بنقل ملف واحد.
+3. إرسال مخرجات Cells 1–4 إلى Brain → موافقة منفصلة لـM16-T02.
+
+### Not changed — عمدًا
+- M16-T02/T03/T04 لم تبدأ (بانتظار الموافقة المنفصلة بعد نجاح Colab الحي).
 
 ## [M16-T01] — 2026-08-10 — إصلاح تبويب Analyze الحي: رفع حاجز `minimum=1`، وضع افتراضي `message`، حقول حسب النمط، تعريب كامل، وأخطاء مترجمة بدل `err.unknown` (من ملف M16 MASTER)
 

@@ -29,7 +29,7 @@ Files modified (ذاكرة فقط، بلا كود منتج):
 - docs/TODO.md           (صف M17-T01)
 - docs/CHANGELOG.md      (بند M17-T01)
 - docs/ACTIVE_TASK.md    (قفل M17-T01)
-- docs/KNOWN_ISSUES.md   (بنود موثقة جديدة #27–#30 من الجرد)
+- docs/KNOWN_ISSUES.md   (بنود موثقة جديدة من الجرد — رُقّمت #28–#31 بعد دمج main الذي ثبّت #27 لقيد `actions:write`)
 - docs/AI_HANDOFF.md     (بطاقة هذه الجلسة)
 
 Files deleted: لا شيء

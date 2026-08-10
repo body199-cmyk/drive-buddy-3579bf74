@@ -15,7 +15,7 @@
 | النطاق | قراءة ملفات الذاكرة العشرة + فحص 13 ملفًا (`action_registry/ui/ui_binder/handlers/app_context/services/drive_auth/drive_folders/queue_manager/transfer_manager` + 3 ملفات اختبار) + إنشاء الـinventory + تشغيل بوابة T01 + تحديث الذاكرة |
 | خارج النطاق | أي تعديل على `teledrive/` أو `tests/`، Notebooks، `PKG_RELEASE_TAG`، workflows، lockfiles، `package.json`، Release؛ وM17-T02/T03/T04 كلها حتى موافقة Brain صريحة |
 | الدليل الرئيسي | بوابة T01 `61 passed` · كامل `443 passed` · `compileall` OK · launcher `26/42 ready actions resolve` · التقرير الكامل في `docs/PHASE_REPORTS/PHASE_M17_T01.md` |
-| الخطوة السابقة (مُغلَقة) | M16-T01 — مُدموجة على main عبر PR #23 (`4a2dac6`) |
+| الخطوة السابقة (مُغلَقة) | M16-T01 — PR #23 مدمج (`4a2dac6`) + PR #24 (docs) مدمج (`5956c1e`) + إعادة نشر التاج متحقَّقة (run `31385543199` بيد المالك؛ الوكيل محظور 403 — KNOWN_ISSUES #27) |
 | الخطوة التالية | **STOP — بانتظار مراجعة Brain للـinventory وموافقته قبل بدء M17-T02** |
 
 ## قاعدة الاستخدام
