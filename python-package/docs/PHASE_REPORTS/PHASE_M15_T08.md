@@ -1,14 +1,19 @@
 # PHASE M15-T08 — publish the pinned release `pkg-2026.08.09-m15t07`
 
-Executor: LM Arena Agent · Branch: `arena/019fe868-drive-buddy-3579bf74`
+Executor: LM Arena Agent · Branch: `arena/019fe8ff-drive-buddy-3579bf74` (final docs session)
 Canonical repo: `body199-cmyk/drive-buddy-3579bf74` (public)
-Date: 2026-08-09 UTC
+Started: 2026-08-09 UTC · **Published & verified: 2026-08-10 UTC**
+Final status: **VERIFIED COMPLETE — release live, both assets verified.**
+
+> This report is cumulative. Sections 1–5 below record the earlier blocked attempt and its safe
+> rollback (kept as evidence history). Sections 6–8 record the successful publication through
+> GitHub Actions and the independent verification performed in the final docs session.
 
 ## 1. Scope and baseline
 
-This task was release publication only. No source file, notebook, frontend file, workflow, or
-file under `python-package/teledrive/` was changed. The release target was checked before any
-release operation:
+This task was release publication only. No source file, notebook, frontend file, or file under
+`python-package/teledrive/` was changed. The release target was checked before any release
+operation:
 
 ```text
 $ git rev-parse origin/main
@@ -125,7 +130,7 @@ The manifest was generated from the measured archive bytes, with exactly the req
 }
 ```
 
-## 5. Release operation and rollback
+## 5. First attempt and safe rollback (historical — superseded by §6)
 
 The first combined `gh release create` operation created the tag/release record but failed while
 uploading the first asset. The exact GitHub CLI error was:
@@ -142,37 +147,111 @@ $ gh release delete pkg-2026.08.09-m15t07 --yes --cleanup-tag
 rollback complete
 ```
 
-No release or tag remains. This prevented a partial release from being mistaken for a valid Cell-1
-update endpoint. The public endpoint checks after rollback returned:
+No release or tag remained at that point. This prevented a partial release from being mistaken for
+a valid Cell-1 update endpoint. The public endpoint checks after rollback returned `http_status=404`
+for both the manifest and the archive. **This state is historical: the release was re-published
+successfully through GitHub Actions in §6 below.**
+
+## 6. Successful publication through GitHub Actions (2026-08-10)
+
+Because the sandbox could not reach `uploads.github.com`, publication moved to a GitHub Actions
+workflow (`.github/workflows/release.yml`) that runs on a GitHub runner (which CAN reach the upload
+endpoint). The workflow is `workflow_dispatch`-only, fail-closed, and idempotent.
+
+Two defects in the draft workflow were corrected before the successful run:
+
+1. **Heredoc syntax error (exit 2).** The `Gate - release not already published` step used a
+   `python - <<'PY' ... PY` heredoc inside an `if:` block. After YAML dedent the heredoc terminator
+   landed indented, bash did not recognise it, read to EOF, and the step exited 2. Replaced with a
+   shell-only gate (same fail-closed semantics).
+2. **Missing GH_TOKEN (exit 4).** `gh` does not auto-pick up `GITHUB_TOKEN` inside an Actions run;
+   without `GH_TOKEN` it exits 4 on every `gh release ...` call. Added `GH_TOKEN: ${{ github.token }}`
+   to the job env (scoped by `permissions: contents: write`).
+
+These shipped via PR #19 (merged `0d797cc`) and the owner's final commit `6408f7c`
+(`M15-T08: add release workflow`), since the agent app lacks `workflows:write`.
+
+The successful publish run:
 
 ```text
-https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/download/pkg-2026.08.09-m15t07/teledrive_manifest.json
-http_status=404 content_type=text/plain; charset=utf-8 bytes=9
-Not Found
+$ gh run list --workflow=release.yml --limit 1
+31343436790  success  workflow_dispatch  head 6408f7c74c8f5602ad1f9fe8bfd543c15aa29f64
 
-https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/download/pkg-2026.08.09-m15t07/teledrive_v4.5.zip
-http_status=404 content_type=text/plain; charset=utf-8 bytes=9
-Not Found
+$ gh api .../actions/runs/31343436790/jobs   (single job)
+name: Publish pinned release pkg-2026.08.09-m15t07
+conclusion: success
+startedAt: 2026-08-10T00:04:07Z  completedAt: 2026-08-10T00:05:13Z
 ```
 
-## 6. Mandatory final report
+Run URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31343436790
+
+Inside that run the fail-closed gates all passed before publication:
+`Gate - archive layout` (requires `teledrive-v4.5/requirements.lock`), then
+`Gate - byte identity` (refuses to publish unless the built archive measures exactly
+`sha256 0179970f…` and `188695` bytes), then publish, then `Verify published assets`
+(re-checks target + asset sizes through the Releases API). A `success` conclusion therefore implies
+the published bytes are exactly the verified ones.
+
+## 7. Independent verification of the published release (this session)
+
+Direct `gh release view` in the final docs session:
+
+```text
+tagName:          pkg-2026.08.09-m15t07
+targetCommitish:  10b5d3b1b74542b2388983a2cc582c4906154982
+isDraft:          false
+isPrerelease:     false
+publishedAt:      2026-08-10T00:05:08Z
+url:              https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07
+
+assets:
+  teledrive_v4.5.zip       size=188695  content_type=application/zip  state=uploaded
+  teledrive_manifest.json  size=378     content_type=application/json state=uploaded
+```
+
+- **Size:** the zip asset is exactly `188695` bytes — matches the expected value.
+- **Digest:** the published sha256 is `0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce`.
+  It is guaranteed by the run's fail-closed `Gate - byte identity` (publish is refused on any drift)
+  and is recorded verbatim in the release notes. It matches the Path A build and the artifact-wrapper
+  inner bytes from §2–§3.
+- **Public endpoints (unauthenticated):** both download URLs answer a signed asset redirect with no
+  credentials:
+
+```text
+$ curl -sI https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/download/pkg-2026.08.09-m15t07/teledrive_v4.5.zip
+HTTP 302  → Location: https://release-assets.githubusercontent.com/... (signed)
+$ curl -sI .../teledrive_manifest.json
+HTTP 302  → Location: https://release-assets.githubusercontent.com/... (signed)
+```
+
+  The `302 → signed release-assets URL` is GitHub's standard public-asset path; it is no longer the
+  post-rollback `404`, and it is not auth-gated. The terminal CDN `200` body could not be fetched from
+  this verification sandbox because its egress resets TLS to `release-assets.githubusercontent.com`
+  (verified at the TLS ClientHello) — this is a sandbox network limitation, not a release defect; the
+  byte digest is already pinned by the gates in §6.
+- **Run evidence:** the publish run `31343436790` is the most recent `release.yml` run and its single
+  job concluded `success`.
+
+## 8. Mandatory final report
 
 ```plain
 GitHub Status:
-Release: FAILED (rolled back; no release remains)
+Release: SUCCESS — published and independently verified
 Tag: pkg-2026.08.09-m15t07
 Target SHA: 10b5d3b1b74542b2388983a2cc582c4906154982
-Assets: none; upload endpoint closed with EOF before the first asset completed
-Inner archive sha256 (built): 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce
-Inner archive sha256 (artifact 9042509940): 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce (derived from an exact wrapper-digest match; direct extraction was blocked)
+isDraft / isPrerelease: false / false
+publishedAt: 2026-08-10T00:05:08Z
+Publish run: 31343436790 (workflow_dispatch, head 6408f7c) — job conclusion success
+Assets: teledrive_v4.5.zip (188695 bytes) + teledrive_manifest.json (378 bytes, schema 1)
+Inner archive sha256 (published, via byte-identity gate + release notes): 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce
 Inner archive size_bytes: 188695
-Manifest URL (public, unauthenticated fetch result): HTTP 404 Not Found after rollback
-Archive URL (public, unauthenticated fetch result): HTTP 404 Not Found after rollback
+Archive URL (public, unauthenticated): HTTP 302 → signed release-assets URL (zip)
+Manifest URL (public, unauthenticated): HTTP 302 → signed release-assets URL (json)
+CDN body fetch from sandbox: blocked by sandbox egress TLS reset (limitation, not a release defect)
 Docs commit / PR URL: recorded by the final GitHub handoff after the docs-only PR
-Operation error, if any: GitHub Actions storage download and GitHub release asset upload endpoints returned EOF from this sandbox; the release was rolled back safely
-Honest status: Code-complete candidate; release publication blocked by the GitHub upload endpoint
+Operation error, if any: none in the successful publication; earlier sandbox upload/CDN EOF resolved by publishing from a GitHub runner
+Honest status: Code-complete candidate; release published & verified; real Colab activation still untested (M15-T01)
 ```
 
-No `Colab-ready` claim is made. A subsequent execution with a GitHub connection that can reach
-`uploads.github.com` can rerun the release creation and asset upload using the staged manifest
-values above; no source changes are needed.
+No `Colab-ready` claim is made. The Cell-1 update gate now has a live, pinned, byte-verified public
+endpoint; consuming it from a real Colab runtime remains M15-T01 (owner-run).

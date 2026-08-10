@@ -2,6 +2,28 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M15-T08] — 2026-08-10 — نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` عبر GitHub Actions + تصحيح الـworkflow والتوثيق النهائي
+
+### Verified
+- الـrelease `pkg-2026.08.09-m15t07` منشور فعلًا (تحقق `gh release view` من هذه الجلسة): target `10b5d3b1b74542b2388983a2cc582c4906154982`، غير draft وغير prerelease، `publishedAt 2026-08-10T00:05:08Z`، وأصلان بحالة `uploaded`: `teledrive_v4.5.zip` (**188695 بايت** — مطابق حرفيًا) و`teledrive_manifest.json` (378 بايت، schema 1).
+- هوية البايتات مضمونة بسلسلة بوابات fail-closed داخل run النشر الناجح `31343436790`: `Gate - archive layout` (وجود `teledrive-v4.5/requirements.lock`) ثم `Gate - byte identity` (رفض النشر إن لم يقس الأرشيف بالضبط `sha256 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce` و`188695` بايت) ثم `Verify published assets` بعد النشر (target + أحجام الأصول عبر Releases API). نتيجة الـrun: `success`.
+- نقطتا التنزيل العامتان تجيبان **بلا مصادقة** (curl دون أي ترويسة اعتمادية): كلاهما `HTTP 302` → URL موقّع على `release-assets.githubusercontent.com` (مسار GitHub القياسي للأصول العامة؛ لم يعد 404 كما بعد الـrollback السابق ولا محجوبًا بمصادقة). الرصد المباشر لتنزيل البايتات من CDN غير متاح من sandbox التحقق الحالي (TLS reset على مضيف الأصول من egress الحاوية) — هوية البايتات مثبتة بالبوابات أعلاه لا بالتنزيل المباشر.
+- دليل الـrun: `gh run list --workflow=release.yml` → آخر run `31343436790` (workflow_dispatch على `6408f7c`) job `Publish pinned release pkg-2026.08.09-m15t07` = `success` (00:04:07→00:05:13Z).
+
+### Changed
+- `.github/workflows/release.yml` (**قبل هذه الجلسة**، مدموج سلفًا): إصلاح بوابة "release not already published" من heredoc (خطأ صياغة → exit 2) إلى صياغة shell-only بنفس دلالات fail-closed، وإضافة `GH_TOKEN: ${{ github.token }}` إلى job env (بدونها يخرج `gh` بكود 4) — PR #19 (مدموج `0d797cc`) ثم إعادة إضافة الملف النهائية بcommit المالك `6408f7c` لأن App الخاص بالوكيل لا يملك `workflows:write`.
+- ذاكرة: `docs/{TODO,KNOWN_ISSUES,ACTIVE_TASK,CHANGELOG,AI_HANDOFF}.md` + التقرير النهائي `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md` (أقسام النشر والتحقق بعد النشر + التقرير النهائي المحدَّث).
+
+### Delivery
+- Release: https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07
+- Run النشر: https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31343436790
+- تصحيحات الـworkflow: PR #19 (مدموج `0d797cc`) + commit `6408f7c` على main.
+- توثيق هذه الجلسة: PR docs-only من الفرع `arena/019fe8ff-drive-buddy-3579bf74`.
+
+### Not changed — عمدًا
+- في هذه الجلسة لم يُمس أي شيء خارج `docs/` و`python-package/docs/`: لا `.github/workflows/**` (بلا صلاحية `workflows:write` عند الوكيل، والتصحيحات مدموجة سلفًا)، لا `requirements.lock`/`bun.lock`، لا كود منتج ولا نوت‌بوك.
+- لا ادعاء `Colab-ready` — بوابة تحديث Cell 1 ستقرأ الآن نقطة الإصدار الحية، لكن التفعيل على Colab حقيقي لم يُختبر بعد (M15-T01 بيد المالك). الحالة الصادقة: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.`
+
 ## [M15-T07] — 2026-08-09 — إصلاح CI بعد الدمج (بناء حزمة main run 65) + مسار تحديث Colab دستوري آمن
 
 ### Verified

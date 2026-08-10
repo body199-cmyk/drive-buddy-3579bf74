@@ -21,7 +21,7 @@
 | M15-T03 | إصلاح تدفق تسجيل Telegram داخل Colab: لوحتا OTP و2FA الشرطيتان مع اختبارات contract | VERIFIED COMPLETE | PHASE_18 · `338 passed` · ui_binder/handlers/ui/flow_contract/no_credentials |
 | M15-T04 | تشخيص اتصال Telegram وإعادة بناء واجهة Colab (غرافيت RTL/LTR) مع الحفاظ على التحكم الحقيقي | VERIFIED COMPLETE | PHASE_19 · `360 passed` · ui/handlers/progress_tracker(RLock)/locale + 22 اختبار contract · بوابتا bun مؤجلتان لـ CI على الـPR (حاجز شبكة حاوية) |
 | M15-T07 | إصلاح CI بعد الدمج (بناء الحزمة) + مسار تحديث Colab دستوري آمن (manifest + sha256 + استبدال ذري، رفض أثناء تشغيل الـruntime) | VERIFIED COMPLETE | PHASE_M15_T07 · PR #15 · run 31329502070 success · main `10b5d3b` |
-| M15-T08 | نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` مع الأرشيف الداخلي وmanifest العام | BLOCKED | PHASE_M15_T08 · build/artifact bytes verified (`sha256 0179970f…`, `188695` bytes)؛ GitHub `uploads.github.com` أغلق اتصال رفع الأصول بـ`EOF`، فتم rollback آمن ولم يبقَ إصدار منشور |
+| M15-T08 | نشر الإصدار المثبَّت `pkg-2026.08.09-m15t07` مع الأرشيف الداخلي وmanifest العام | VERIFIED COMPLETE | PHASE_M15_T08 · run `31343436790` success (workflow_dispatch على `6408f7c`) · release منشور: target `10b5d3b` + أصلان `teledrive_v4.5.zip` (`sha256 0179970f…`/`188695` بايت ببوابة byte-identity fail-closed) و`teledrive_manifest.json` (378 بايت، schema 1) · نقطتا التنزيل العامتان تجيبان بلا مصادقة (302→CDN) |
 | M15-T11 | Scoped Telegram scan, media filters, and selection queue (message/range/latest/chat + media types + bounded) | VERIFIED COMPLETE | PHASE_M15_T11 · `419 passed` · `25/41 ready` · ui/services/scanner/handlers/locale + 16 new contract tests |
 
 ## ملاحظات أمان
