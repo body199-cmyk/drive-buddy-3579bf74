@@ -15,11 +15,24 @@ from .i18n import t
 from .logging_config import get_logger
 from .media_scanner import DEFAULT_SCAN_MODE
 from .redaction import redact, safe_exception
-from .services import rows_for
+from .services import candidate_rows_for, rows_for
 from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
 from .ui_binder import component_update
 from .ui_theme import theme_style_block
 from .utils import human_bytes
+
+# Gradio is required by the running app but must stay optional for non-UI
+# tests. ``SelectData`` is only used as a type hint so Gradio's event system
+# injects the clicked-cell payload into ``h_analyze_toggle_row``; the
+# placeholder class keeps import-time resolution working when gradio is
+# absent (handler-level tests call the handler with a plain fake instead).
+try:  # pragma: no cover - exercised in every real app run
+    import gradio as gr  # noqa: F401
+
+    SelectData = gr.SelectData
+except Exception:  # pragma: no cover - non-UI environments
+    class SelectData:  # type: ignore[no-redef]
+        """Placeholder when gradio is not installed."""
 
 
 def status_ok(message: str) -> str:
@@ -28,6 +41,11 @@ def status_ok(message: str) -> str:
 
 def status_error(message: str) -> str:
     return f"⚠️ {message}"
+
+
+def chip_html(value: str, state: str = "warn") -> str:
+    """Top-bar chip markup. Colors come only from ui_theme CSS variables."""
+    return f'<span class="td-chip" data-state="{state}">{value}</span>'
 
 _log = get_logger("teledrive.handlers")
 
@@ -77,15 +95,24 @@ ERROR_ARITY: dict[str, int] = {
     "drive.reconnect": 2,
     "drive.status": 2,
     "drive.list_folders": 2,
-    "drive.create_folder": 3,
-    "drive.select_folder": 3,
+    # DOC-39 §4: one folder truth broadcast to every panel + the top chip:
+    # (own choice, own current, own message, top chip,
+    #  other currents x3, other messages x3).
+    "drive.create_folder": 10,
+    "drive.select_folder": 10,
     "drive.refresh_quota": 2,
-    "analyze.run": 2,
+    # DOC-39 §5 selection stage: (analyze_message, candidates_table,
+    # selection_preview, enqueue_btn, group_choice).
+    "analyze.run": 5,
     "analyze.set_mode": 4,
-    "analyze.apply_filters": 2,
-    "analyze.select_all": 2,
-    "analyze.clear_selection": 2,
-    "analyze.enqueue_selected": 2,
+    "analyze.apply_filters": 5,
+    "analyze.select_all": 5,
+    "analyze.clear_selection": 5,
+    "analyze.select_range": 5,
+    "analyze.toggle_row": 5,
+    "analyze.select_group": 5,
+    # (analyze_message, queue_table, queue_status, selection_preview, enqueue_btn)
+    "analyze.enqueue_selected": 5,
     "logs.refresh": 2,       # (logs_text, status)
     "logs.search": 2,        # (logs_text, status)
     "logs.download": 2,      # (file_component, status)
@@ -120,6 +147,12 @@ class Handlers:
             # re-derived from the LIVE state machine, not from the failed call.
             state = getattr(getattr(self.ctx, "telegram_auth", None), "state", "")
             return (message, None, *self._telegram_panels(state))
+        if action_id == "analyze.enqueue_selected":
+            # A refused enqueue (empty selection / no folder / disk / quota)
+            # must not blank the queue table: keep every panel live.
+            header, queue_rows = self._queue_view(self.ctx.queue_manager.snapshot())
+            rows, preview, enqueue_update, _groups = self._selection_view()
+            return message, queue_rows, header, preview, enqueue_update
         arity = ERROR_ARITY.get(action_id, DEFAULT_QUEUE_ARITY)
         if arity <= 1:
             return message
@@ -147,14 +180,50 @@ class Handlers:
         if status.can_resend_in:
             detail += f" · {t('btn.resend_code')} {status.can_resend_in}s"
         code_panel, password_panel = self._telegram_panels(status.state)
-        return detail, label, code_panel, password_panel
+        return (
+            detail,
+            chip_html(label, "ok" if status.authorized else "err"),
+            code_panel,
+            password_panel,
+        )
 
     def _drive_view(self, status) -> tuple[str, str]:
         label = t("status.connected") if status.connected else t("status.disconnected")
         detail = f"{label} · {status.state}"
         if status.account_label:
             detail += f" · {status.account_label}"
-        return detail, label
+        return detail, chip_html(label, "ok" if status.connected else "err")
+
+    # ---- DOC-39 §5 selection stage (shared renderers) ----
+
+    def _selection_view(self) -> tuple[list, str, dict, dict]:
+        """(candidate_rows, preview_text, enqueue_update, group_update).
+
+        Everything derives from LIVE context state — the candidates, the
+        selection, and the persisted Drive target. Empty state renders as an
+        empty table and a disabled enqueue button; nothing is fabricated.
+        """
+        ctx = self.ctx
+        sel = ctx.selection
+        visible = sel.visible()
+        rows = candidate_rows_for(visible, sel.selected_ids)
+        summary = sel.summary()
+        ref = ctx.drive_folders.selected()
+        folder_label = (ref.name or ref.id) if ref else t("msg.no_folder_selected")
+        preview = (
+            f"{t('sel.count')}: {summary['count']} · "
+            f"{t('sel.total_size')}: {human_bytes(summary['total_bytes'])} · "
+            f"{t('sel.required_space')}: {human_bytes(summary['total_bytes'])} · "
+            f"{t('sel.target_folder')}: {folder_label}"
+        )
+        can_enqueue = summary["count"] > 0 and ref is not None
+        groups = sel.groups()
+        return (
+            rows,
+            preview,
+            component_update(interactive=can_enqueue),
+            component_update(choices=groups),
+        )
 
     def _queue_view(self, snapshot: dict) -> tuple[str, list]:
         counts = ", ".join(f"{t('state.' + k)}: {v}" for k, v in (snapshot.get("counts") or {}).items())
@@ -220,20 +289,45 @@ class Handlers:
         # would be misread as the *selected value*, leaving the menu empty.
         return t("msg.folders_loaded"), component_update(choices=choices)
 
+    def _folder_broadcast(self, choice_update: dict, name: str, message: str) -> tuple:
+        """DOC-39 §4: one folder truth, propagated to every visible panel.
+
+        Return shape (10 values) mirrors the wiring in ui.py:
+        (own choice, own current, own message, top chip,
+         other-1 current, other-2 current, other-3 current,
+         other-1 message, other-2 message, other-3 message).
+        """
+        return (
+            choice_update,
+            name,
+            message,
+            chip_html(name or t("msg.no_folder_selected"), "ok"),
+            name, name, name,
+            message, message, message,
+        )
+
     @action("drive.create_folder")
     def h_drive_create_folder(self, name: str, parent_id: str = "root"):
         folder = self.call("drive.create_folder", name, (parent_id or "root").strip() or "root")
         # Creation selects immediately: the persisted destination is always its ID,
         # while the name is strictly a display value.
         choice = f"{folder.name} :: {folder.id}"
-        return component_update(choices=[choice], value=choice), folder.name, t("msg.folder_created")
+        return self._folder_broadcast(
+            component_update(choices=[choice], value=choice),
+            folder.name,
+            t("msg.folder_created"),
+        )
 
     @action("drive.select_folder")
     def h_drive_select_folder(self, choice: str):
         folder_id = str(choice or "").split("::")[-1].strip()
         folder = self.call("drive.select_folder", folder_id)
         selected = f"{folder.name} :: {folder.id}"
-        return component_update(value=selected), folder.name, t("msg.folder_selected")
+        return self._folder_broadcast(
+            component_update(value=selected),
+            folder.name,
+            t("msg.folder_selected"),
+        )
 
     @action("drive.refresh_quota")
     def h_drive_refresh_quota(self):
@@ -283,7 +377,7 @@ class Handlers:
             media_types or ["all"],
         )
         summary = f"{result.total} · {human_bytes(result.total_bytes)} · {result.scope}"
-        return summary, result.rows
+        return summary, *self._selection_view()
 
     @action("analyze.set_mode")
     def h_analyze_set_mode(self, mode: str):
@@ -309,22 +403,50 @@ class Handlers:
             "analyze.apply_filters", media_types, extensions, min_size_mb, max_size_mb,
             date_from, date_to, include, exclude,
         )
-        return f"{len(items)}", rows_for(items)
+        return f"{len(items)}", *self._selection_view()
 
     @action("analyze.select_all")
     def h_analyze_select_all(self):
         selected = self.call("analyze.select_all")
-        return f"{t('btn.select_all')}: {len(selected)}", rows_for(self.ctx.selection.visible())
+        return f"{t('btn.select_all')}: {len(selected)}", *self._selection_view()
 
     @action("analyze.clear_selection")
     def h_analyze_clear_selection(self):
         self.call("analyze.clear_selection")
-        return f"{t('btn.clear_selection')}: 0", rows_for(self.ctx.selection.visible())
+        return f"{t('btn.clear_selection')}: 0", *self._selection_view()
+
+    @action("analyze.toggle_row")
+    def h_analyze_toggle_row(self, evt: SelectData):
+        """Manual row selection: the clicked table row toggles its candidate.
+
+        ``evt.index`` is the (row, col) cell index Gradio sends on
+        ``Dataframe.select``; only the row matters. The table re-renders with
+        the marker cell (☑/☐) reflecting the live selection state.
+        """
+        index = getattr(evt, "index", None)
+        row = index[0] if isinstance(index, (tuple, list)) else index
+        self.call("analyze.toggle_row", int(row or 0))
+        count = len(self.ctx.selection.selected_ids)
+        return f"{t('btn.toggle_row')}: {count}", *self._selection_view()
+
+    @action("analyze.select_range")
+    def h_analyze_select_range(self, start_id, end_id):
+        selected = self.call("analyze.select_range", start_id, end_id)
+        return f"{t('btn.select_range')}: {len(selected)}", *self._selection_view()
+
+    @action("analyze.select_group")
+    def h_analyze_select_group(self, choice: str):
+        chat_id = str(choice or "").split("::")[-1].strip()
+        selected = self.call("analyze.select_group", chat_id)
+        return f"{t('btn.select_group')}: {len(selected)}", *self._selection_view()
 
     @action("analyze.enqueue_selected")
     def h_analyze_enqueue_selected(self):
         items = self.call("analyze.enqueue_selected")
-        return f"{t('btn.enqueue_selected')}: {len(items)}", self.queue_rows()
+        header, queue_rows = self._queue_view(self.ctx.queue_manager.snapshot())
+        msg = f"{t('btn.enqueue_selected')}: {len(items)}"
+        rows, preview, enqueue_update, _groups = self._selection_view()
+        return msg, queue_rows, header, preview, enqueue_update
 
     # ---- Transfers ----
 
@@ -486,25 +608,49 @@ def shell_seed(ctx) -> dict[str, Any]:
     Disconnected only when the state machine really says so).
     """
     handlers = ctx.handlers
-    telegram_detail, telegram_label, code_panel, password_panel = handlers._telegram_view(
+    telegram_detail, telegram_chip, code_panel, password_panel = handlers._telegram_view(
         ctx.telegram_auth.status()
     )
-    drive_detail, drive_label = handlers._drive_view(ctx.drive_auth.status())
+    drive_detail, drive_chip = handlers._drive_view(ctx.drive_auth.status())
     queue_header, queue_rows = handlers._queue_view(ctx.queue_manager.snapshot())
     quota_last = ctx.drive_quota.last or None
     quota_line, quota_payload = _quota_view(quota_last) if quota_last else ("", None)
+
+    # DOC-39 §4: the top folder chip always reads the ONE persisted folder ID.
+    dr_connected = ctx.drive_auth.connected
+    folder_name = ctx.drive_folders.current_folder_name() if dr_connected else ""
+    if not dr_connected:
+        folder_label, folder_state = t("status.disconnected"), "err"
+    elif folder_name:
+        folder_label, folder_state = folder_name, "ok"
+    else:
+        folder_label, folder_state = t("msg.no_folder_selected"), "warn"
+
+    # DOC-39 §5: selection stage seeds — all derived from live context.
+    rows, preview, enqueue_update, group_update = handlers._selection_view()
+    summary = ctx.selection.summary()
+    folder_ref = ctx.drive_folders.selected()
     return {
         "language": ctx.ui_state.language,
         "theme": ctx.ui_state.extra.get("theme", "dark"),
         "telegram_detail": telegram_detail,
-        "telegram_label": telegram_label,
+        "telegram_chip": telegram_chip,
+        "telegram_connected": ctx.telegram_auth.authorized,
         "otp_visible": bool(code_panel.get("visible")),
         "password_visible": bool(password_panel.get("visible")),
         "drive_detail": drive_detail,
-        "drive_label": drive_label,
+        "drive_chip": drive_chip,
+        "drive_connected": dr_connected,
+        "folder_chip": chip_html(folder_label, folder_state),
+        "folder_label": folder_label,
         "queue_header": queue_header,
         "queue_rows": queue_rows,
-        "analyze_rows": rows_for(ctx.selection.visible()),
+        "analyze_rows": rows,
+        "selection_count": summary["count"],
+        "selection_size": human_bytes(summary["total_bytes"]),
+        "selection_preview": preview,
+        "enqueue_allowed": bool(summary["count"] > 0 and folder_ref is not None),
+        "group_choices": [label for label, _value in (group_update.get("choices") or [])],
         "analyze_mode": DEFAULT_SCAN_MODE,
         "analyze_fields": ctx.scanner.mode_fields(DEFAULT_SCAN_MODE),
         "dashboard": ctx.stats.dashboard(),

@@ -250,6 +250,38 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         tested=True,
         proof_test="tests/test_selection.py::test_clear_selection_preserves_items_and_visible_rows",
     ),
+    # DOC-39 (M18-T01): selection before transfer — row/range/group selection.
+    # All three are pure in-memory selection; enqueue stays explicit.
+    ActionSpec(
+        action_id="analyze.toggle_row",
+        handler_name="h_analyze_toggle_row",
+        service_path="selection.toggle_by_index",
+        label_key="btn.toggle_row",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_file_selection_flow.py::test_manual_row_toggle_updates_selection",
+    ),
+    ActionSpec(
+        action_id="analyze.select_range",
+        handler_name="h_analyze_select_range",
+        service_path="selection.select_range",
+        label_key="btn.select_range",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_file_selection_flow.py::test_range_from_to_valid_invalid_and_cap",
+    ),
+    ActionSpec(
+        action_id="analyze.select_group",
+        handler_name="h_analyze_select_group",
+        service_path="selection.select_group_by_chat",
+        label_key="btn.select_group",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_file_selection_flow.py::test_group_selection_selects_all_in_chat",
+    ),
     ActionSpec(
         action_id="analyze.enqueue_selected",
         handler_name="h_analyze_enqueue_selected",

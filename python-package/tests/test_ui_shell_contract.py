@@ -127,11 +127,18 @@ def test_analyze_outputs_never_include_the_queue_table(ctx):
 
     def fake_call(action_id, *args, **kwargs):
         rows = [["id1", "a.bin", "document", "1.0 B", t("state.Pending"), "0%", 0]]
+        # the fake scan still populates the live selection, like the real one
+        ctx.selection.set_candidates([
+            MediaItem(id="id1", safe_name="a.bin", media_type="document",
+                      size_bytes=1, message_id=1)
+        ])
         return SimpleNamespace(total=1, total_bytes=1, scope="auto", rows=rows)
 
     ctx.handlers.call = fake_call  # type: ignore[assignment]
-    summary, rows = ctx.handlers.h_analyze_run("https://t.me/x/1", "auto")
-    assert rows and rows[0][0] == "id1"
+    summary, rows, preview, enqueue_update, _groups = ctx.handlers.h_analyze_run(
+        "https://t.me/x/1", "auto"
+    )
+    assert rows and rows[0][0] == "☐" and rows[0][2] == "a.bin"
     assert rows != ctx.handlers.queue_rows() or not ctx.handlers.queue_rows()
 
 
@@ -190,7 +197,7 @@ def test_panels_close_after_authorization(ctx, auth):
     demo, refs = _render(ctx, "ar")
     assert refs["code_panel"].visible is False
     assert refs["password_panel"].visible is False
-    assert refs["telegram_chip"].value == t("status.connected")
+    assert t("status.connected") in refs["telegram_chip"].value
 
 
 # ---- RTL/LTR switch preserves runtime state ----
@@ -219,12 +226,15 @@ def test_language_switch_preserves_selection_rows(ctx):
     demo_en, refs_en = _render(ctx, "en")
     rows_ar = refs_ar["candidates_table"].value["data"]
     rows_en = refs_en["candidates_table"].value["data"]
-    # the SAME underlying item survives re-render; only the state label's
-    # localization differs (بانتظار vs Pending), which is the point of i18n.
+    # DOC-39 §5.2 column layout: تحديد · معرّف الرسالة · الملف · النوع ·
+    # الحجم · المجموعة · التاريخ · الحالة. The SAME underlying item survives
+    # re-render; only the state label's localization differs (بانتظار vs
+    # Pending), which is the point of i18n.
     assert len(rows_ar) == len(rows_en) == 1
-    assert rows_ar[0][0] == rows_en[0][0] == item.id
-    assert rows_ar[0][1] == rows_en[0][1] == "clip.mp4"
-    assert rows_ar[0][4] != rows_en[0][4]
+    assert len(rows_ar[0]) == len(rows_en[0]) == len(ui.CANDIDATE_HEADERS)
+    assert rows_ar[0][0] == rows_en[0][0] == "☐"  # not selected in both
+    assert rows_ar[0][2] == rows_en[0][2] == "clip.mp4"
+    assert rows_ar[0][7] != rows_en[0][7]
 
 
 # ---- no fake data anywhere on first render ----
@@ -232,8 +242,8 @@ def test_language_switch_preserves_selection_rows(ctx):
 
 def test_fresh_render_shows_no_fake_rows_logs_or_connected_states(ctx):
     demo, refs = _render(ctx, "ar")
-    assert refs["telegram_chip"].value == t("status.disconnected")
-    assert refs["drive_chip"].value == t("status.disconnected")
+    assert t("status.disconnected") in refs["telegram_chip"].value
+    assert t("status.disconnected") in refs["drive_chip"].value
     assert refs["queue_table"].value["data"] == []
     assert refs["candidates_table"].value["data"] == []
     assert t("status.disconnected") in refs["telegram_card"].value

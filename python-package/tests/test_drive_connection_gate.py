@@ -146,7 +146,7 @@ def test_connect_action_reports_connected_only_after_about_get(ctx):
     assert isinstance(out, tuple) and len(out) == 2
     detail, label = out
     assert service.executed == ["about.get"], "Connected before about().get() is forbidden"
-    assert label == t("status.connected")
+    assert t("status.connected") in label
     assert "user@example.com" in detail
     assert drive.state == CONNECTED and drive.connected is True
 
@@ -193,7 +193,7 @@ def test_reconnect_action_clears_stale_service_and_auth_state(ctx):
     detail, label = ctx.handlers.h_drive_reconnect()
     assert drive2.service is replacement and drive2.service is not old2
     assert drive2.state == CONNECTED and drive2.connected is True
-    assert label == t("status.connected")
+    assert t("status.connected") in label
     assert replacement.executed == ["about.get"], "reconnect must re-run the gate"
 
 
@@ -209,7 +209,7 @@ def test_status_action_is_read_only_and_never_calls_the_service(ctx):
     assert isinstance(first, tuple) and len(first) == 2
     assert first == second, "status must be a pure read of cached state"
     assert service.executed == [], "status must never call the Drive API"
-    assert first[1] == t("status.connected")
+    assert t("status.connected") in first[1]  # second value is the chip markup
     assert "Traceback" not in str(first)
 
 
@@ -247,7 +247,9 @@ def test_all_seven_drive_actions_resolve_from_the_context(ctx):
 
 def test_drive_handler_output_arities_match_the_folder_sync_contract():
     for action_id in DRIVE_ACTIONS:
-        expected = 3 if action_id in {"drive.create_folder", "drive.select_folder"} else 2
+        # DOC-39 §4: create/select broadcast one folder truth to all four
+        # panels + the top chip (10 outputs); everything else stays at 2.
+        expected = 10 if action_id in {"drive.create_folder", "drive.select_folder"} else 2
         assert ERROR_ARITY.get(action_id) == expected, action_id
 
 

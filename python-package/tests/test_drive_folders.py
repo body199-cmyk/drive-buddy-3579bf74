@@ -113,20 +113,27 @@ def test_create_folder_action_validates_name_and_parent(ctx):
 
     # Empty / whitespace names are refused locally with the localized key.
     for bad in ("", "   "):
-        message, choice, current = ctx.handlers.h_drive_create_folder(bad, "root")
-        assert choice is None and current is None
+        message, *rest = ctx.handlers.h_drive_create_folder(bad, "root")
+        assert all(v is None for v in rest)
         assert t("err.bad_folder_name") in message
     assert service.created_count == 0, "no Drive call may fire for an invalid name"
 
     # A real name creates the folder under the given parent, id-authoritative.
-    choices, current, message = ctx.handlers.h_drive_create_folder("Backups", "root")
+    # DOC-39 §4 broadcast: (own choice, own current, own message, top chip,
+    # other currents x3, other messages x3).
+    result = ctx.handlers.h_drive_create_folder("Backups", "root")
+    assert len(result) == 10
+    choices, current, message, top_chip, *rest = result
     assert message == t("msg.folder_created")
     assert choices["value"] == "Backups :: id_new"
     assert current == "Backups"
+    # the SAME folder truth reaches the top chip and all three other panels
+    assert top_chip == f'<span class="td-chip" data-state="ok">Backups</span>'
+    assert rest == ["Backups"] * 3 + [t("msg.folder_created")] * 3
     body = [c for c in service.calls if c[0] == "create"][0][1]
     assert body["mimeType"] == FOLDER_MIME
     assert body["parents"] == ["root"]
-    assert ERROR_ARITY["drive.create_folder"] == 3
+    assert ERROR_ARITY["drive.create_folder"] == 10
 
 
 def test_select_folder_action_validates_mimetype_and_stores_the_id(ctx):
@@ -134,22 +141,26 @@ def test_select_folder_action_validates_mimetype_and_stores_the_id(ctx):
     assert ctx.handlers.h_drive_select_folder.action_id == "drive.select_folder"
 
     # A non-folder target is refused with the localized key; nothing persists.
-    message, choice, stored = ctx.handlers.h_drive_select_folder("notes.txt :: id_plain")
-    assert choice is None and stored is None
+    message, *rest = ctx.handlers.h_drive_select_folder("notes.txt :: id_plain")
+    assert all(v is None for v in rest)
     assert t("err.bad_folder_id") in message
     assert db.get_setting("drive_folder_id", "") == ""
 
     # A real folder stores the ID as the source of truth (name is display-only).
-    choice, current, message = ctx.handlers.h_drive_select_folder("Alpha :: id_alpha")
+    result = ctx.handlers.h_drive_select_folder("Alpha :: id_alpha")
+    assert len(result) == 10
+    choice, current, message, top_chip, *rest = result
     assert message == t("msg.folder_selected")
     assert choice["value"] == "Alpha :: id_alpha"
     assert current == "Alpha"
+    assert top_chip == f'<span class="td-chip" data-state="ok">Alpha</span>'
+    assert rest == ["Alpha"] * 3 + [t("msg.folder_selected")] * 3
     get_calls = [c for c in service.calls if c[0] == "get"]
     assert get_calls and get_calls[-1][1] == "id_alpha"
     assert db.get_setting("drive_folder_id", "") == "id_alpha"
     assert db.get_setting("drive_folder_name", "") == "Alpha"
     assert ctx.config.drive_folder_id == "id_alpha", "the ID, never the name, is persisted"
-    assert ERROR_ARITY["drive.select_folder"] == 3
+    assert ERROR_ARITY["drive.select_folder"] == 10
 
 
 def test_no_credentials_or_service_objects_reach_storage_or_logs(ctx):

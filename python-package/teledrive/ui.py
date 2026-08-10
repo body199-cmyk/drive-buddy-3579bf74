@@ -30,6 +30,11 @@ TABLE_HEADERS = (
     "col.id", "col.file", "col.type", "col.size",
     "col.state", "col.progress", "col.attempts",
 )
+# DOC-39 §5.2: candidates table — selection marker is part of the table value.
+CANDIDATE_HEADERS = (
+    "col.select", "col.msg_id", "col.file", "col.type",
+    "col.size", "col.group", "col.date", "col.state",
+)
 # Canonical media filter values. Each label is a direct t("media.<name>")
 # call so static contract checks that grep for the literal translation
 # markers still see them, and so do the localisation/extraction tools.
@@ -159,35 +164,31 @@ def _render_shell(
     def chip(val: str, state: str = "warn") -> str:
         return _status_chip(val or t("status.disconnected"), state)
 
-    tg_ok = bool(seed.get("telegram_label") and t("status.connected") in seed["telegram_label"])
-    dr_ok = bool(seed.get("drive_label") and t("status.connected") in seed["drive_label"])
+    tg_ok = bool(seed.get("telegram_connected"))
+    dr_ok = bool(seed.get("drive_connected"))
 
     with gr.Column(elem_classes=["td-root", direction]):
-        # ===== Top status bar (real chips from ctx) =====
+        # ===== Top status bar (real chips from ctx, styled HTML) =====
         with gr.Row(elem_classes=["td-topbar"]):
             gr.HTML(
                 f'<div class="td-brand"><strong>TeleDrive</strong> '
                 f'<code>v{ctx.config.version}</code></div>',
             )
-            telegram_chip = gr.Textbox(
-                value=seed["telegram_label"], show_label=False, interactive=False,
-                max_lines=1, elem_classes=["td-chip"],
+            telegram_chip = gr.HTML(
+                value=seed["telegram_chip"], show_label=False,
+                elem_classes=["td-chip-host"],
             )
-            drive_chip = gr.Textbox(
-                value=seed["drive_label"], show_label=False, interactive=False,
-                max_lines=1, elem_classes=["td-chip"],
+            drive_chip = gr.HTML(
+                value=seed["drive_chip"], show_label=False,
+                elem_classes=["td-chip-host"],
             )
-            default_folder_label = (
-                ctx.drive_folders.current_folder_name()
-                if dr_ok else t("status.disconnected")
+            folder_chip = gr.HTML(
+                value=seed["folder_chip"], show_label=False,
+                elem_classes=["td-chip-host"],
             )
-            folder_chip = gr.Textbox(
-                value=default_folder_label, show_label=False, interactive=False,
-                max_lines=1, elem_classes=["td-chip"],
-            )
-            engine_chip = gr.Textbox(
-                value=t("dash.engine_colab"), show_label=False, interactive=False,
-                max_lines=1, elem_classes=["td-chip"],
+            engine_chip = gr.HTML(
+                value=chip(t("dash.engine_colab"), "ok"), show_label=False,
+                elem_classes=["td-chip-host"],
             )
             lang_btn = binder.button(gr, "settings.toggle_language", variant="secondary")
             top_zip_btn = binder.button(gr, "export.build_zip", variant="secondary")
@@ -213,6 +214,7 @@ def _render_shell(
 
                 # Gather well-known refs required by contract tests.
                 refs.update(
+                    theme_host=theme_host,
                     telegram_chip=telegram_chip,
                     drive_chip=drive_chip,
                     folder_chip=folder_chip,
@@ -253,8 +255,14 @@ def _render_shell(
                     colab_cells_btn=_export_refs["colab_cells_btn"],
                     colab_status=_export_refs["colab_status"],
                     folder_dash=_dash_refs["folder_picker"],
+                    folder_transfer=_queue_refs["folder_picker"],
                     folder_settings=_set_refs["folder_picker"],
                     folder_conn=_conn_refs["folder_picker"],
+                    selection_preview=_analyze_refs["selection_preview"],
+                    range_start=_analyze_refs["range_start"],
+                    range_end=_analyze_refs["range_end"],
+                    group_choice=_analyze_refs["group_choice"],
+                    enqueue_btn=_analyze_refs["enqueue_btn"],
                 )
 
             # ===== Right navigation rail =====
@@ -279,6 +287,7 @@ def _render_shell(
             export=_export_refs, lang=lang_state, theme=theme_host,
             rail_buttons=rail_buttons, active_tab=active_tab,
             telegram_chip=telegram_chip, drive_chip=drive_chip,
+            folder_chip=folder_chip,
             top_zip_btn=top_zip_btn, lang_btn=lang_btn,
         )
         binder.assert_complete()
@@ -290,11 +299,23 @@ def _render_shell(
 # Section builders. Each returns the component refs its wiring block needs.
 # ---------------------------------------------------------------------------
 
-def _render_folder_picker(ctx, binder, suffix: str, lang: str) -> dict[str, Any]:
-    """One Drive destination panel reused by dashboard, settings and connection."""
+def _render_folder_picker(ctx, binder, suffix: str, lang: str, open: bool = False) -> dict[str, Any]:
+    """One Drive destination panel reused by dashboard, transfers, settings and connection.
+
+    DOC-39 §4 rules: the panel is ALWAYS visible; when Drive is disconnected
+    every control is disabled and the message says to connect first (no fake
+    folder list). The current-folder box shows the persisted ID's display name
+    or «لم يتم اختيار مجلد» — it never invents a name.
+    """
     connected = bool(getattr(getattr(ctx, "drive_auth", None), "connected", False))
     reason = "" if connected else t("err.drive_not_ready")
-    with gr.Accordion(t("form.drive_folder"), open=False, elem_id=f"td-folder-{suffix}"):
+    # The persisted folder ID (with its Drive-derived name) is the ONE truth,
+    # shown even while disconnected — it is real state, never fabricated.
+    folder_name = ctx.drive_folders.current_folder_name()
+    current_value = folder_name if folder_name else (
+        t("msg.no_folder_selected") if connected else "—"
+    )
+    with gr.Accordion(t("form.drive_folder"), open=open, elem_id=f"td-folder-{suffix}"):
         parent_id = gr.Textbox(label=t("form.parent_folder"), value="root", interactive=connected)
         list_btn = binder.button(gr, "drive.list_folders", interactive=connected)
         choice = gr.Dropdown(choices=[], label=t("form.folder"), allow_custom_value=True,
@@ -302,7 +323,7 @@ def _render_folder_picker(ctx, binder, suffix: str, lang: str) -> dict[str, Any]
         new_name = gr.Textbox(label=t("form.new_folder"), interactive=connected)
         create_btn = binder.button(gr, "drive.create_folder", interactive=connected)
         select_btn = binder.button(gr, "drive.select_folder", interactive=connected)
-        current = gr.Textbox(value=ctx.drive_folders.current_folder_name(),
+        current = gr.Textbox(value=current_value,
                              label=t("form.selected_folder"), interactive=False)
         message = gr.Textbox(value=reason, label=t("form.folder"), interactive=False)
     return {"suffix": suffix, "parent_id": parent_id, "list_btn": list_btn,
@@ -329,7 +350,7 @@ def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
         dashboard_json = gr.JSON(
             label=t("dash.stats"), value=seed.get("dashboard", {}),
         )
-        folder_picker = _render_folder_picker(ctx, binder, "dash", t("common.language"))
+        folder_picker = _render_folder_picker(ctx, binder, "dash", t("common.language"), open=True)
     return {
         "telegram_card": telegram_card, "drive_card": drive_card,
         "queue_card": queue_card, "dash_btn": dash_btn,
@@ -339,6 +360,9 @@ def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
 
 def _section_transfers(ctx, binder, seed) -> dict[str, Any]:
     with gr.Tab(t("nav.queue")):
+        # DOC-39 §4: the Drive target panel lives HERE, inside transfers —
+        # the same single source of truth as dashboard/settings/connection.
+        folder_picker = _render_folder_picker(ctx, binder, "transfer", t("common.language"), open=True)
         gr.Markdown(f"### {t('transfer.controls')}", elem_classes=["td-section-title"])
         with gr.Row():
             start_btn = binder.button(gr, "queue.start_selected", variant="primary", scale=2)
@@ -380,7 +404,7 @@ def _section_transfers(ctx, binder, seed) -> dict[str, Any]:
         "queue_table": queue_table, "concurrency_chip": concurrency_chip,
         "item_id": item_id, "pause_item_btn": pause_item_btn,
         "resume_item_btn": resume_item_btn, "stop_item_btn": stop_item_btn,
-        "retry_item_btn": retry_item_btn,
+        "retry_item_btn": retry_item_btn, "folder_picker": folder_picker,
     }
 
 
@@ -434,13 +458,37 @@ def _section_analyze(ctx, binder, seed) -> dict[str, Any]:
                     visible=seed["analyze_fields"]["limit"],
                 )
             analyze_message = gr.Textbox(label=t("analyze.result"), interactive=False)
+        # DOC-39 §5: real selection stage — candidates table, preview, and the
+        # explicit enqueue gate. Row clicks toggle the selection marker, which
+        # is part of the table value (candidate_rows_for), not a decorative
+        # button.
+        with gr.Group(elem_classes=["td-card"]):
+            gr.Markdown(t("sel.hint"), elem_classes=["td-section-title"])
             candidates_table = gr.Dataframe(
-                headers=_headers(),
+                headers=[t(key) for key in CANDIDATE_HEADERS],
                 value=seed["analyze_rows"] if seed["analyze_rows"] else None,
-                interactive=False, wrap=True, elem_classes=["td-table"],
+                # interactive=True keeps the cell/row .select event alive in
+                # the browser; the table chrome is neutralized via CSS and
+                # cell edits are display-only (nothing reads them back).
+                interactive=True, wrap=True, elem_classes=["td-table"],
+                elem_id="td-candidates",
             )
             if not seed["analyze_rows"]:
                 gr.Markdown(f"**{t('analyze.empty')}**", elem_classes=["td-empty"])
+            selection_preview = gr.Textbox(
+                value=seed["selection_preview"], label=t("sel.preview"),
+                interactive=False,
+            )
+            with gr.Row():
+                range_start = gr.Number(label=t("form.range_from"), precision=0)
+                range_end = gr.Number(label=t("form.range_to"), precision=0)
+                select_range_btn = binder.button(gr, "analyze.select_range")
+                gr.Markdown(t("sel.range_cap"), elem_classes=["td-ltr"])
+            with gr.Row():
+                group_choice = gr.Dropdown(
+                    choices=seed["group_choices"], label=t("form.group"),
+                )
+                select_group_btn = binder.button(gr, "analyze.select_group")
         with gr.Accordion(t("form.filters"), open=False):
             filter_media_types = gr.CheckboxGroup(
                 choices=[
@@ -468,12 +516,18 @@ def _section_analyze(ctx, binder, seed) -> dict[str, Any]:
         with gr.Row():
             select_all_btn = binder.button(gr, "analyze.select_all")
             clear_selection_btn = binder.button(gr, "analyze.clear_selection")
-            enqueue_btn = binder.button(gr, "analyze.enqueue_selected", variant="primary")
+            enqueue_btn = binder.button(
+                gr, "analyze.enqueue_selected", variant="primary",
+                interactive=bool(seed["enqueue_allowed"]),
+            )
     return {
         "link": link, "analyze_btn": analyze_btn, "mode": mode,
         "media_types": media_types, "message_id": message_id, "start_id": start_id,
         "end_id": end_id, "limit": limit, "analyze_message": analyze_message,
-        "candidates_table": candidates_table,
+        "candidates_table": candidates_table, "selection_preview": selection_preview,
+        "range_start": range_start, "range_end": range_end,
+        "select_range_btn": select_range_btn, "group_choice": group_choice,
+        "select_group_btn": select_group_btn,
         "filter_media_types": filter_media_types, "extensions": extensions,
         "min_size": min_size, "max_size": max_size, "date_from": date_from,
         "date_to": date_to, "include": include, "exclude": exclude,
@@ -637,7 +691,7 @@ def _section_export(ctx, binder, seed) -> dict[str, Any]:
 def _bind_actions(
     ctx, binder, *, dash, queue, analyze, conn, logs, sets, export,
     lang, theme, rail_buttons, active_tab, telegram_chip, drive_chip,
-    top_zip_btn, lang_btn,
+    folder_chip, top_zip_btn, lang_btn,
 ) -> None:
     # Language toggle re-renders the shell via gr.render.
     binder.wire(lang_btn, "settings.toggle_language", [], [lang], event="click")
@@ -664,20 +718,38 @@ def _bind_actions(
     binder.wire(conn["drive_connect_btn"], "drive.connect", [], dr_outputs)
     binder.wire(conn["drive_reconnect_btn"], "drive.reconnect", [], dr_outputs)
     binder.wire(conn["drive_status_btn"], "drive.status", [], dr_outputs)
-    # The same named handlers back all three visible folder panels.
-    for picker in (dash["folder_picker"], sets["folder_picker"], conn["folder_picker"]):
+    # The same named handlers back all four visible folder panels; create and
+    # select broadcast the ONE folder truth to every panel + the top chip
+    # (DOC-39 §4): (own choice, own current, own message, top chip,
+    # other currents x3, other messages x3).
+    _pickers = (
+        dash["folder_picker"], queue["folder_picker"],
+        sets["folder_picker"], conn["folder_picker"],
+    )
+    for picker in _pickers:
         binder.wire(picker["list_btn"], "drive.list_folders", [picker["parent_id"]],
                     [picker["message"], picker["choice"]])
+        others = [q for q in _pickers if q is not picker]
+        folder_out = (
+            [picker["choice"], picker["current"], picker["message"], folder_chip]
+            + [q["current"] for q in others]
+            + [q["message"] for q in others]
+        )
         binder.wire(picker["create_btn"], "drive.create_folder",
-                    [picker["new_name"], picker["parent_id"]],
-                    [picker["choice"], picker["current"], picker["message"]])
+                    [picker["new_name"], picker["parent_id"]], folder_out)
         binder.wire(picker["select_btn"], "drive.select_folder", [picker["choice"]],
-                    [picker["choice"], picker["current"], picker["message"]])
+                    folder_out)
     binder.wire(conn["quota_btn"], "drive.refresh_quota", [],
                 [conn["quota_line"], conn["quota_json"]])
 
-    # Analyze
-    a_out = [analyze["analyze_message"], analyze["candidates_table"]]
+    # Analyze — DOC-39 §5 selection stage outputs shared by every selection
+    # action: (analyze_message, candidates_table, selection_preview,
+    # enqueue_btn, group_choice).
+    a_out = [
+        analyze["analyze_message"], analyze["candidates_table"],
+        analyze["selection_preview"], analyze["enqueue_btn"],
+        analyze["group_choice"],
+    ]
     binder.wire(analyze["analyze_btn"], "analyze.run",
                 [analyze["link"], analyze["mode"], analyze["message_id"],
                  analyze["start_id"], analyze["end_id"], analyze["limit"],
@@ -691,7 +763,18 @@ def _bind_actions(
                  analyze["date_to"], analyze["include"], analyze["exclude"]], a_out)
     binder.wire(analyze["select_all_btn"], "analyze.select_all", [], a_out)
     binder.wire(analyze["clear_selection_btn"], "analyze.clear_selection", [], a_out)
-    binder.wire(analyze["enqueue_btn"], "analyze.enqueue_selected", [], a_out)
+    binder.wire(analyze["select_range_btn"], "analyze.select_range",
+                [analyze["range_start"], analyze["range_end"]], a_out)
+    binder.wire(analyze["select_group_btn"], "analyze.select_group",
+                [analyze["group_choice"]], a_out)
+    # Row click = manual selection toggle; the marker cell is table state.
+    binder.wire(analyze["candidates_table"], "analyze.toggle_row", [], a_out,
+                event="select")
+    # Enqueue stays EXPLICIT and refreshes the real queue table + status.
+    binder.wire(analyze["enqueue_btn"], "analyze.enqueue_selected", [],
+                [analyze["analyze_message"], queue["queue_table"],
+                 queue["queue_status"], analyze["selection_preview"],
+                 analyze["enqueue_btn"]])
 
     # Transfers
     q_out = [queue["queue_status"], queue["queue_table"]]

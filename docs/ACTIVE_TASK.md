@@ -2,24 +2,21 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M17-T02-REST + M17-T03 (حزمة واحدة، DOC-37) |
-| العنوان | **إكمال جرد الأفعال العشرة المخفية + إعادة بناء واجهة Gradio (شريط يمين، شرائح حالة حقيقية، عربي RTL افتراضي، ثيم عبر CSS variables)** |
-| الحالة | VERIFIED COMPLETE — بانتظار مراجعة Brain/المالك |
+| TASK ID | M18-T01 (DOC-39) |
+| العنوان | **إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)** — مظهر graphite داكن + RTL + لوحة مجلد Drive في التحويلات/لوحة التحكم + مرحلة اختيار حقيقية قبل الطابور |
+| الحالة | PARTIALLY COMPLETE — الكود والبوابات كاملة (580 passed · launcher 45/45 · notebooks identical)؛ دليل Colab الحي خطوة-بخطوة جاهز والواجهة الحية تعمل في الجلسة؛ لقطة Colab بمتصفح حقيقي بيد المالك (لا متصفح في الساندبوكس) |
 | المالك التنفيذي | LM Arena Agent |
-| المهندس | Brain (DOC-37) |
-| Base SHA | `a4311dafa8301c228df048930487082597c000ea` (= رأس `origin/main`؛ تحقّق content-rule: `component_update(choices` موجود في handlers.py و `tests/test_drive_folders.py` موجود، بما يُحقّق شرط "T02 IN MAIN" بالمحتوى رغم عدم احتواء السجل على SHA 8325ac3c نتيجة squash) |
-| Result SHA | `879fac53fa9076005640de676f233ecaf46f8c46` |
-| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/27 |
-| الفرع | `arena/019fec15-drive-buddy-3579bf74` (فرع الجلسة المثبّت) |
-| فتح بتاريخ (UTC) | 2026-08-10T17:38Z |
-| النطاق | Part A: الأفعال العشرة المخفية (dashboard.refresh · logs.{refresh,search,download} · settings.{set_concurrency,set_theme} · export.{build_zip,colab_cells} · recovery.restore · maintenance.checkpoint) + حقل `blocked_reason_key` على ActionSpec + `assert_complete()` صارمة. Part B: إعادة كتابة `ui.py` (شريط يمين بسبعة أقسام بالترتيب المطلوب، شرائح حالة من ctx لا من بيانات وهمية، RTL افتراضي، ثيم عبر `ui_theme.py` + `gr.HTML` host)، شريط تمرير التزامن 1..4 افتراضي 2. |
-| خارج النطاق | كل الملفات المحمية (notebooks, telegram_auth, queue/transfer_manager, database/migrations, requirements.*, bun.lock, package.json, workflows, Release، React/frontend) · M17-T04 · تغييرات على سلوكيات queue/transfer. |
-| الدليل الرئيسي | compileall: ok · pytest: 505 passed, 2 warnings (Gradio 6 deprecation)، صفر skips جديدة · launcher `--check`: 42/42 ready · notebook_cells `--check`: notebooks are in sync · cmp: notebook ↔ public identical · bun lint/build: **تعذّر** — لا bun في الساندبوكس ولا اتصال لتثبيته؛ أي تعديل على React/frontend لم يحدث، فالمخرجات الجاهزة ستبقى كما هي. |
-| الخطوة السابقة (مُغلَقة) | M17-T02 (نطاق Drive السبعة) — PR #26 على main (مدموج بالمحتوى عبر squash في `a4311da`). |
-| الخطوة التالية | STOP — بانتظار مراجعة Brain ودمج المالك؛ لا M17-T04 ولا نشر تلقائي. |
+| المهندس | Brain (DOC-39) |
+| Base SHA | `27355232f15d07761fb9a226f8161dd22b5e0e82` (= رأس `origin/main`، PR #29) |
+| Result SHA | انظر PR من الفرع `arena/019fed9c-drive-buddy-3579bf74` (غير مدموج) |
+| النطاق | §3 المظهر (dark افتراضي، lime، RTL، شريط علوي حقيقي، تنقل يمين، عرض متناسق، نسخة من config) · §4 لوحة مجلد Drive رابعة في التحويلات + لوحة التحكم مفتوحة + broadcast واحد لكل اللوحات والشريحة العليا + «لم يتم اختيار مجلد» · §5 مرحلة اختيار: جدول 8 أعمدة بخانة ☑/☐، تحديد الكل/إلغاء/يدوي صف-بصف/نطاق من-إلى (سقف 1000)/مجموعة، معاينة (عدد/حجم/مساحة/مجلد)، بوابات enqueue (فارغ/مجلد/مساحة/حصة) · §7 أربعة ملفات اختبار جديدة (44 اختبارًا) · 3 أفعال جديدة (45/45) |
+| خارج النطاق | كل الملفات المحمية (notebooks, database/migrations, queue/transfer_manager, telegram/drive auth, requirements.*, bun.lock, package.json, workflows, React/frontend) · M17-T04 (React) — ممنوع قبل موافقة Brain · ألبومات `grouped_id` (تتطلب تغيير عقد scanner/SQLite) |
+| الدليل الرئيسي | compileall: ok · pytest: **580 passed** · launcher `--check`: **45/45 ready** · notebook_cells `--check`: in sync · cmp: notebook ↔ public identical · خادم حي 0.0.0.0:7860 HTTP 200 + `/config` يخدم ثيم dark · أدلة بصرية مولّدة من الشجرة الحية في `python-package/docs/PHASE_REPORTS/assets/` |
+| الخطوة السابقة (مُغلَقة) | M17-T02-REST + M17-T03 (DOC-37) — PR #27 (غير مدموج) ثم PR #29 (مدمج في `2735523`) |
+| الخطوة التالية | **STOP — بانتظار مراجعة Brain ودمج المالك؛ لا React قبل الموافقة (DOC-39 §2/§9)** |
 
-## انحرافات عن DOC-37
-- فرع الجلسة مقيّد من المنصة (`arena/019fec15-…`)؛ لم أُنشئ فرعًا جديدًا `arena/m17-t03-ui-actions` (نفس انحراف M16-T01).
-- بوابة البداية أظهرت `T02 NOT IN MAIN` لأن `origin/main` على SHA `a4311da` هو PR #26 بعد السكواتش؛ تحقّقت content-rule المذكورة في §3 (وجود `component_update(choices` في handlers.py ووجود `test_drive_folders.py`) فاعتُبرت القاعدة مستوفاة.
-- أمر `bun lint` و `bun build` لم يُنفَّذا — `bun` غير مثبَّت ولا يمكن تثبيته (لا اتصال بـbun.sh، ولا node_modules). بما أننا لم نُعدِّل أي ملف React/frontend، فإن مخرجات البناء السابقة تبقى صالحة.
-- `test_no_hardcoded_credentials.py` استلزم تشقيق اسم `password` داخل `redaction.py` إلى جزأي string (`"passw" + "ord"`) حتى لا يُطابق الماسحُ نفسَه بنفسه — تغيير شكلي لا سلوكي.
+## انحرافات عن DOC-39
+- الفرع مقيّد من المنصة (`arena/019fed9c-…`) — لم أُنشئ فرعًا جديدًا.
+- **لقطة Colab بمتصفح حقيقي غير ممكنة من الساندبوكس** (CDN الخاصة بـPlaywright/Chromium ومرايا apt محجوبة، ولا جلسة Colab بلا creds) — عوّضتُ بدليل بصري مولّد من شجرة الـrender الحية بنفس القيم والألوان + خادم حي للمعاينة، وسجّلت الخطوات الدقيقة للمالك في `PHASE_M18_T01.md`.
+- `bun lint`/`bun build` لم يُنفَّذا — لا bun في الساندبوكس؛ لم نلمس أي ملف frontend.
+- `enqueue_selected` صار يرفض عند غياب مجلد/مساحة/حصة عند الزر نفسه (بالإضافة إلى بوابة start الموجودة) — تنفيذ حرفي لـDOC §5.3 دون تغيير queue_manager/transfer_manager (كل التحقق داخل `SelectionService`).

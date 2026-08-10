@@ -178,7 +178,7 @@ def test_otp_panel_closes_after_authorization(handlers, auth):
     )
     assert auth.state == ta.AUTHORIZED
     assert code_visible is False and password_visible is False
-    assert label == t("status.connected")
+    assert t("status.connected") in label
 
 
 def test_invalid_code_keeps_the_otp_panel_open_and_the_2fa_panel_shut(handlers, auth):
@@ -210,7 +210,7 @@ def test_2fa_panel_appears_only_on_session_password_needed(handlers, auth):
     assert auth.state == ta.PASSWORD_REQUIRED
     assert password_visible is True
     assert code_visible is False
-    assert label == t("status.disconnected")  # Connected NOT claimed yet
+    assert t("status.disconnected") in label  # Connected NOT claimed yet
 
 
 def test_account_without_2fa_never_sees_the_password_panel(handlers, auth):
@@ -237,7 +237,7 @@ def test_2fa_panel_closes_after_the_password_is_accepted(handlers, auth):
     assert len(auth.client.sent) == 1            # no new code requested
     assert auth.state == ta.AUTHORIZED
     assert code_visible is False and password_visible is False
-    assert label == t("status.connected")
+    assert t("status.connected") in label
 
 
 def test_rejected_password_keeps_the_2fa_panel_open(handlers, auth):
@@ -268,6 +268,6 @@ def test_logout_closes_both_panels_and_clears_secret_state(handlers, auth):
     _, label, code_visible, password_visible = _panels(handlers.h_telegram_logout())
     assert auth.state == ta.DISCONNECTED
     assert code_visible is False and password_visible is False
-    assert label == t("status.disconnected")
+    assert t("status.disconnected") in label
     assert auth.client is None
     assert auth._phone is None and auth._phone_code_hash is None  # noqa: SLF001

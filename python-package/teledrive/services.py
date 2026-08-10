@@ -20,7 +20,9 @@ from .config import (
 )
 from .errors import (
     DriveNotReadyError,
+    LocalDiskError,
     NothingSelectedError,
+    QuotaRefusedError,
     TeleDriveError,
     TelegramNotReadyError,
 )
@@ -75,7 +77,14 @@ class ScanResult:
 
 
 class SelectionService:
-    """Owns analyze candidates, the active filter set, and the selection."""
+    """Owns analyze candidates, the active filter set, and the selection.
+
+    Selection is a pure in-memory stage: nothing here downloads, enqueues, or
+    touches Telegram/Drive. ``enqueue_selected`` is the ONLY method that moves
+    candidates into the queue, and it validates the target folder, the local
+    disk reserve and (when Drive is connected) the Drive quota first
+    (DOC-39 §5.3).
+    """
 
     def __init__(self, ctx) -> None:
         self.ctx = ctx
@@ -143,16 +152,126 @@ class SelectionService:
             self.selected_ids.add(item_id)
             return True
 
+    def toggle_by_index(self, row_index: int) -> bool:
+        """Toggle the candidate shown at ``row_index`` of the visible table.
+
+        Manual row selection is row-based, never filename-based: the index
+        maps onto the live ``visible()`` order, so the same row toggles the
+        same candidate regardless of name collisions or re-analysis.
+        """
+        try:
+            item = self.visible()[int(row_index)]
+        except (IndexError, TypeError, ValueError):
+            raise TeleDriveError("unknown candidate row", "err.bad_scan_request")
+        return self.toggle(item.id)
+
+    def select_range(self, start_id, end_id) -> list[str]:
+        """Select every visible candidate whose message id lies in [start, end].
+
+        The range REPLACES the current selection (predictable from/to
+        semantics). Refusals are translated and happen before any side effect:
+        non-numeric ids, non-positive ids, end < start, and ranges beyond the
+        declared cap (``MAX_RANGE_MESSAGES``) are all rejected locally.
+        """
+        try:
+            start, end = int(start_id), int(end_id)
+        except (TypeError, ValueError):
+            raise TeleDriveError("range needs numeric ids", "err.selection_range_invalid")
+        if start <= 0 or end <= 0:
+            raise TeleDriveError("range needs positive ids", "err.selection_range_invalid")
+        if end < start:
+            raise TeleDriveError("range end precedes start", "err.selection_range_invalid")
+        from .media_scanner import MAX_RANGE_MESSAGES
+        if (end - start + 1) > MAX_RANGE_MESSAGES:
+            raise TeleDriveError("range too large", "err.selection_range_too_large")
+        with self._lock:
+            picked = {
+                i.id for i in self.visible()
+                if start <= int(i.message_id or 0) <= end
+            }
+            self.selected_ids = picked
+            return sorted(picked)
+
+    def select_group_by_chat(self, chat_id) -> list[str]:
+        """Select every visible candidate from one chat/group (replace mode).
+
+        The candidates table exposes a real grouping column (chat title); the
+        dropdown value is ``<chat_id>`` so this never depends on file names.
+        Album-level (``grouped_id``) grouping needs a scanner contract change
+        and is out of scope — chat grouping is the grouping the source
+        supports today (DOC-39 §5.1 "عند دعم المصدر لذلك").
+        """
+        try:
+            chat = int(chat_id)
+        except (TypeError, ValueError):
+            raise TeleDriveError("invalid group", "err.bad_scan_request")
+        with self._lock:
+            picked = {
+                i.id for i in self.visible()
+                if int(getattr(i, "chat_id", 0) or 0) == chat
+            }
+            self.selected_ids = picked
+            return sorted(picked)
+
+    def groups(self) -> list[tuple[str, str]]:
+        """(label, chat_id) pairs derived from the visible candidates only."""
+        seen: dict[int, str] = {}
+        for item in self.visible():
+            if item.chat_id not in seen:
+                seen[item.chat_id] = item.chat_title or f"chat {item.chat_id}"
+        return [(seen[cid], str(cid)) for cid in seen]
+
+    def summary(self) -> dict[str, Any]:
+        """Live count + total bytes of the current selection (never fake)."""
+        items = self.selected_items()
+        return {
+            "count": len(items),
+            "total_bytes": sum(int(i.size_bytes or 0) for i in items),
+        }
+
     def selected_items(self) -> list[MediaItem]:
         chosen = {i.id: i for i in self.visible()}
         return [chosen[i] for i in self.selected_ids if i in chosen]
 
     def enqueue_selected(self) -> list[MediaItem]:
+        """Enqueue ONLY the explicit selection, after the DOC-39 §5.3 gates.
+
+        Refusals, in order, each with a translated key:
+          * empty selection            -> NothingSelectedError (err.nothing_selected)
+          * no valid target folder ID  -> err.no_folder
+          * local disk reserve         -> LocalDiskError     (err.disk_full)
+          * Drive quota (if connected) -> QuotaRefusedError  (err.drive_full)
+
+        Nothing here starts a transfer and nothing touches Telegram; the queue
+        is a local SQLite row until the user presses Start in Transfers.
+        """
         items = self.selected_items()
         if not items:
             raise NothingSelectedError("no items selected")
-        enqueued = self.ctx.queue_manager.bulk_enqueue(items)
-        db.add_event("", "queue", "enqueued", {"count": len(enqueued)})
+        ctx = self.ctx
+        # Target folder must exist and be persisted by ID (root only counts
+        # when the node explicitly selected it — require_selected() reads the
+        # persisted ID, so an unselected root never passes silently).
+        folder = ctx.drive_folders.require_selected()
+        total = sum(int(i.size_bytes or 0) for i in items)
+        largest = max([int(i.size_bytes or 0) for i in items] or [0])
+        from .storage_manager import preflight as storage_preflight
+        ok_disk, free = storage_preflight(largest)
+        if not ok_disk:
+            raise LocalDiskError(f"local disk reserve: free={free} need={largest}")
+        drive_auth = ctx.drive_auth
+        if drive_auth is not None and drive_auth.connected and ctx.drive_client is not None:
+            from .drive_quota import preflight_or_raise
+            try:
+                preflight_or_raise(ctx.drive_client, total)
+            except RuntimeError as exc:
+                raise QuotaRefusedError(str(exc)) from exc
+        enqueued = ctx.queue_manager.bulk_enqueue(items)
+        db.add_event("", "queue", "enqueued", {
+            "count": len(enqueued),
+            "folder_id": folder.id,
+            "total_bytes": total,
+        })
         return enqueued
 
 
@@ -268,6 +387,32 @@ def rows_for(items: Iterable[MediaItem]) -> list[list[Any]]:
             t(f"state.{item.state}"),
             f"{max(item.download_pct, item.upload_pct):.0f}%",
             item.attempts,
+        ]
+        for item in items
+    ]
+
+
+def candidate_rows_for(
+    items: Iterable[MediaItem], selected_ids: Iterable[str] | None = None
+) -> list[list[Any]]:
+    """DOC-39 §5.2 candidate rows: select marker is part of the table value.
+
+    Column order: تحديد · معرّف الرسالة · اسم الملف · النوع · الحجم ·
+    المجموعة · التاريخ · الحالة. The marker cell (☑/☐) is derived from the
+    live selection state, and row clicks toggle it through the service — it is
+    state, not a decorative button.
+    """
+    selected = set(selected_ids or ())
+    return [
+        [
+            "☑" if item.id in selected else "☐",
+            item.message_id,
+            item.safe_name,
+            item.media_type,
+            human_bytes(item.size_bytes),
+            item.chat_title or "—",
+            str(item.message_date or ""),
+            t(f"state.{item.state}"),
         ]
         for item in items
     ]
