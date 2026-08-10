@@ -2,6 +2,21 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M16-T01 merged] — 2026-08-10 — دمج PR #23 في main بعد موافقة Brain + خطوة إعادة النشر (بيد المالك)
+
+### Verified
+- PR #23 مدمج في `main` (merge commit `4a2dac6`): كود M16-T01 أصبح على main (`analyze.set_mode` موجود في `action_registry.py`، و`DEFAULT_SCAN_MODE` في `media_scanner.py` — تحقّق `git show origin/main:...`).
+- محاولة تشغيل workflow النشر من الوكيل: `gh workflow run "Publish current TeleDrive package" --ref main` → **HTTP 403: Resource not accessible by integration** (توكن الوكيل بلا `actions:write` — امتداد لـKNOWN_ISSUES #15). **خطوة المالك إلزامية.**
+- الإصدار الحالي بعد الدمج ما زال قديمًا: `pkg-2026.08.09-m15t07` target `f8c0ec2` · zip `212474` بايت — **لا يحتوي M16-T01** (مطابق لملاحظة المالك).
+
+### Next (بيد المالك)
+1. Actions → `Publish current TeleDrive package` → Run workflow → branch `main` (يعيد نشر نفس التاج `pkg-2026.08.09-m15t07` بمعرّف sha256 جديد).
+2. Colab: Restart session → Cell 1 (توقع `Package update: SUCCESS` وsha256 مختلف عن `167d25d4…`) → Cells 2–4 → اختبار حي بنقل ملف واحد.
+3. إرسال مخرجات Cells 1–4 إلى Brain → موافقة منفصلة لـM16-T02.
+
+### Not changed — عمدًا
+- M16-T02/T03/T04 لم تبدأ (بانتظار الموافقة المنفصلة بعد نجاح Colab الحي).
+
 ## [M16-T01] — 2026-08-10 — إصلاح تبويب Analyze الحي: رفع حاجز `minimum=1`، وضع افتراضي `message`، حقول حسب النمط، تعريب كامل، وأخطاء مترجمة بدل `err.unknown` (من ملف M16 MASTER)
 
 ### Verified
