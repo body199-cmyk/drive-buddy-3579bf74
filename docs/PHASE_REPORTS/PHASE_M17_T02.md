@@ -11,9 +11,9 @@ TASK ID: M17-T02
 Status: VERIFIED COMPLETE (نطاق Drive السبعة فقط — باقي أولويات M17-T02 الأصلية مسجلة كبنود لاحقة)
 
 GitHub Status:
-Commit: (يُسجَّل النهائي في AI_HANDOFF.md بعد الدفع)
-Push: (كما سبق)
-Pull Request: (كما سبق)
+Commit: SUCCESS — 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba
+Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74
+Pull Request: UPDATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 (لم يكن ممكنًا فتح PR ثانٍ من نفس فرع الجلسة المثبَّت و#26 ما زال مفتوحًا؛ عُدّل عنوان/متن #26 ليغطي المرحلتين بcommits منفصلة بوضوح)
 Branch: arena/019febba-drive-buddy-3579bf74 (فرع الجلسة المثبَّت من المنصة؛ الاسم المقترح
         arena/m17-t02-drive-actions غير قابل للاستخدام — نفس انحراف M16-T01 الموثق)
 Base SHA: e097b3d6391c0cb85ac785c605ea76f017d23f0b (= رأس PR #26 = origin/main 37377cb + محتوى PR #26؛
@@ -21,8 +21,8 @@ Base SHA: e097b3d6391c0cb85ac785c605ea76f017d23f0b (= رأس PR #26 = origin/mai
 تنبيه انحراف: PR #26 كان ما زال OPEN لحظة بدء هذه الجلسة (المالك لم يدمجه بعد). الشرط المسبق
 «main بعد دمج PR #26» تحقق بالمحتوى لا بالـSHA: الفرع يحوي 37377cb كاملًا + ملفات T01 السبعة فقط.
 التوصية: يُدمج PR #26 أولًا ثم PR هذه المرحلة — لا تعارض متوقع لأنهما يستندان لنفس المحتوى.
-Result SHA: (بعد الدفع)
-PR URL: (بعد الدفع)
+Result SHA: 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba (+ follow-up docs commit)
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
 Operation error: لا شيء. (ملاحظة تعليمية: أول تشغيل دخاني سريع فشل بـ sqlite no such table لأن
   السكربت العابر لم يشغّل migrations — خطأ في أداة القياس العابرة لا في المنتج؛ أُعيد بعد
   migrations.apply() ونجح كل المسار.)
