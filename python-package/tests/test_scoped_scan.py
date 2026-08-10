@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 from teledrive import action_registry
 from teledrive import telegram_auth as ta
+from teledrive.i18n import t
 from teledrive.media_scanner import MAX_RANGE_MESSAGES, MAX_SCAN_MESSAGES, ScanRequest, scan_link
 from teledrive.models import MediaItem
 
@@ -363,7 +364,12 @@ def test_handler_passes_bounded_scan_request(ctx, monkeypatch):
 
     # Call handler with full 7-tuple as UI wiring does
     link = "https://t.me/testchat"
-    summary, rows = ctx.handlers.h_analyze_run(link, "range", 0, 5, 8, 100, ["video", "photo"])
+    # DOC-39 §5: analyze.run refreshes the whole selection stage
+    # (analyze_message, candidates_table, selection_preview, enqueue_btn,
+    # group_choice).
+    summary, rows, preview, enqueue_update, group_update = ctx.handlers.h_analyze_run(
+        link, "range", 0, 5, 8, 100, ["video", "photo"]
+    )
 
     # Handler must have forwarded correctly
     assert captured["link"] == link
@@ -377,6 +383,11 @@ def test_handler_passes_bounded_scan_request(ctx, monkeypatch):
     assert "video" in captured["media_types"] and "photo" in captured["media_types"]
     assert summary.startswith("1 ·") and "range" in summary
     assert rows is not None and len(rows) == 1
+    assert rows[0][0] == "☐"  # not selected yet — analyze never auto-selects
+    assert isinstance(preview, str) and t("sel.target_folder") in preview
+    assert enqueue_update.get("interactive") is False
+    # group choices derive from the REAL candidate (chat 1, no title)
+    assert group_update.get("choices") == [("chat 1", "1")]
     # Enqueue must not have been called during analyze
     assert enqueue_calls == []
     # selection should have candidates, but nothing enqueued yet

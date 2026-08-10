@@ -1,5 +1,28 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M18-T01] — 2026-08-10 — DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)
+
+### Verified
+- بوابة DOC-39 من `python-package`: `compileall` OK · `pytest -q tests` → **580 passed** (كان 536) · `teledrive_launcher.py --check` → **45/45 ready actions resolve** (كان 42/42) · `python -m teledrive.notebook_cells --check` → `notebooks are in sync` · `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` → متطابقان (صفر تعديل على ملفات محمية).
+- المظهر (§3): dark graphite `#0d0f10` افتراضي + lime accent، صفر ألوان hardcoded في `ui.py`، RTL عربي افتراضي مع زر English، الشرائح العلوية صارت HTML حقيقي (`td-chip`) فاختفت النقاط/الرموز الشاردة، النسخة من `ctx.config.version` (لا literal)، عرض متناسق (max-width 1280 + جداول/بطاقات 100%)، focus rings lime.
+- المجلد (§4): لوحة رابعة داخل **التحويلات** + لوحة التحكم مفتوحة؛ الـ`folder_id` هو مصدر الحقيقة الوحيد، وكل نجاح (اختيار/إنشاء) يُبثّ نفس القيمة إلى اللوحات الأربع + الشريحة العليا (عقد 10 مخارج)؛ «لم يتم اختيار مجلد» عند الاتصال بلا هدف؛ درايف مفصول = اللوحة ظاهرة + disabled + «لم يتم ربط جوجل درايف» بلا قائمة وهمية.
+- الاختيار (§5): جدول مرشحين من 8 أعمدة (تحديد ☑/☐ · معرّف الرسالة · الملف · النوع · الحجم · المجموعة · التاريخ · الحالة)؛ تحديد الكل/إلغاء · يدوي صف-بصف عبر `Dataframe.select` · نطاق من/إلى بسقف معلن 1000 ورسائل رفض مترجمة · مجموعة حسب القناة · معاينة (عدد/حجم/مساحة/مجلد) · زر الإضافة مقفول حيًا بلا تحديد/مجلد.
+- الأمان (§5.3): `enqueue_selected` يرفض بلا تحديد (`err.nothing_selected`) وبلا مجلد (`err.no_folder`) وبلا مساحة محلية (`err.disk_full`) وبلا حصة Drive عند الاتصال (`err.drive_full`)؛ التحليل لا يُدخل الطابور أبدًا؛ التحديد في الذاكرة فقط؛ الإضافة للطابور لا تبدأ نقلًا (Pending حتى زر البدء اليدوي).
+- أفعال جديدة 3 (45/45): `analyze.toggle_row` · `analyze.select_range` · `analyze.select_group` — proof tests في `tests/test_file_selection_flow.py`.
+
+### Created
+- 4 ملفات اختبار DOC §7: `test_ui_colab_render_contract.py` · `test_folder_target_flow.py` · `test_file_selection_flow.py` · `test_no_enqueue_before_selection.py` (+44 اختبارًا جديدًا/موسّعًا).
+- `python-package/docs/PHASE_REPORTS/PHASE_M18_T01.md` + `assets/make_ui_render.py` + `ui_render_fresh.png` + `ui_render_selection.png` (دليل بصري مولّد من شجرة الـrender الحية — لا متصفح في الساندبوكس).
+
+### Changed
+- `ui.py` (شرائح HTML، لوحة مجلد في التحويلات، مرحلة اختيار كاملة، wiring 5/10 مخارج) · `handlers.py` (`chip_html`, `_selection_view`, `_folder_broadcast`, 3 handlers جدد، `ERROR_ARITY`) · `services.py` (`toggle_by_index`, `select_range`, `select_group_by_chat`, `groups`, `summary`, بوابات enqueue، `candidate_rows_for`) · `action_registry.py` (3 أفعال) · `ui_theme.py` (عرض متناسق، chip-host، focus، إخفاء أزرار تحرير الجدول) · `locale/ar.json`+`en.json` (20 مفتاحًا) · `tests/conftest.py` (إعادة تعيين CONFIG المشترك — عزل حقيقي) · اختبارات قائمة حُدِّثت للعقد الجديد (folder parity 4 لوحات، chips HTML، أعمدة 8، arity 5/10، ARGS).
+- `python-package/docs/UI_ACTION_INVENTORY.md`: 42/42 → **45/45**.
+
+### Known-issue ledger
+- لا بنود KNOWN_ISSUES جديدة. ملاحظة صادقة: لقطة Colab بمتصفح حقيقي غير ممكنة من الساندبوكس (CDN بلوك) — الدليل البصري مولّد من الشجرة الحية والخطوات الدقيقة في `PHASE_M18_T01.md` بيد المالك.
+
+
+
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
 ## [M17-T02-REST + M17-T03] — 2026-08-10 — إكمال جرد الأفعال العشرة + إعادة بناء واجهة Gradio (RTL + ثيم + شريط يمين + شرائح حقيقية)

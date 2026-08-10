@@ -6,7 +6,7 @@ from teledrive import action_registry
 from teledrive.errors import TeleDriveError
 from teledrive.i18n import t
 from teledrive.models import MediaItem
-from teledrive.services import rows_for
+from teledrive.services import candidate_rows_for, rows_for
 
 PROVES = (
     "analyze.select_all",
@@ -42,13 +42,22 @@ def test_select_all_visible_only(ctx):
     assert len(visible) == 2
     assert {i.id for i in visible} == {"id-1", "id-3"}
 
-    summary, rows = ctx.handlers.h_analyze_select_all()
+    summary, rows, preview, enqueue_update, _groups = ctx.handlers.h_analyze_select_all()
 
     assert ctx.selection.selected_ids == {"id-1", "id-3"}
     assert "id-2" not in ctx.selection.selected_ids
     assert summary == f"{t('btn.select_all')}: 2"
-    assert rows == rows_for(visible)
+    assert rows == candidate_rows_for(visible, ctx.selection.selected_ids)
     assert len(rows) == 2
+    assert rows[0][0] == "☑"  # selection marker is table value, not a button
+    # live gating: enabled only when selection AND a target folder exist
+    assert enqueue_update.get("interactive") is False
+    from teledrive import database as db
+    db.set_setting("drive_folder_id", "folder-1")
+    db.set_setting("drive_folder_name", "Target")
+    ctx.config.drive_folder_id = "folder-1"
+    _s2, _r2, _p2, enqueue_update2, _g2 = ctx.handlers.h_analyze_select_all()
+    assert enqueue_update2.get("interactive") is True
 
 
 def test_clear_selection_preserves_items_and_visible_rows(ctx):
@@ -63,16 +72,19 @@ def test_clear_selection_preserves_items_and_visible_rows(ctx):
 
     before_candidates = list(ctx.selection.candidates)
     before_visible = list(ctx.selection.visible())
-    before_rows = rows_for(before_visible)
+    before_rows = candidate_rows_for(before_visible, {"id-1", "id-3"})
 
-    summary, rows = ctx.handlers.h_analyze_clear_selection()
+    summary, rows, preview, enqueue_update, _groups = ctx.handlers.h_analyze_clear_selection()
 
     assert ctx.selection.selected_ids == set()
     assert ctx.selection.candidates == before_candidates
     assert ctx.selection.visible() == before_visible
     assert summary == f"{t('btn.clear_selection')}: 0"
-    assert rows == before_rows
+    # same candidates are still shown; only the selection markers cleared
+    assert [r[1:] for r in rows] == [r[1:] for r in before_rows]
+    assert all(r[0] == "☐" for r in rows)
     assert len(rows) == len(before_visible)
+    assert enqueue_update.get("interactive") is False
 
 
 def test_select_all_and_clear_resolve_through_ctx(ctx, monkeypatch):
@@ -126,7 +138,7 @@ def test_error_path_arity_and_redaction(ctx, monkeypatch):
     monkeypatch.setattr(ctx.selection, "select_all_visible", boom_runtime)
     result = ctx.handlers.h_analyze_select_all()
     assert isinstance(result, tuple)
-    assert len(result) == 2
+    assert len(result) == 5
     assert "SECRET_API_HASH_99999" not in str(result)
     assert "Traceback" not in str(result)
 
@@ -136,7 +148,7 @@ def test_error_path_arity_and_redaction(ctx, monkeypatch):
     monkeypatch.setattr(ctx.selection, "clear", boom_teledrive)
     result = ctx.handlers.h_analyze_clear_selection()
     assert isinstance(result, tuple)
-    assert len(result) == 2
+    assert len(result) == 5
     assert "SECRET_API_HASH_88888" not in str(result)
     assert "Traceback" not in str(result)
 
@@ -144,12 +156,13 @@ def test_error_path_arity_and_redaction(ctx, monkeypatch):
 def test_select_all_and_clear_empty_candidates(ctx):
     ctx.selection.set_candidates([])
 
-    summary, rows = ctx.handlers.h_analyze_select_all()
+    summary, rows, preview, enqueue_update, _groups = ctx.handlers.h_analyze_select_all()
     assert ctx.selection.selected_ids == set()
     assert summary == f"{t('btn.select_all')}: 0"
     assert rows == []
+    assert enqueue_update.get("interactive") is False
 
-    summary, rows = ctx.handlers.h_analyze_clear_selection()
+    summary, rows, preview, enqueue_update, _groups = ctx.handlers.h_analyze_clear_selection()
     assert ctx.selection.selected_ids == set()
     assert summary == f"{t('btn.clear_selection')}: 0"
     assert rows == []

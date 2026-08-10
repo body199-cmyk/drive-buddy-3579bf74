@@ -1,6 +1,8 @@
 """Handlers must call the exact service_path declared in ACTION_SPECS."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from teledrive import action_registry
@@ -30,6 +32,9 @@ ARGS = {
     "analyze.run": ("https://t.me/x/1", "auto"),
     "analyze.set_mode": ("message",),
     "analyze.apply_filters": ([], "", None, None, "", "", "", ""),
+    "analyze.toggle_row": (SimpleNamespace(index=(0, 0), value="☐"),),
+    "analyze.select_range": ("1", "10"),
+    "analyze.select_group": ("My Chat :: 12345",),
     "logs.search": ("query",),
     "settings.set_concurrency": ("safe",),
     "settings.set_theme": ("dark",),

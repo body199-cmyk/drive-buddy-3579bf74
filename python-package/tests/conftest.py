@@ -39,10 +39,19 @@ def isolated_root(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def ctx():
-    """The single ApplicationContext, torn down after every test."""
+    """The single ApplicationContext, torn down after every test.
+
+    ``importlib.reload(config)`` above creates a fresh RuntimeConfig, but
+    ``app_context`` still holds a reference to the PREVIOUS RuntimeConfig
+    instance, so fields mutated on ``ctx.config`` (e.g. drive_folder_id)
+    would leak into later tests. Reset the shared instance's mutable fields
+    so every test starts from the default state.
+    """
     from teledrive import app_context
 
     app_context.reset_context()
     context = app_context.create_context()
+    context.config.drive_folder_id = None
+    context.config.manual_concurrency = None
     yield context
     app_context.reset_context()

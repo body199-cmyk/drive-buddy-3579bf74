@@ -93,8 +93,16 @@ BASE_CSS = """
 .td-root.td-rtl { direction: rtl; text-align: right; }
 .td-root.td-ltr { direction: ltr; text-align: left; }
 
+/* ---- page frame: consistent width, centered, no stray strips ---- */
+.gradio-container {
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+}
+#td-root { width: 100%; }
+#td-content, #td-shell, #td-shell > * { min-width: 0; }
+
 /* ---- shell grid: main + right navigation rail ---- */
-#td-shell { display: grid; grid-template-columns: 1fr 232px; gap: 16px; align-items: start; }
+#td-shell { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; align-items: start; }
 #td-content { min-width: 0; }
 #td-rail {
   background: var(--td-surface);
@@ -156,6 +164,11 @@ BASE_CSS = """
   border-radius: 14px;
   margin-bottom: 14px;
 }
+/* DOC-39 §3: chips are real styled spans, never raw textboxes with stray
+   dots/symbols. Gradio wraps HTML chips in a labeled div; neutralize it. */
+.td-chip-host { display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent !important; }
+.td-chip-host > * { margin: 0; }
+.td-topbar .td-brand { margin-inline-end: auto; }
 .td-brand { font-size: 17px; letter-spacing: 0.3px; color: var(--td-text); margin-inline-end: auto; }
 .td-brand strong { color: var(--td-text); }
 .td-brand code {
@@ -197,8 +210,32 @@ BASE_CSS = """
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .td-section-title { color: var(--td-muted); font-size: 14px; font-weight: 700; margin: 0; }
+
+/* ---- consistent widths: tables and panels never stretch arbitrarily ---- */
+.td-table, .td-table table, .td-table .table-wrap { width: 100% !important; }
+.td-tabs { width: 100%; }
+#td-content .gr-tabs, #td-content .gr-tabs > div { width: 100%; }
+#td-content .gr-form, #td-content .gr-box, #td-content .gr-group { max-width: none; }
+.td-preview { font-variant-numeric: tabular-nums; }
+
+/* ---- focus ring uses the lime accent, never a default blue ---- */
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+.gradio-container .gr-text-input:focus, .gradio-container .gr-number-input:focus {
+  outline: 2px solid var(--td-accent) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--td-accent) 22%, transparent) !important;
+}
+
+/* ---- candidates table: row clicks are selection toggles ---- */
+#td-candidates table td { cursor: pointer; }
+#td-candidates table td:hover { background: color-mix(in srgb, var(--td-accent) 10%, var(--td-surface-2)); }
+/* The table is interactive so row clicks emit .select; hide the edit chrome
+   (add/delete row buttons) — selection is the only interaction we expose. */
+#td-candidates [aria-label="Add row"], #td-candidates [aria-label="Delete row"] { display: none !important; }
 
 /* ---- buttons: primary uses accent, stop uses err wash ---- */
 .gradio-container button { border-radius: 10px !important; }

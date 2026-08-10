@@ -64,7 +64,7 @@ def test_analyze_tab_has_required_controls():
     # Selection actions must still exist
     assert 'binder.button(gr, "analyze.select_all")' in text
     assert 'binder.button(gr, "analyze.clear_selection")' in text
-    assert 'binder.button(gr, "analyze.enqueue_selected"' in text
+    assert re.search(r'binder\.button\(\s*gr,\s*"analyze\.enqueue_selected"', text)
 
 
 def test_analyze_run_wiring_has_seven_inputs(ctx):
@@ -104,14 +104,24 @@ def test_analyze_table_is_seeded_from_real_selection(ctx):
     demo, refs = _render(ctx, "ar")
     # Initially empty, seeded from selection.visible() which is []
     assert refs["candidates_table"].value["data"] == []
-    # After adding a candidate, re-render shows it
+    assert refs["candidates_table"].headers == [t(k) for k in ui.CANDIDATE_HEADERS]
+    # After adding a candidate, re-render shows it (DOC-39 §5.2 layout)
     from teledrive.models import MediaItem
-    item = MediaItem(safe_name="clip.mp4", media_type="video", size_bytes=1234)
+    item = MediaItem(safe_name="clip.mp4", media_type="video", size_bytes=1234,
+                     message_id=77, chat_title="Channel X")
     ctx.selection.set_candidates([item])
     demo2, refs2 = _render(ctx, "ar")
     data = refs2["candidates_table"].value["data"]
     assert len(data) == 1
-    assert data[0][0] == item.id
+    assert data[0][0] == "☐"          # selection marker is part of the value
+    assert data[0][1] == 77           # message id column
+    assert data[0][2] == "clip.mp4"   # file name
+    assert data[0][3] == "video"      # type
+    assert data[0][5] == "Channel X"  # group column
+    # Selecting the row updates the marker cell on re-render
+    ctx.selection.toggle(item.id)
+    _demo3, refs3 = _render(ctx, "ar")
+    assert refs3["candidates_table"].value["data"][0][0] == "☑"
     # analyze.run outputs must not include the queue table
     for bf in demo2.fns.values():
         if getattr(getattr(bf, "fn", None), "action_id", None) == "analyze.run":
