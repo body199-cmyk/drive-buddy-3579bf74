@@ -1,0 +1,172 @@
+name: Publish current TeleDrive package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-current-teledrive-package
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish current main package
+    runs-on: ubuntu-latest
+    env:
+      TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
+      TELEDRIVE_LANG: en
+      RELEASE_TAG: pkg-2026.08.09-m15t07
+      PRODUCT_VERSION: 4.5.0
+      REPOSITORY: ${{ github.repository }}
+
+    defaults:
+      run:
+        working-directory: python-package
+
+    steps:
+      - name: Checkout the selected current main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve and record the exact main SHA
+        run: |
+          set -euo pipefail
+          CURRENT_SHA="$(git rev-parse HEAD)"
+          echo "CURRENT_SHA=$CURRENT_SHA" >> "$GITHUB_ENV"
+          echo "current main SHA: $CURRENT_SHA"
+
+      - name: Verify M15-T11 implementation is present
+        run: |
+          set -euo pipefail
+          test -f teledrive/media_scanner.py
+          test -f teledrive/services.py
+          test -f teledrive/handlers.py
+          test -f teledrive/ui.py
+          test -f tests/test_scoped_scan.py
+          test -f tests/test_analyze_ui_contract.py
+          grep -q "ScanRequest" teledrive/media_scanner.py
+          grep -q "test_handler_passes_bounded_scan_request" tests/test_scoped_scan.py
+          echo "M15-T11 source and proof tests present"
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install pytest
+
+      - name: Run constitution gates
+        run: |
+          set -euo pipefail
+          python -m compileall -q teledrive
+          python -m pytest -q tests
+          python teledrive_launcher.py --check
+          python -m teledrive.notebook_cells --check
+          cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb
+
+      - name: Build the tested archive
+        run: |
+          set -euo pipefail
+          python -m teledrive.package_service --build --output teledrive_v4.5.zip
+
+      - name: Verify archive layout
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import zipfile
+          names = zipfile.ZipFile("teledrive_v4.5.zip").namelist()
+          assert "teledrive-v4.5/requirements.lock" in names
+          assert any(name.startswith("teledrive-v4.5/") for name in names)
+          print("archive layout verified")
+          PY
+
+      - name: Measure exact archive bytes
+        run: |
+          set -euo pipefail
+          ARCHIVE_SHA256="$(sha256sum teledrive_v4.5.zip | cut -d' ' -f1)"
+          ARCHIVE_SIZE="$(stat -c%s teledrive_v4.5.zip)"
+          test "${#ARCHIVE_SHA256}" -eq 64
+          test "$ARCHIVE_SIZE" -gt 0
+          echo "ARCHIVE_SHA256=$ARCHIVE_SHA256" >> "$GITHUB_ENV"
+          echo "ARCHIVE_SIZE=$ARCHIVE_SIZE" >> "$GITHUB_ENV"
+          echo "archive sha256: $ARCHIVE_SHA256"
+          echo "archive size: $ARCHIVE_SIZE"
+
+      - name: Generate manifest from the exact archive bytes
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          manifest = {
+              "schema": 1,
+              "release": os.environ["RELEASE_TAG"],
+              "commit": os.environ["CURRENT_SHA"],
+              "product_version": os.environ["PRODUCT_VERSION"],
+              "sha256": os.environ["ARCHIVE_SHA256"],
+              "size_bytes": int(os.environ["ARCHIVE_SIZE"]),
+              "archive_url": (
+                  "https://github.com/" + os.environ["REPOSITORY"]
+                  + "/releases/download/" + os.environ["RELEASE_TAG"]
+                  + "/teledrive_v4.5.zip"
+              ),
+          }
+          with open("teledrive_manifest.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          print(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
+
+      - name: Validate manifest against the exact archive
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, pathlib
+          archive = pathlib.Path("teledrive_v4.5.zip").read_bytes()
+          manifest = json.loads(pathlib.Path("teledrive_manifest.json").read_text())
+          assert manifest["commit"]
+          assert len(manifest["sha256"]) == 64
+          assert manifest["sha256"] == hashlib.sha256(archive).hexdigest()
+          assert manifest["size_bytes"] == len(archive)
+          assert manifest["archive_url"].endswith("/teledrive_v4.5.zip")
+          print("manifest matches archive bytes")
+          PY
+
+      - name: Publish release from the GitHub runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+          gh release create "$RELEASE_TAG" \
+            --target "$CURRENT_SHA" \
+            --title "TeleDrive package $RELEASE_TAG" \
+            --notes "Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate and is not Colab-ready until owner-run live proof." \
+            teledrive_v4.5.zip \
+            teledrive_manifest.json
+
+      - name: Verify public manifest and archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, time, urllib.request
+          tag = os.environ["RELEASE_TAG"]
+          base = "https://github.com/" + os.environ["REPOSITORY"] + "/releases/download/" + tag + "/"
+
+          def fetch(url):
+              request = urllib.request.Request(url, headers={"User-Agent": "teledrive-release-verifier"})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return response.read()
+
+          manifest = json.loads(fetch(base + "teledrive_manifest.json").decode("utf-8"))
+          archive = fetch(base + "teledrive_v4.5.zip")
+          assert manifest["commit"] == os.environ["CURRENT_SHA"]
+          assert manifest["size_bytes"] == len(archive)
+          assert manifest["sha256"] == hashlib.sha256(archive).hexdigest()
+          print("PUBLIC VERIFICATION OK")
+          print(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
