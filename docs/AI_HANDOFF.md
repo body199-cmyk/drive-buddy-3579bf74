@@ -13,8 +13,8 @@
 | Fixed branch (Arena) | `arena/019febba-drive-buddy-3579bf74` (session-pinned by the platform) |
 | Base SHA | `4a2dac62e0aa57092100d35a1726d464b742e48c` (= `origin/main` at session start = merge of PR #23/M16-T01) → **RESUME_VERIFIED** |
 | HEAD at session start | `4a2dac62e0aa57092100d35a1726d464b742e48c` |
-| Result SHA | this commit (+ possible follow-up docs commit recording the PR URL, same pattern as M16-T01) |
-| PR | see "GitHub handoff" block below |
+| Result SHA | `f311a0615155a681aa16b75edac7e416e0053744` (M17-T01) + follow-up docs commit recording the PR URL (same pattern as M16-T01) |
+| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 |
 | Status | `VERIFIED COMPLETE` for the T01 scope (inventory + docs; gate evidence below); product status unchanged: `Code-complete candidate / NOT Colab-ready` |
 | Authority | M17 MASTER §1 rules read and followed; memory files read in the mandated order; M16 plan superseded by M17 MASTER per the owner's current instruction |
 | What was done | Read the 10 mandated memory files; inspected the 13 mandated source/test files; built `python-package/docs/UI_ACTION_INVENTORY.md` (42 actions × the 17 mandated fields) using a throwaway cross-check script (not committed); ran the T01 gate raw; wrote `docs/PHASE_REPORTS/PHASE_M17_T01.md`; updated `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` (KNOWN_ISSUES +rows #27–#30). **Zero product-code edits.** |
@@ -34,13 +34,13 @@
 
 ```plain
 GitHub Status:
-Commit: this commit — see git log on branch arena/019febba-drive-buddy-3579bf74
-Push: see PR / branch tip
-Pull Request: (recorded below after creation, via follow-up docs commit — same pattern as M16-T01)
+Commit: SUCCESS — f311a0615155a681aa16b75edac7e416e0053744 (+ this follow-up docs commit)
+Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74
+Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
 Branch: arena/019febba-drive-buddy-3579bf74
 Base SHA: 4a2dac62e0aa57092100d35a1726d464b742e48c
-Result SHA: see git log
-PR URL: (see follow-up note below)
+Result SHA: f311a0615155a681aa16b75edac7e416e0053744 (+ follow-up docs commit)
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
 Operation error, if any: none; sandbox lacked pinned Python deps (venv created locally, not committed)
 Current repository state: clean tree after commit (memory files updated in the same commit)
 Recovery recommendation: docs-only change — closing the PR / reverting the merge commit restores the prior state; never force-push/rebase/amend

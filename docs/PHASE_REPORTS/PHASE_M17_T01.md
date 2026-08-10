@@ -11,13 +11,13 @@ TASK ID: M17-T01
 Status: VERIFIED COMPLETE (نطاق T01 فقط — الجرد والتوثيق؛ لا إصلاح كود)
 
 GitHub Status:
-Commit: (يُسجَّل عند الدفع — انظر AI_HANDOFF.md لهذه الجلسة)
-Push: (يُسجَّل عند الدفع)
-Pull Request: (يُسجَّل عند الدفع)
+Commit: SUCCESS — f311a0615155a681aa16b75edac7e416e0053744 (+ follow-up docs commit لتسجيل رابط PR)
+Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74
+Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
 Branch: arena/019febba-drive-buddy-3579bf74
 Base SHA: 4a2dac62e0aa57092100d35a1726d464b742e48c (= origin/main = merge PR #23 / M16-T01)
-Result SHA: (يُسجَّل عند الدفع)
-PR URL: (يُسجَّل عند الدفع)
+Result SHA: f311a0615155a681aa16b75edac7e416e0053744 (+ follow-up docs commit)
+PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
 Operation error: لا شيء في Git. قيد بيئة معروف: pytest/gradio غير مثبتين مسبقًا في الحاوية — أُنشئ venv محلي (python-package/.venv، مستثنى من Git عبر .git/info/exclude) بمثبّتات requirements.lock حرفيًا.
 Current repository state: شجرة نظيفة عند البدء؛ لا تعديل على أي ملف منتج.
 
