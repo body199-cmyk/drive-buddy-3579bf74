@@ -18,7 +18,7 @@
 - Release: https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07
 - Run النشر: https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31343436790
 - تصحيحات الـworkflow: PR #19 (مدموج `0d797cc`) + commit `6408f7c` على main.
-- توثيق هذه الجلسة: PR docs-only من الفرع `arena/019fe8ff-drive-buddy-3579bf74`.
+- توثيق هذه الجلسة: PR #20 (docs-only) من الفرع `arena/019fe8ff-drive-buddy-3579bf74`.
 
 ### Not changed — عمدًا
 - في هذه الجلسة لم يُمس أي شيء خارج `docs/` و`python-package/docs/`: لا `.github/workflows/**` (بلا صلاحية `workflows:write` عند الوكيل، والتصحيحات مدموجة سلفًا)، لا `requirements.lock`/`bun.lock`، لا كود منتج ولا نوت‌بوك.
