@@ -210,5 +210,6 @@
   "analyze.empty": "No results yet — analyze a link first",
   "dash.engine_colab": "Colab Native · SQLite WAL",
   "nav.analyze": "Analyze & links",
-  "blocked.colab_only": "Requires a live Colab session"
+  "blocked.colab_only": "Requires a live Colab session",
+  "common.language": "Language"
 }
