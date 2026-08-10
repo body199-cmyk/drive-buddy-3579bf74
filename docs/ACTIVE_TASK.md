@@ -4,19 +4,19 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M17-T01 |
-| العنوان | **جرد صادق لكل الأزرار/الإجراءات** — `python-package/docs/UI_ACTION_INVENTORY.md` (42 action × 17 حقلًا)، بلا أي تعديل على كود المنتج (من ملف M17 MASTER، المرجع الأعلى مع الدستور v5.0) |
-| الحالة | VERIFIED COMPLETE (نطاق الجرد والتوثيق) — بانتظار مراجعة Brain |
-| المالك التنفيذي | LM Arena Agent (نفّذ) → Brain (يراجع التقرير ويقرر T02) |
-| المهندس | Brain (M17 MASTER) |
-| Base SHA | `4a2dac62e0aa57092100d35a1726d464b742e48c` — تطابق تام مع `origin/main` عند البدء (= merge PR #23 / M16-T01) → `RESUME_VERIFIED` |
-| الفرع | `arena/019febba-drive-buddy-3579bf74` (فرع الجلسة المثبَّت من المنصة) |
+| TASK ID | M17-T02 (شريحة Drive فقط، بتعليمة Brain) |
+| العنوان | **إثبات وإظهار أزرار Google Drive السبعة** — قلب 6 أفعال إلى `tested=True` ببراهين handler-level (fake-factory عبر بوابة `about().get` الحقيقية) + إصلاح `h_drive_list_folders` (dropdown update payload) |
+| الحالة | VERIFIED COMPLETE (نطاق Drive السبعة) — بانتظار مراجعة Brain |
+| المالك التنفيذي | LM Arena Agent (نفّذ) → Brain (يراجع التقرير ويقرر الخطوة التالية) |
+| المهندس | Brain (M17-T02 DOC) |
+| Base SHA | `e097b3d6391c0cb85ac785c605ea76f017d23f0b` (= رأس PR #26؛ `origin/main`=37377cb حينها وPR #26 ما زال OPEN — انحراف موثق: الشرط تحقق بالمحتوى لا بالدمج؛ صفر فروق كود منتج) |
+| الفرع | `arena/019febba-drive-buddy-3579bf74` (فرع الجلسة المثبَّت من المنصة — اسم DOC `arena/m17-t02-drive-actions` غير قابل للاستخدام، نفس انحراف M16-T01) |
 | فتح بتاريخ (UTC) | 2026-08-10 |
-| النطاق | قراءة ملفات الذاكرة العشرة + فحص 13 ملفًا (`action_registry/ui/ui_binder/handlers/app_context/services/drive_auth/drive_folders/queue_manager/transfer_manager` + 3 ملفات اختبار) + إنشاء الـinventory + تشغيل بوابة T01 + تحديث الذاكرة |
-| خارج النطاق | أي تعديل على `teledrive/` أو `tests/`، Notebooks، `PKG_RELEASE_TAG`، workflows، lockfiles، `package.json`، Release؛ وM17-T02/T03/T04 كلها حتى موافقة Brain صريحة |
-| الدليل الرئيسي | بوابة T01 `61 passed` · كامل `443 passed` · `compileall` OK · launcher `26/42 ready actions resolve` · التقرير الكامل في `docs/PHASE_REPORTS/PHASE_M17_T01.md` |
-| الخطوة السابقة (مُغلَقة) | M16-T01 — PR #23 مدمج (`4a2dac6`) + PR #24 (docs) مدمج (`5956c1e`) + إعادة نشر التاج متحقَّقة (run `31385543199` بيد المالك؛ الوكيل محظور 403 — KNOWN_ISSUES #27) |
-| الخطوة التالية | **STOP — بانتظار مراجعة Brain للـinventory وموافقته قبل بدء M17-T02** |
+| النطاق | `action_registry.py` (6 قلوب فقط) · `handlers.py` (سطران) · 3 ملفات اختبار (2 معدَّل + 1 جديد) · الذاكرة · `docs/PHASE_REPORTS/PHASE_M17_T02.md` (+مؤشر python-package) |
+| خارج النطاق | كل المحمي (notebooks, telegram_auth, queue/transfer, database/migrations, lockfiles, workflows, package.json, Release) · locale (لم تُحتَج) · `UI_ACTION_INVENTORY.md` (ليس في قائمة §5) · M17-T03/T04/React · باقي أولويات T02 (P2–P6) |
+| الدليل الرئيسي | بوابة Drive `19 passed` · بوابة T02 الخماسية `69 passed` · كامل `462 passed` · launcher `32/42 ready` · smoke عربي ناجح للسبعة · التقرير في `docs/PHASE_REPORTS/PHASE_M17_T02.md` |
+| الخطوة السابقة (مُغلَقة) | M17-T01 — جرد 42 إجراءً (PR #26؛ بانتظار دمج المالك له) |
+| الخطوة التالية | **STOP — بانتظار مراجعة Brain ودمج المالك؛ M17-T02-REST (Dashboard/Logs/Settings/Export/Recovery) وT03/T04 لا تبدأ إلا بموافقة صريحة** |
 
 ## قاعدة الاستخدام
 

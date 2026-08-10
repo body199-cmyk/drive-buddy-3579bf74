@@ -2,6 +2,27 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M17-T02] — 2026-08-10 — إثبات وإظهار أزرار Drive السبعة (نطاق Drive فقط من M17-T02، برسالة Brain)
+
+### Verified
+- بوابة T02 من `python-package`: `compileall` OK · `pytest` لملفات Drive الثلاثة → **19 passed** · ملفات البوابة الخمسة → **69 passed** · كامل `pytest -q tests` → **462 passed** · `teledrive_launcher.py --check` → **32/42 ready actions resolve** (كان 26/42).
+- تشغيل دخاني بخدمة Drive مزيفة عبر `service_factory` (خارج الاختبارات): السبعة تُرجع نصوصًا عربية مترجمة وتعمل end-to-end على الـhandlers الحقيقية؛ وبعد render كامل للـshell: السبعة wired و`visible=True, interactive=True`.
+- **إصلاح حقيقي في كود المنتج:** `h_drive_list_folders` كان يعيد قائمة خام لـ`gr.Dropdown` (تُفسَّر كقيمة مختارة)؛ الآن `component_update(choices=…)` — مُثبت باختبار إثبات مسمّى.
+- كل الملفات المحمية سليمة (تحقق آلي per-path)؛ locale لم تُلمس (المفاتيح موجودة)؛ `drive.refresh_quota` لم يُمس كما طلب DOC.
+- انحراف موثق: PR #26 كان OPEN عند البدء (لم يدمجه المالك بعد) — الشرط تحقق بالمحتوى (`origin/main` + ملفات T01 السبعة فقط، صفر فروق كود) لا بالـSHA؛ التوصية دمج #26 قبل PR هذه المرحلة.
+
+### Created
+- `tests/test_drive_folders.py` (fake Drive service كامل: about+files؛ 4 اختبارات: choices الحقيقية، تحقق الاسم/الوالد، mimeType وتخزين الـID، عدم تسريب service objects) · `docs/PHASE_REPORTS/PHASE_M17_T02.md` + مؤشر `python-package/docs/PHASE_REPORTS/PHASE_M17_T02.md`.
+
+### Changed
+- `action_registry.py`: 6 أفعال Drive → `tested=True` مع proof_test مسمّى لكل واحد (connect/reconnect/status في gate، list/create/select في folders) · تعليق P0-6 القديم حُدّث بصدق (الحي ما زال غير مثبت).
+- `handlers.py`: `h_drive_list_folders` يعيد update payload.
+- `tests/test_drive_connection_gate.py`: PROVES(4) + 7 اختبارات handler-level (connect بعد about فقط، فشل مترجم بلا connected، reconnect يمسح الخدمة والـauth، status read-only بلا استدعاء API، شكل quota الحقيقي، resolve السبعة، arity=2 للسبعة، labels ar/en).
+- `tests/test_bindings.py`: اختبار AST — لا `lambda` ولا `.click/.change/.submit` حقيقية في `ui.py`.
+
+### Known-issue ledger
+- KNOWN_ISSUES #30 أُغلقت (براهين Drive مربوطة) · #28 حُدّثت (المخفي صامتًا صار 9) · `UI_ACTION_INVENTORY.md` لم تُحدَّث عمدًا (خارج قائمة §5) — الدلتا في تقرير المرحلة.
+
 ## [M17-T01] — 2026-08-10 — جرد صادق لكل الأزرار/الإجراءات (بلا تعديل كود، من ملف M17 MASTER)
 
 ### Verified

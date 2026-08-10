@@ -207,7 +207,9 @@ class Handlers:
     def h_drive_list_folders(self, parent_id: str = "root"):
         folders = self.call("drive.list_folders", (parent_id or "root").strip() or "root")
         choices = [f"{folder.name} :: {folder.id}" for folder in folders]
-        return t("msg.folders_loaded"), choices
+        # A Gradio Dropdown consumes choices via an update payload; a bare list
+        # would be misread as the *selected value*, leaving the menu empty.
+        return t("msg.folders_loaded"), component_update(choices=choices)
 
     @action("drive.create_folder")
     def h_drive_create_folder(self, name: str, parent_id: str = "root"):

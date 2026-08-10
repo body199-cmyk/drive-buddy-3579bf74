@@ -7,6 +7,7 @@ gate now lives in tests/test_action_proofs.py.
 """
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -134,6 +135,24 @@ def test_ui_module_wires_exactly_the_ready_actions():
     declared = {s.action_id for s in action_registry.ACTION_SPECS}
     assert wired == declared, "every declared action must go through wire_if_ready"
     assert "binder.wire(" not in text.replace("binder.wire_if_ready(", "")
+
+
+def test_ui_module_has_no_lambdas_or_direct_event_attachment():
+    """Layout purity (M17-T02 §4.4): enforced on the AST, not by convention.
+
+    Docstrings may *mention* lambda/.click — only real syntax nodes count.
+    """
+    tree = ast.parse(UI_SOURCE.read_text(encoding="utf-8"))
+    assert not any(isinstance(node, ast.Lambda) for node in ast.walk(tree)), \
+        "lambda found in ui.py"
+    forbidden = sorted({
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ("click", "change", "submit")
+    })
+    assert forbidden == [], f"direct event attachment in ui.py: {forbidden}"
 
 
 def test_wire_rejects_an_unresolvable_service_path(ctx, monkeypatch):
