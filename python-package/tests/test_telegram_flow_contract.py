@@ -258,6 +258,36 @@ def test_rejected_password_keeps_the_2fa_panel_open(handlers, auth):
     assert t("err.password_invalid") in message
 
 
+# ---- connect-step transport failures are classified, not err.unknown (M18-T02) ----
+
+
+def test_transport_failure_at_connect_is_classified_not_unknown(handlers, auth):
+    """A DC/network-level failure (the class that escaped TelegramAuth's
+    unprotected connect()) must surface as err.tg_connect_failed, never as the
+    dead-end err.unknown — this is exactly the Colab report in §10 (cid
+    d75de588): 'خطأ غير معروف. جرّب مرة أخرى.' after pressing Connect."""
+
+    class FlakyClient(FakeClient):
+        async def connect(self):
+            raise ConnectionError("telegram dc unreachable")
+
+    auth._client_factory = lambda api_id, api_hash: FlakyClient(api_id, api_hash)  # noqa: SLF001
+    message, _, code_visible, password_visible = _panels(
+        handlers.h_telegram_set_credentials("12345", "abc")
+    )
+    assert t("err.tg_connect_failed") in message
+    assert t("err.unknown") not in message
+    assert code_visible is False and password_visible is False
+
+
+def test_bad_api_id_is_not_swallowed_by_the_transport_classifier(handlers, auth):
+    """TeleDriveError (bad api id/hash) must pass through untouched — the
+    transport branch only ever classifies non-TeleDrive exceptions."""
+    message, *_ = _panels(handlers.h_telegram_set_credentials("not-a-number", "abc"))
+    assert t("err.bad_api_id") in message
+    assert auth.created == [] and auth.client is None
+
+
 # ---- logout closes both panels ----
 
 

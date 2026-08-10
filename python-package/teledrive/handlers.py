@@ -241,7 +241,28 @@ class Handlers:
 
     @action("telegram.set_credentials")
     def h_telegram_set_credentials(self, api_id: str, api_hash: str):
-        return self._telegram_view(self.call("telegram.set_credentials", api_id, api_hash))
+        # DOC-39 follow-up (§10, M18-T02): TelegramAuth.set_credentials creates
+        # the Telethon client and calls connect()/is_authorized() WITHOUT an
+        # exception handler, so any transport/DC-level failure (asyncio
+        # IncompleteReadError, TimeoutError, ConnectionError, OSError, an RPC
+        # error during the handshake, a locked session file, ...) escapes the
+        # service and the generic @action wrapper turns it into a dead-end
+        # "err.unknown". Bad api_id/api_hash still surface as their own
+        # classified TeleDriveError (err.bad_api_id / err.bad_api_hash) — this
+        # branch only re-classifies the *transport* failures into a localized,
+        # retryable message while the full traceback stays in the logs
+        # (redacted) for diagnosis.
+        try:
+            status = self.call("telegram.set_credentials", api_id, api_hash)
+        except TeleDriveError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — see comment above
+            _log.exception("telegram.set_credentials transport failure at connect")
+            raise TeleDriveError(
+                f"telegram connect failed: {type(exc).__name__}",
+                "err.tg_connect_failed",
+            ) from exc
+        return self._telegram_view(status)
 
     @action("telegram.send_code")
     def h_telegram_send_code(self, phone: str):
