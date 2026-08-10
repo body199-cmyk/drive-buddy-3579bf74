@@ -44,10 +44,12 @@ def test_analyze_tab_has_required_controls():
     assert 't("form.start_message")' in text
     assert 't("form.end_message")' in text
     assert 't("form.message_limit")' in text
-    # Scan mode radio choices must be the four canonical modes
-    assert re.search(r'choices=\["message",\s*"range",\s*"latest",\s*"chat"\]', text)
-    # Media types checkbox must contain all eight canonical types
-    assert 'choices=["all", "video", "audio", "document", "photo", "voice", "animation", "sticker"]' in text
+    # Scan mode radio choices must be the four canonical modes, localized
+    for scan_mode in ("message", "range", "latest", "chat"):
+        assert f'(t("scan.mode.{scan_mode}"), "{scan_mode}")' in text
+    # Media types checkbox must contain all eight canonical types, localized
+    for media in ("all", "video", "audio", "document", "photo", "voice", "animation", "sticker"):
+        assert f'(t("media.{media}"), "{media}")' in text
     # Scan inputs must be declared
     assert "link = gr.Textbox" in text
     assert "mode = gr.Radio" in text
@@ -126,6 +128,16 @@ def test_locale_keys_present_in_both_languages():
     ar = json.loads(AR_LOCALE.read_text(encoding="utf-8"))
     required = [
         "analyze.instructions",
+        "analyze.result",
+        "err.bad_scan_mode",
+        "err.bad_scan_request",
+        "err.link_invite_unsupported",
+        "err.scan_limit",
+        "err.scan_media_type",
+        "err.scan_message_id",
+        "err.scan_range_ids",
+        "err.scan_range_invalid",
+        "err.scan_range_too_large",
         "form.scan_mode",
         "form.media_types",
         "form.message_id",
@@ -158,5 +170,5 @@ def test_binder_wires_all_analyze_actions_and_no_orphans(ctx):
     assert ctx.binder.orphans() == []
     wired_ids = {bf.fn.action_id for bf in demo.fns.values() if getattr(getattr(bf, "fn", None), "action_id", None)}
     # All analyze actions must be wired
-    for aid in ("analyze.run", "analyze.apply_filters", "analyze.select_all", "analyze.clear_selection", "analyze.enqueue_selected"):
+    for aid in ("analyze.run", "analyze.set_mode", "analyze.apply_filters", "analyze.select_all", "analyze.clear_selection", "analyze.enqueue_selected"):
         assert aid in wired_ids, f"{aid} not wired"

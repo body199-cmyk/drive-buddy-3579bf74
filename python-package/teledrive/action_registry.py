@@ -198,6 +198,16 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         proof_test="tests/test_scoped_scan.py::test_handler_passes_bounded_scan_request",
     ),
     ActionSpec(
+        action_id="analyze.set_mode",
+        handler_name="h_analyze_set_mode",
+        service_path="scanner.mode_fields",
+        label_key="form.scan_mode",
+        section="analyze",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_analyze_ui_modes.py::test_set_mode_shows_only_the_fields_that_mode_uses",
+    ),
+    ActionSpec(
         action_id="analyze.apply_filters",
         handler_name="h_analyze_apply_filters",
         service_path="selection.apply_filters",

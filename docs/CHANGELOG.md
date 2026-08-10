@@ -2,6 +2,25 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M16-T01] — 2026-08-10 — إصلاح تبويب Analyze الحي: رفع حاجز `minimum=1`، وضع افتراضي `message`، حقول حسب النمط، تعريب كامل، وأخطاء مترجمة بدل `err.unknown` (من ملف M16 MASTER)
+
+### Verified
+- مخرجات حقيقية: بوابة T01 → **97 passed** · `pytest -q tests` → **443 passed** · `compileall` OK · `launcher --check` → **`26/42 ready actions resolve`** · `notebook_cells --check` → in sync · `cmp` → identical · `package_service --build` → OK (222699 بايت؛ sha256 `827e8566…a832f6`) · `npm run lint` 0 errors / `npm run build` success (بوابتا bun الحرفيتان على CI — bun.sh غير قابل للوصول من الساندبوكس).
+- `analyze.set_mode` جديد (implemented+tested، proof: `test_analyze_ui_modes.py::test_set_mode_shows_only_the_fields_that_mode_uses`)؛ `mode_fields()` مصدر الحقيقة لوضوح الحقول؛ `DEFAULT_SCAN_MODE="message"` في `media_scanner.py`؛ اختيارات `scan.mode.*`/`media.*` مترجمة بقيم داخلية canonical؛ لا `minimum=`/`maximum=` على الحقول الاختيارية (تحقق `ScanRequest.validate()` هو السلطة الوحيدة)؛ `InvalidLink`→`err.bad_link`، روابط الدعوة→`err.link_invite_unsupported`، أخطاء `validate()`→مفاتيح `err.scan_*`/`err.bad_scan_request`؛ +10 مفاتيح ar/en.
+- `tests/test_analyze_ui_modes.py` أُنشئ (كان مفقودًا بينما بوابة T01 تذكره — توجيه AUTHORITY)؛ `test_analyze_ui_contract.py` حُدِّث (تشديد العقد للاختيارات المترجمة)؛ `test_handlers_contract.py` زيد له سطر `analyze.set_mode` في `ARGS` (الملف يـparametrize على كل الـspecs).
+- لا مساس بـ: notebooks، `PKG_RELEASE_TAG`، workflows، lockfiles، `package.json`، Release، أو أي ملف محمي. الحزمة المبنية حُذفت بعد التحقق (لم تُرفع).
+
+### Changed
+- `media_scanner.py` (DEFAULT_SCAN_MODE/MODE_FIELDS/fields_for_mode)، `services.py` (SCAN_VALIDATION_KEYS/NON_SCANNABLE_LINK_KINDS/mode_fields/أخطاء مترجمة)، `action_registry.py` (+analyze.set_mode)، `handlers.py` (h_analyze_set_mode/ERROR_ARITY 4/seed)، `ui.py` (كتلة Analyze)، `locale/ar.json`+`en.json`، الاختبارات الثلاثة أعلاه.
+- ذاكرة: `docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md` + `docs/PHASE_REPORTS/PHASE_M16_T01.md`.
+
+### Delivery
+- PR: (يُملأ بعد الإنشاء) · فرع الجلسة: `arena/019fe96c-drive-buddy-3579bf74` (المنصة تثبّت الجلسة على فرعها؛ اسم فرع MASTER `arena/m16-t01-analyze-fix` غير قابل للاستخدام — موثَّق في التقرير).
+
+### Not changed — عمدًا
+- سطر نتيجة `h_analyze_run` بقي بصيغته (M16 MASTER لا يطلب تغييره، و`test_scoped_scan.py` — غير مسموح بتعديله — يثبّت الصيغة الحالية). يُرفع كملاحظة لـBrain.
+- الحالة تبقى `Code-complete candidate / NOT Colab-ready` — M16-T02/T03/T04 **متوقفة** بانتظار مراجعة Brain لهذا التقرير.
+
 ## [M15-T12] — 2026-08-10 — نشر حزمة الـmain الحالية (تضم M15-T11) على التاج المثبَّت `pkg-2026.08.09-m15t07` لبوابة تحديث Cell 1
 
 ### Verified
