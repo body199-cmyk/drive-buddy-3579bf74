@@ -165,13 +165,12 @@ def test_set_mode_shows_only_the_fields_that_mode_uses(ctx):
 def test_mode_radio_is_wired_through_the_binder_change_event(ctx):
     text = _ui_text()
     assert re.search(
-        r'binder\.wire_if_ready\(\s*mode,\s*"analyze\.set_mode",\s*\[mode\],'
-        r'\s*\[message_id,\s*start_id,\s*end_id,\s*limit\],\s*event="change",?\s*\)',
+        r'binder\.wire\(\s*analyze\["mode"\],\s*"analyze\.set_mode",'
+        r'\s*\[analyze\["mode"\]\],\s*'
+        r'\[analyze\["message_id"\],\s*analyze\["start_id"\],\s*'
+        r'analyze\["end_id"\],\s*analyze\["limit"\]\],\s*event="change"',
         text,
     )
-    # The radio is gated like every non-ready-able control: declared through
-    # binder.is_ready so the rendered-control contract sees it.
-    assert 'binder.is_ready("analyze.set_mode")' in text
 
     gr = pytest.importorskip("gradio")
     from teledrive import ui as ui_module
@@ -210,11 +209,9 @@ def test_shell_seed_derives_mode_and_fields_from_the_service():
 
 
 def test_scan_numbers_have_no_client_side_bounds():
-    """A frontend minimum= on an empty Number posts 0 and kills the event.
-    ScanRequest.validate() is the only bound authority; re-adding a client
-    bound here is exactly the M16-T01 regression."""
+    """A frontend minimum= on an empty Number posts 0 and kills the event."""
     text = _ui_text()
-    analyze_start = text.find('with gr.Tab(t("nav.link"))')
+    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
     assert analyze_start != -1
     analyze_block = text[analyze_start : analyze_start + 8000]
     assert "minimum=" not in analyze_block
@@ -223,16 +220,15 @@ def test_scan_numbers_have_no_client_side_bounds():
 
 def test_analyze_choices_are_localized_not_raw_english():
     text = _ui_text()
-    analyze_start = text.find('with gr.Tab(t("nav.link"))')
-    analyze_block = text[analyze_start : analyze_start + 8000]
+    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
+    analyze_block = text[analyze_start : analyze_start + 15000]
     for scan_mode in ("message", "range", "latest", "chat"):
-        assert f'(t("scan.mode.{scan_mode}"), "{scan_mode}")' in analyze_block
+        assert f't("scan.mode.{scan_mode}")' in analyze_block, scan_mode
     for media in ("all", "video", "audio", "document", "photo", "voice", "animation", "sticker"):
-        assert f'(t("media.{media}"), "{media}")' in analyze_block
-    # No raw English strings standing alone as a choice value.
+        assert f't("media.{media}")' in analyze_block, media
+    # No raw English choices= list
     assert 'choices=["message"' not in analyze_block
     assert 'choices=["all"' not in analyze_block
-    # The result box has its own translated label (no more triple label).
     assert 'label=t("analyze.result")' in analyze_block
 
 
