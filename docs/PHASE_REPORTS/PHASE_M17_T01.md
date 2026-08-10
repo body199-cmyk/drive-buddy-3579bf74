@@ -82,6 +82,10 @@ What is not proven:
 Next step: STOP and await Brain approval
 ```
 
+## تحديث ما بعد الدفع — حل تعارض PR #26 (docs-only)
+
+main تقدّم بسجلات توثيق M16-T01 (PR #24 عبر `5a7dda2` + PR #25 عبر `416afbe`، merge `37377cb`) فتعارض مع ملفات الذاكرة الخمسة في هذا الفرع. حُل بدمج `origin/main` (commit `0dc1d0c63a325783578d93a8d8f8f164bf8fd369`): AI_HANDOFF/ACTIVE_TASK تبقيان على جلسة M17-T01 (الأحدث — تصميم الملفين)، CHANGELOG/TODO اجتماع الجانبين، وKNOWN_ISSUES أبقت #27 لقيد `actions:write` القادم من main وأُعيد ترقيم بنود الجرد إلى #28–#31 مع تصحيح كل المراجع. **صفر كود منتج في الحل.** بعد الدفع: PR `mergeable=MERGEABLE, mergeStateStatus=CLEAN`، CI أخضر (Python 1m12s run `31392467213` · Frontend 13s run `31392469908`)، والبوابات المحلية مُعادة بعد الدمج: compileall OK · T01 `61 passed` · launcher `26/42` · كامل `443 passed`.
+
 ## ملاحظات صدق إضافية خارج القالب
 
 - **M16-T02/T03/T04 لم تُبدأ** — M17 MASTER حلّ محل خطة M16 كمرجع (بنص تعليمة المالك الحالية).

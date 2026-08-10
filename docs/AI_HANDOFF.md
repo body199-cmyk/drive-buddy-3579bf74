@@ -13,7 +13,7 @@
 | Fixed branch (Arena) | `arena/019febba-drive-buddy-3579bf74` (session-pinned by the platform) |
 | Base SHA | `4a2dac62e0aa57092100d35a1726d464b742e48c` (= `origin/main` at session start = merge of PR #23/M16-T01) → **RESUME_VERIFIED** |
 | HEAD at session start | `4a2dac62e0aa57092100d35a1726d464b742e48c` |
-| Result SHA | `f311a0615155a681aa16b75edac7e416e0053744` (M17-T01) + follow-up docs commit recording the PR URL (same pattern as M16-T01) |
+| Result SHA | `f311a0615155a681aa16b75edac7e416e0053744` (M17-T01) + `0c24c0c…` (PR URL docs) + `0dc1d0c63a325783578d93a8d8f8f164bf8fd369` (merge of `origin/main` docs — conflict resolution) + this docs commit |
 | PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 |
 | Status | `VERIFIED COMPLETE` for the T01 scope (inventory + docs; gate evidence below); product status unchanged: `Code-complete candidate / NOT Colab-ready` |
 | Authority | M17 MASTER §1 rules read and followed; memory files read in the mandated order; M16 plan superseded by M17 MASTER per the owner's current instruction |
@@ -34,9 +34,9 @@
 
 ```plain
 GitHub Status:
-Commit: SUCCESS — f311a0615155a681aa16b75edac7e416e0053744 (+ this follow-up docs commit)
+Commit: SUCCESS — f311a0615155a681aa16b75edac7e416e0053744 · 0c24c0c53bd85a52c495e1f430534a9aad77ee1d · 0dc1d0c63a325783578d93a8d8f8f164bf8fd369 (merge origin/main, docs conflicts resolved) (+ this docs commit)
 Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74
-Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
+Pull Request: CREATED — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 — after the docs-merge push: mergeable=MERGEABLE, mergeStateStatus=CLEAN, CI: Python package PASS (1m12s, job 93467242377 / run 31392467213) + Frontend build PASS (13s, job 93467251688 / run 31392469908)
 Branch: arena/019febba-drive-buddy-3579bf74
 Base SHA: 4a2dac62e0aa57092100d35a1726d464b742e48c
 Result SHA: f311a0615155a681aa16b75edac7e416e0053744 (+ follow-up docs commit)
