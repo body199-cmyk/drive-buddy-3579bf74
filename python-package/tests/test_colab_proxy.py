@@ -240,3 +240,10 @@ def test_ensure_localhost_bypasses_proxy_sets_when_empty(monkeypatch):
     app._ensure_localhost_bypasses_proxy()
     assert os.environ["NO_PROXY"] == "localhost,127.0.0.1,::1"
     assert os.environ["no_proxy"] == "localhost,127.0.0.1,::1"
+
+
+def test_launch_passes_gradio_6_presentation_options(ctx, fake_demo):
+    fake_demo.td_theme, fake_demo.td_css = "theme", "css"
+    app.launch(ctx)
+    assert fake_demo.kwargs["theme"] == "theme"
+    assert fake_demo.kwargs["css"] == "css"

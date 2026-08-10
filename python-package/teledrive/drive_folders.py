@@ -56,7 +56,16 @@ class DriveFolders:
             body["parents"] = [parent_id]
         created = service.files().create(body=body, fields="id,name").execute()
         ref = FolderRef(created["id"], created.get("name", name))
-        db.add_event("", "drive.folder", "created", {"folder_id": ref.id})
+        self._persist(ref, event="created")
+        return ref
+
+    def _persist(self, ref: FolderRef, *, event: str) -> FolderRef:
+        """Persist only the folder ID; name remains a display cache."""
+        self.ctx.config.drive_folder_id = ref.id
+        db.set_setting(SETTING_FOLDER_ID, ref.id)
+        db.set_setting(SETTING_FOLDER_NAME, ref.name)
+        db.add_event("", "drive.folder", event, {"folder_id": ref.id})
+        _log.info("drive folder %s id=%s", event, ref.id)
         return ref
 
     def select(self, folder_id: str, folder_name: str = "") -> FolderRef:
@@ -69,12 +78,7 @@ class DriveFolders:
             raise TeleDriveError("target is not a folder", "err.bad_folder_id")
         ref = FolderRef(meta["id"], meta.get("name", folder_name))
         # ID is what we persist. The name is cached for the chip label only.
-        self.ctx.config.drive_folder_id = ref.id
-        db.set_setting(SETTING_FOLDER_ID, ref.id)
-        db.set_setting(SETTING_FOLDER_NAME, ref.name)
-        db.add_event("", "drive.folder", "selected", {"folder_id": ref.id})
-        _log.info("drive folder selected id=%s", ref.id)
-        return ref
+        return self._persist(ref, event="selected")
 
     def selected(self) -> FolderRef | None:
         folder_id = self.ctx.config.drive_folder_id or db.get_setting(SETTING_FOLDER_ID, "")

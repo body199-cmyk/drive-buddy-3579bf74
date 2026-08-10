@@ -210,15 +210,15 @@ def launch(
 
     demo: Any = build(ctx)
     ctx.ui = demo
-    demo.launch(
-        **_launch_kwargs(
+    launch_kwargs = _launch_kwargs(
             share=share,
             inline=inline,
             blocking=blocking,
             port=port,
             root_path=proxy_url,
         )
-    )
+    launch_kwargs.update(theme=getattr(demo, "td_theme", None), css=getattr(demo, "td_css", None))
+    demo.launch(**launch_kwargs)
     _log.info(
         "ui launched share=%s blocking=%s port=%s colab=%s proxy=%s",
         share,

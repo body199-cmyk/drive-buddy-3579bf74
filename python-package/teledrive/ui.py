@@ -83,8 +83,6 @@ def build(ctx: ApplicationContext | None = None) -> Any:
 
     with gr.Blocks(
         title=t("app.title"),
-        theme=_graphite_theme(),
-        css=BASE_CSS,
         elem_id="td-root",
     ) as demo:
         # Invisible host for the theme style block (replaced by set_theme).
@@ -100,6 +98,9 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         def _language_root(lang: str) -> None:
             _render_shell(ctx, binder, lang_state, active_tab, theme_host, lang)
 
+    # Gradio 6 deprecates theme/css on Blocks; app.launch supplies these.
+    demo.td_theme = _graphite_theme()
+    demo.td_css = BASE_CSS
     return demo
 
 
@@ -247,6 +248,9 @@ def _render_shell(
                     build_zip_btn=_export_refs["build_zip_btn"],
                     colab_cells_btn=_export_refs["colab_cells_btn"],
                     colab_status=_export_refs["colab_status"],
+                    folder_dash=_dash_refs["folder_picker"],
+                    folder_settings=_set_refs["folder_picker"],
+                    folder_conn=_conn_refs["folder_picker"],
                 )
 
             # ===== Right navigation rail =====
@@ -282,6 +286,26 @@ def _render_shell(
 # Section builders. Each returns the component refs its wiring block needs.
 # ---------------------------------------------------------------------------
 
+def _render_folder_picker(ctx, binder, suffix: str, lang: str) -> dict[str, Any]:
+    """One Drive destination panel reused by dashboard, settings and connection."""
+    connected = bool(getattr(getattr(ctx, "drive_auth", None), "connected", False))
+    reason = "" if connected else t("err.drive_not_ready")
+    with gr.Accordion(t("form.drive_folder"), open=False, elem_id=f"td-folder-{suffix}"):
+        parent_id = gr.Textbox(label=t("form.parent_folder"), value="root", interactive=connected)
+        list_btn = binder.button(gr, "drive.list_folders", interactive=connected)
+        choice = gr.Dropdown(choices=[], label=t("form.folder"), allow_custom_value=True,
+                             interactive=connected)
+        new_name = gr.Textbox(label=t("form.new_folder"), interactive=connected)
+        create_btn = binder.button(gr, "drive.create_folder", interactive=connected)
+        select_btn = binder.button(gr, "drive.select_folder", interactive=connected)
+        current = gr.Textbox(value=ctx.drive_folders.current_folder_name(),
+                             label=t("form.selected_folder"), interactive=False)
+        message = gr.Textbox(value=reason, label=t("form.folder"), interactive=False)
+    return {"suffix": suffix, "parent_id": parent_id, "list_btn": list_btn,
+            "choice": choice, "new_name": new_name, "create_btn": create_btn,
+            "select_btn": select_btn, "current": current, "message": message}
+
+
 def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
     with gr.Tab(t("nav.dashboard")):
         with gr.Row():
@@ -301,10 +325,11 @@ def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
         dashboard_json = gr.JSON(
             label=t("dash.stats"), value=seed.get("dashboard", {}),
         )
+        folder_picker = _render_folder_picker(ctx, binder, "dash", t("common.language"))
     return {
         "telegram_card": telegram_card, "drive_card": drive_card,
         "queue_card": queue_card, "dash_btn": dash_btn,
-        "dashboard_json": dashboard_json,
+        "dashboard_json": dashboard_json, "folder_picker": folder_picker,
     }
 
 
@@ -493,18 +518,7 @@ def _section_connection(ctx, binder, seed) -> dict[str, Any]:
                     value=seed["drive_detail"], label=t("dash.drive_status"),
                     interactive=False,
                 )
-                with gr.Accordion(t("form.folder"), open=False):
-                    parent_id = gr.Textbox(label=t("form.parent_folder"), value="root")
-                    list_folders_btn = binder.button(gr, "drive.list_folders")
-                    folder_choice = gr.Dropdown(
-                        choices=[], label=t("form.folder"), allow_custom_value=True,
-                    )
-                    new_folder_name = gr.Textbox(label=t("form.new_folder"))
-                    create_folder_btn = binder.button(gr, "drive.create_folder")
-                    created_folder = gr.Textbox(label=t("form.folder"), interactive=False)
-                    select_folder_btn = binder.button(gr, "drive.select_folder")
-                    selected_folder = gr.Textbox(label=t("form.selected_folder"), interactive=False)
-                    folder_message = gr.Textbox(label=t("form.folder"), interactive=False)
+                folder_picker = _render_folder_picker(ctx, binder, "conn", t("common.language"))
                 quota_btn = binder.button(gr, "drive.refresh_quota", variant="secondary")
                 quota_line = gr.Textbox(
                     value=seed["quota_line"], label=t("dash.drive_space"), interactive=False,
@@ -519,11 +533,7 @@ def _section_connection(ctx, binder, seed) -> dict[str, Any]:
         "tg_status_btn": tg_status_btn, "telegram_detail": telegram_detail,
         "drive_connect_btn": drive_connect_btn, "drive_reconnect_btn": drive_reconnect_btn,
         "drive_status_btn": drive_status_btn, "drive_detail": drive_detail,
-        "parent_id": parent_id, "list_folders_btn": list_folders_btn,
-        "folder_choice": folder_choice, "new_folder_name": new_folder_name,
-        "create_folder_btn": create_folder_btn, "created_folder": created_folder,
-        "select_folder_btn": select_folder_btn, "selected_folder": selected_folder,
-        "folder_message": folder_message, "quota_btn": quota_btn,
+        "folder_picker": folder_picker, "quota_btn": quota_btn,
         "quota_line": quota_line, "quota_json": quota_json,
     }
 
@@ -588,11 +598,12 @@ def _section_settings(ctx, binder, seed) -> dict[str, Any]:
             maintenance_box = gr.Textbox(
                 label=t("nav.maintenance"), interactive=False,
             )
+            folder_picker = _render_folder_picker(ctx, binder, "settings", t("common.language"))
     return {
         "concurrency": concurrency, "concurrency_box": concurrency_box,
         "theme_radio": theme_radio, "theme_status": theme_status,
         "recover_btn": recover_btn, "checkpoint_btn": checkpoint_btn,
-        "maintenance_box": maintenance_box,
+        "maintenance_box": maintenance_box, "folder_picker": folder_picker,
     }
 
 
@@ -649,13 +660,15 @@ def _bind_actions(
     binder.wire(conn["drive_connect_btn"], "drive.connect", [], dr_outputs)
     binder.wire(conn["drive_reconnect_btn"], "drive.reconnect", [], dr_outputs)
     binder.wire(conn["drive_status_btn"], "drive.status", [], dr_outputs)
-    binder.wire(conn["list_folders_btn"], "drive.list_folders", [conn["parent_id"]],
-                [conn["folder_message"], conn["folder_choice"]])
-    binder.wire(conn["create_folder_btn"], "drive.create_folder",
-                [conn["new_folder_name"], conn["parent_id"]],
-                [conn["folder_message"], conn["created_folder"]])
-    binder.wire(conn["select_folder_btn"], "drive.select_folder", [conn["folder_choice"]],
-                [conn["folder_message"], conn["selected_folder"]])
+    # The same named handlers back all three visible folder panels.
+    for picker in (dash["folder_picker"], sets["folder_picker"], conn["folder_picker"]):
+        binder.wire(picker["list_btn"], "drive.list_folders", [picker["parent_id"]],
+                    [picker["message"], picker["choice"]])
+        binder.wire(picker["create_btn"], "drive.create_folder",
+                    [picker["new_name"], picker["parent_id"]],
+                    [picker["choice"], picker["current"], picker["message"]])
+        binder.wire(picker["select_btn"], "drive.select_folder", [picker["choice"]],
+                    [picker["choice"], picker["current"], picker["message"]])
     binder.wire(conn["quota_btn"], "drive.refresh_quota", [],
                 [conn["quota_line"], conn["quota_json"]])
 

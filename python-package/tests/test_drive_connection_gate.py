@@ -245,9 +245,10 @@ def test_all_seven_drive_actions_resolve_from_the_context(ctx):
         assert handler.service_path == spec.service_path
 
 
-def test_all_seven_drive_handlers_have_output_arity_two():
+def test_drive_handler_output_arities_match_the_folder_sync_contract():
     for action_id in DRIVE_ACTIONS:
-        assert ERROR_ARITY.get(action_id) == 2, action_id
+        expected = 3 if action_id in {"drive.create_folder", "drive.select_folder"} else 2
+        assert ERROR_ARITY.get(action_id) == expected, action_id
 
 
 def test_arabic_and_english_labels_exist_for_all_seven_drive_actions():

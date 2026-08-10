@@ -77,8 +77,8 @@ ERROR_ARITY: dict[str, int] = {
     "drive.reconnect": 2,
     "drive.status": 2,
     "drive.list_folders": 2,
-    "drive.create_folder": 2,
-    "drive.select_folder": 2,
+    "drive.create_folder": 3,
+    "drive.select_folder": 3,
     "drive.refresh_quota": 2,
     "analyze.run": 2,
     "analyze.set_mode": 4,
@@ -223,13 +223,17 @@ class Handlers:
     @action("drive.create_folder")
     def h_drive_create_folder(self, name: str, parent_id: str = "root"):
         folder = self.call("drive.create_folder", name, (parent_id or "root").strip() or "root")
-        return t("msg.folder_created"), f"{folder.name} :: {folder.id}"
+        # Creation selects immediately: the persisted destination is always its ID,
+        # while the name is strictly a display value.
+        choice = f"{folder.name} :: {folder.id}"
+        return component_update(choices=[choice], value=choice), folder.name, t("msg.folder_created")
 
     @action("drive.select_folder")
     def h_drive_select_folder(self, choice: str):
         folder_id = str(choice or "").split("::")[-1].strip()
         folder = self.call("drive.select_folder", folder_id)
-        return t("msg.folder_selected"), folder.id
+        selected = f"{folder.name} :: {folder.id}"
+        return component_update(value=selected), folder.name, t("msg.folder_selected")
 
     @action("drive.refresh_quota")
     def h_drive_refresh_quota(self):

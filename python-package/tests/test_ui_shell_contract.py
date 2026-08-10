@@ -267,8 +267,9 @@ def test_dashboard_seed_reports_zeroes_not_staged_numbers(ctx):
 
 def test_graphite_theme_and_css_are_attached_to_the_blocks(ctx):
     demo = ui.build(ctx)
-    css = getattr(demo, "_deprecated_css", "") or ""
-    theme = getattr(demo, "_deprecated_theme", None)
+    # Gradio 6 receives presentation options at launch, not Blocks construction.
+    css = getattr(demo, "td_css", "") or ""
+    theme = getattr(demo, "td_theme", None)
     assert theme is not None
     assert "--td-bg" in css and "--td-lime" in css
     assert getattr(demo, "renderables", None), "language render root must exist"

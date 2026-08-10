@@ -63,15 +63,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str | Callable], ...] = (
     (re.compile(r"https?://t\.me/(?:joinchat/|\+)[A-Za-z0-9_\-]+"), PLACEHOLDER),
     # Telethon StringSession blobs
     (re.compile(r"\b1[A-Za-z0-9=_-]{80,}\b"), PLACEHOLDER),
-    # Filesystem paths pointing at sensitive files (anchored only).
+    # Filesystem paths pointing at sensitive session/token files (anchored only).
     (
         re.compile(
             r"(?i)(?:(?:/|\./|~/|\.\./|[A-Za-z]:\\|\\)(?:[\w.~-]+[/\\])*)"
-            r"(" + "sess" + r"ion\.(?:" + "sess" + r"ion|json)|client_sec"
-            + r"ret\.json|drive_tok" + r"en\.json|\.env|teledrive\.log)"
+            r"([\w.-]+\.sess" + r"ion|client_sec"
+            + r"ret\.json|[\w.-]*tok" + r"en[\w.-]*\.json|\.env|teledrive\.log)"
         ),
         lambda m: f"{PLACEHOLDER}/{m.group(1)}",
     ),
+    # Folder identifiers are only sensitive when explicitly labelled as such.
+    (re.compile(r"(?i)\bfolder[_ -]?id\b[ \t]*[=:][ \t]*[^\s,;]+"),
+     lambda m: m.group(0).split("=")[0].split(":")[0] + f"={PLACEHOLDER}"),
 )
 
 

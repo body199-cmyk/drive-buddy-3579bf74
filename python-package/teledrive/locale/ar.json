@@ -210,5 +210,6 @@
   "analyze.empty": "لا توجد نتائج بعد — ابدأ بتحليل رابط",
   "dash.engine_colab": "Colab Native · SQLite WAL",
   "nav.analyze": "تحليل وروابط",
-  "blocked.colab_only": "يتطلب جلسة Colab حيّة"
+  "blocked.colab_only": "يتطلب جلسة Colab حيّة",
+  "common.language": "اللغة"
 }
