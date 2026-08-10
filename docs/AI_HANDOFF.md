@@ -1,70 +1,82 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md` (and `PHASE_M15_T11.md`, `PHASE_M15_T07.md`, ...).
+> This file records the latest execution session only. Historical evidence is in `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md` (and `PHASE_M15_T08.md`, `PHASE_M15_T11.md`, `PHASE_M15_T07.md`, ...).
 
 ## Session card
 
 | Field | Value |
 |---|---|
-| UTC date | 2026-08-10 |
-| Session type | M15-T08 — verification of the published pinned release + final docs-only documentation |
-| TASK ID | `M15-T08` |
+| UTC date | 2026-08-10 (publication verified 01:00Z) |
+| Session type | M15-T12 — publish the current main package for the Colab updater (republish same tag from current main) |
+| TASK ID | `M15-T12` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` (public) |
-| Fixed branch (Arena) | `arena/019fe8ff-drive-buddy-3579bf74` |
-| HEAD at session start | `6408f7c74c8f5602ad1f9fe8bfd543c15aa29f64` (= `origin/main`, commit `M15-T08: add release workflow`) |
-| Status | `VERIFIED COMPLETE` (release published and independently verified; docs-only changes this session) |
-| Release | `SUCCESS` — tag `pkg-2026.08.09-m15t07` · target `10b5d3b1b74542b2388983a2cc582c4906154982` · not draft, not prerelease · published `2026-08-10T00:05:08Z` · URL https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07 |
-| Publish run | `31343436790` (workflow_dispatch on `6408f7c`) · job `Publish pinned release pkg-2026.08.09-m15t07` · conclusion `success` (00:04:07→00:05:13Z) · https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31343436790 |
-| Asset: teledrive_v4.5.zip | size `188695` bytes (Releases API, exact match) · sha256 `0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce` — guaranteed by the run's fail-closed `Gate - byte identity` (publish refuses on any drift) + recorded in the release notes; direct byte fetch from this verification sandbox is blocked (see Known limitations) |
-| Asset: teledrive_manifest.json | size `378` bytes · schema 1 (schema/release/commit/product_version/sha256/size_bytes/archive_url) · `archive_url` = the pinned Cell-1 endpoint |
-| Public endpoints (unauthenticated fetch, no credentials) | Both `https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/download/pkg-2026.08.09-m15t07/{teledrive_v4.5.zip,teledrive_manifest.json}` return `HTTP 302` → signed `release-assets.githubusercontent.com` URL (GitHub's standard public-asset redirect; not 404 as after the earlier rollback, not auth-gated). The final CDN `200` body is not observable from this sandbox (egress TLS reset on the asset CDN host). |
-| Files changed | 6 docs: `docs/TODO.md`, `docs/CHANGELOG.md`, `docs/ACTIVE_TASK.md`, `docs/KNOWN_ISSUES.md`, `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md` (final report), + this handoff |
-| Protected files touched | None — `.github/workflows/**` untouched (bot lacks `workflows:write`; the workflow fixes shipped earlier via PR #19 `0d797cc` + owner commit `6408f7c`), `requirements.lock` and `bun.lock` untouched, no product code, no notebooks |
-| Known limitations | (1) Asset CDN (`release-assets.githubusercontent.com`) and Actions log storage are unreachable from this sandbox (TLS reset / EOF), so the sha256 is proven by the fail-closed byte-identity gate inside the successful publish run + the Releases API size, not by a sandbox-side download. (2) Real Colab activation of the Cell-1 update gate against the live endpoint is still untested (M15-T01). |
+| Fixed branch (Arena) | `arena/019fe912-drive-buddy-3579bf74` |
+| Base SHA (origin/main at session start) | `5fd064a3e1934fe47934e004b808bb7b05d9eebc` |
+| Current main SHA used for build | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` |
+| Status | `VERIFIED COMPLETE` for the publication; final product status remains `Code-complete candidate / NOT Colab-ready` |
+| Release | `SUCCESS` — tag `pkg-2026.08.09-m15t07` replaced · target `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` · not draft, not prerelease · published `2026-08-10T01:00:50Z` |
+| Publish run | `31345898521` (workflow_dispatch on `f8c0ec2`) · workflow `Publish current TeleDrive package` · conclusion `success` · https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31345898521 |
+| Asset: teledrive_v4.5.zip | size `212474` bytes · sha256 `167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3` — guaranteed by the run's fail-closed byte-identity + public-verification steps and matched by the Releases API asset digest `sha256:167d25d4…` |
+| Asset: teledrive_manifest.json | size `378` bytes · schema 1 · `archive_url` = the pinned Cell-1 endpoint |
+| Manifest JSON | `{"schema":1,"release":"pkg-2026.08.09-m15t07","commit":"f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93","product_version":"4.5.0","sha256":"167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3","size_bytes":212474,"archive_url":"https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/download/pkg-2026.08.09-m15t07/teledrive_v4.5.zip"}` |
+| Workflow file | `.github/workflows/release-current.yml` (manual `workflow_dispatch`) — applied by owner to `main` (web editor) via commits `09c170d`, `0b561df`, `f8c0ec2` (agent lacks `workflows:write`, KNOWN_ISSUES #15) |
+| Public endpoints (unauthenticated) | The workflow's final step re-fetched both public download endpoints and asserted commit/size/sha256 against the exact uploaded bytes → `PUBLIC VERIFICATION OK`, run `success`. Direct CDN body fetch from this sandbox remains blocked (egress TLS reset to `release-assets.githubusercontent.com`). |
+| Files changed (docs) | `docs/TODO.md`, `docs/CHANGELOG.md`, `docs/ACTIVE_TASK.md`, `docs/KNOWN_ISSUES.md`, `docs/AI_HANDOFF.md`, `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md` |
+| Protected files touched | None in this session by the agent — `.github/workflows/**` was applied by the owner (no agent `workflows:write`); `requirements.lock`/`bun.lock` untouched; no product code; no notebooks |
+| Known limitations | (1) Agent cannot push `.github/workflows/*` (no `workflows:write`) — owner applied. (2) Asset CDN unreachable from sandbox (TLS reset), so sha256/size are proven by the workflow's own byte-identity + public-verify steps (run `success`) and the Releases API digest. (3) Real Colab activation of the Cell-1 update gate against the live endpoint is still untested (M15-T01). |
 | Honest status | `Code-complete candidate / NOT Colab-ready` |
 
 ## Verified evidence (exact outputs)
 
-- `gh release view pkg-2026.08.09-m15t07 --json ...` → `tagName=pkg-2026.08.09-m15t07`, `targetCommitish=10b5d3b1b74542b2388983a2cc582c4906154982`, `isDraft=false`, `isPrerelease=false`, `publishedAt=2026-08-10T00:05:08Z`; assets: `teledrive_v4.5.zip` (188695, `application/zip`, `uploaded`), `teledrive_manifest.json` (378, `application/json`, `uploaded`).
-- Release notes body carries: `Archive sha256: 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce`, `Archive size_bytes: 188695`, and `Published from GitHub Actions (release.yml) on .../actions/runs/31343436790`.
-- `gh run list --workflow=release.yml` → latest run `31343436790`: `status=completed`, `conclusion=success`, `event=workflow_dispatch`, `headSha=6408f7c74c8f5602ad1f9fe8bfd543c15aa29f64`.
-- `gh api .../runs/31343436790/jobs` → single job `Publish pinned release pkg-2026.08.09-m15t07`, `conclusion=success` (00:04:07→00:05:13Z).
-- Unauthenticated endpoint probes (curl, no auth headers): both download URLs → `HTTP 302` with `Location` = signed asset URL (zip + manifest). Sandbox egress resets TLS to `release-assets.githubusercontent.com` (verified at the TLS ClientHello), so the CDN body could not be fetched here.
-- Workflow gates inside `release.yml` at `6408f7c` (fail-closed): pinned-checkout of `10b5d3b…` → tests → build → `Gate - archive layout` → `Gate - byte identity` (exact sha256+size or the run fails before any publish) → idempotency gate → publish → `Verify published assets` (target + sizes re-checked via Releases API). A `success` conclusion therefore implies the published bytes are exactly the verified ones.
-- No secret, no signed artifact URL, and no credential is stored in this repository or its docs.
+- `git ls-remote origin main` at start → `5fd064a3e1934fe47934e004b808bb7b05d9eebc`; after owner updates → `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93`.
+- `git show origin/main:.github/workflows/release-current.yml` → after `f8c0ec2` contains `uses: actions/setup-python@v5` with `python-version: "3.11"` (the missing pin that had made earlier runs fail on Python 3.12).
+- `gh run list --workflow=330748397` → latest `31345898521`: `conclusion=success`, `event=workflow_dispatch`, `headSha=f8c0ec2…`; earlier `31345048257`/`31345180035`/`31345365567` all `failure` at the "Run constitution gates" step (Python not pinned).
+- `gh release view pkg-2026.08.09-m15t07 --json …` → `target_commitish=f8c0ec2…`, `isDraft=false`, `isPrerelease=false`, `publishedAt=2026-08-10T01:00:50Z`; assets: `teledrive_v4.5.zip` (`212474`, `application/zip`, `uploaded`), `teledrive_manifest.json` (`378`, `application/json`, `uploaded`).
+- Releases API asset digests: zip `sha256:167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3`; manifest `sha256:bdba64a0a920a1f68649119dee9e2dd7a64cbcf488e73f048689fb4cef51b426`.
+- Release body: `Current main package. Built from commit f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93 by workflow run 31345898521. Archive sha256=167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3 size_bytes=212474. This release is a code-complete candidate and is not Colab-ready until owner-run live proof.`
+- Local reproduction of gates on Python 3.11 (sandbox): compileall OK · `419 passed` · launcher `25/41 ready` · notebooks in sync · cmp OK.
+- No secret, no signed artifact URL, no credential is stored in this repository or its docs.
 
 ## What was done this session
 
-- Independently verified the published release (tag, target, assets, size, digest chain, public endpoints) and identified the successful publish run `31343436790`.
-- `docs/TODO.md`: M15-T08 `BLOCKED` → `VERIFIED COMPLETE` with evidence (run + release + digest/size).
-- `docs/CHANGELOG.md`: added the `[M15-T08]` entry (publication + workflow correction + docs).
-- `docs/ACTIVE_TASK.md`: moved the information lock to the next task (M15-T01 — owner-run real Colab).
-- `docs/KNOWN_ISSUES.md`: recorded the sandbox upload/CDN endpoint limitation as resolved for publication (publish moved to GitHub Actions); pinned-release endpoint now live (item 21 updated).
-- `python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md`: extended with the final publication + post-publication verification sections and the updated mandatory final report.
-- This handoff.
+- Diagnosed why the first publish attempts failed: the workflow did not pin Python, so it ran on the runner default (3.12) and the "Run constitution gates" step failed. Reproduced all gates green on Python 3.11. Supplied the corrected workflow (added `actions/setup-python@v5`, `python-version: "3.11"`, `cache: pip`).
+- Owner applied the corrected workflow to `main` and re-ran it; publish run `31345898521` concluded `success`.
+- Independently verified the replaced release (tag, target `f8c0ec2`, assets, sizes, digests, run conclusion, release body, manifest values).
+- Updated `docs/TODO.md` (M15-T12 → VERIFIED COMPLETE), `docs/CHANGELOG.md` (M15-T12 entry), `docs/ACTIVE_TASK.md` (lock stays on M15-T01; M15-T12 done), `docs/KNOWN_ISSUES.md` (endpoint now serves current-main assets), `docs/AI_HANDOFF.md` (this file), `python-package/docs/PHASE_REPORTS/PHASE_M15_T12.md` (final report).
 
-## GitHub handoff (to be filled after push/PR)
+## Next action
+
+Owner-run **M15-T01** live Colab proof (real Telegram auth, native Drive, scoped scan, media filter, selection, enqueue selected, one controlled transfer, checkpoint/recovery/redacted logs). The Cell-1 update gate now reads the live `pkg-2026.08.09-m15t07` endpoint serving current-main assets (M15-T11 included). That live test is the only path to `Colab-ready`.
+
+## GitHub handoff (this session)
 
 ```plain
 GitHub Status:
-Commit: SUCCESS (bb2a378 + fill-in commit)
-Push: SUCCESS
-Pull Request: CREATED
-Branch: arena/019fe8ff-drive-buddy-3579bf74
-Base SHA: 6408f7c74c8f5602ad1f9fe8bfd543c15aa29f64
-Result SHA: bb2a378 (docs commit) + one follow-up filling this PR number
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/20
-Files changed: 6 (docs only)
-Release: SUCCESS — pkg-2026.08.09-m15t07 (run 31343436790 success)
-Asset zip: sha256 0179970fa0037788a1e24812d50ebac00fbdd0baad46ff06977c4ed271b598ce / 188695 bytes
-Asset manifest: schema 1 / 378 bytes
-Public endpoints: unauthenticated 302 → signed asset URL (both); CDN body not fetchable from this sandbox
-Tests: not applicable (docs-only session; no code changed)
-Known limitations: sandbox cannot reach the release asset CDN / Actions log storage; real Colab (M15-T01) still pending
-Handoff/docs updated: AI_HANDOFF.md, TODO.md, CHANGELOG.md, ACTIVE_TASK.md, KNOWN_ISSUES.md, python-package/docs/PHASE_REPORTS/PHASE_M15_T08.md
+Commit: SUCCESS (owner-applied workflow commits 09c170d, 0b561df, f8c0ec2 on main)
+Push: SUCCESS (owner) — agent push of .github/workflows was rejected (no workflows:write, KNOWN_ISSUES #15)
+Pull Request: NOT CREATED for the workflow (owner applied via web editor)
+Branch (workflow): main (owner-applied)
+Base SHA: 5fd064a3e1934fe47934e004b808bb7b05d9eebc
+Current main SHA used for build: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93
+Workflow file: .github/workflows/release-current.yml
+Workflow PR URL: (none — web editor apply)
+Workflow run URL / ID: https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/31345898521 (31345898521)
+Workflow conclusion: success
+Release: CREATED (replaced on same tag pkg-2026.08.09-m15t07)
+Release tag: pkg-2026.08.09-m15t07
+Release target SHA: f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93
+Assets and sizes: teledrive_v4.5.zip = 212474 bytes; teledrive_manifest.json = 378 bytes
+Manifest JSON: schema 1 / release pkg-2026.08.09-m15t07 / commit f8c0ec2… / product_version 4.5.0 / sha256 167d25d4…cce3 / size_bytes 212474 / archive_url …/teledrive_v4.5.zip
+Archive sha256: 167d25d468f1a624f4f1a344d5b7c6531d1eb17f7990daaa891932e4b1c5cce3
+Archive size_bytes: 212474
+Public endpoints: unauthenticated; workflow's public-verify step passed (PUBLIC VERIFICATION OK); CDN body not fetchable from this sandbox
+Digest matches exact uploaded bytes: YES
+Tests and gates: constitution gates in-run (compileall, 419 passed, launcher 25/41, notebook sync, cmp, package build + layout + byte identity + public verify); reproduced locally on Python 3.11
+Documentation commit / PR URL: docs updated in this session (handoff, TODO, CHANGELOG, ACTIVE_TASK, KNOWN_ISSUES, PHASE_M15_T12)
+Known limitations: agent lacks workflows:write (owner applied); CDN not fetchable from sandbox; real Colab (M15-T01) still pending
 Honest status: Code-complete candidate / NOT Colab-ready
-Next action: Owner/Brain merges docs PR → M15-T01 real Colab run by owner (Cell-1 update gate reads the live pkg-2026.08.09-m15t07 endpoint)
-Operation error, if any: <none or details>
+Next action: owner-run M15-T01 live Colab proof
+Operation error: earlier publish runs failed at "Run constitution gates" (Python not pinned → 3.12); fixed by adding setup-python 3.11 in f8c0ec2
 ```
 
 No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made.
