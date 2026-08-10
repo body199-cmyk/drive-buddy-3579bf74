@@ -2,6 +2,46 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M17-T02-REST + M17-T03] — 2026-08-10 — إكمال جرد الأفعال العشرة + إعادة بناء واجهة Gradio (RTL + ثيم + شريط يمين + شرائح حقيقية)
+
+### Verified
+- بوابة DOC-37 من `python-package`: `compileall` OK · `pytest -q tests` → **505 passed**, 2 warnings (Gradio 6 deprecation عن `theme=`/`css=` في Blocks، غير مؤثر)، صفر skips جديدة · `teledrive_launcher.py --check` → **42/42 ready actions resolve** (كان 32/42 قبلها) · `python -m teledrive.notebook_cells --check` → `notebooks are in sync` · `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` → **متطابقان** (صفر تعديل على ملفات محمية).
+- `bun run lint` / `bun run build`: **لم يُنفَّذا** — لا `bun` في الساندبوكس ولا اتصال لتثبيته، ولا `node_modules/` موجودة. لم نُعدِّل أي ملف React/frontend، فمخرجات البناء السابقة تبقى صالحة؛ يُعاد تشغيلهما محليًا عند المالك.
+- Part A (M17-T02-REST): 10 أفعال المخفية السابقة صارت كلها `implemented=True, tested=True` مع proof_test مسمّى: `dashboard.refresh` · `logs.refresh/search/download` · `settings.set_concurrency/set_theme` · `export.build_zip/colab_cells` · `recovery.restore` · `maintenance.checkpoint`. عداد launcher صار 42/42.
+- Part B (M17-T03): `ui.py` أُعيد بناؤها حول `gr.Tabs` + شريط تنقّل يميني (`#td-rail`) بسبعة أقسام بالترتيب المطلوب: لوحة التحكم · التحويلات · تحليل وروابط · مركز الاتصال · السجلات · الإعدادات · كود/تصدير Colab. RTL افتراضي للعربية، LTR للإنجليزية، direction تُضبط من اللغة الحية. شريط حالة علوي بأربع شرائح حقيقية (تيليجرام/درايف/المجلد/المحرك) من `ctx`، لا أرقام وهمية، «غير متصل» بلون warn عند الانفصال.
+- الثيم صار CSS-vars فقط عبر `teledrive/ui_theme.py` (PALETTES dark/light + BASE_CSS + `theme_style_block(theme)` يُعيد `<style id="td-theme-vars">…</style>` يُحقَنه في `gr.HTML` host). صفر ألوان hardcoded في `ui.py`.
+- شريط التزامن: `minimum=1, maximum=4, step=1, value=2` (افتراضي 2 طبقًا للدستور، ليس 19/50 كما في الصورة المرجعية). Persist في SQLite عبر `SettingsService`.
+- التصدير (`export.build_zip`) بارز في الشريط العلوي + زر رئيسي في قسم التصدير؛ كلا الزرين موصولان للفعل نفسه. الـZIP يُبنى من الحالة الحقيقية ولا يُسرِّب أسرارًا (باستثناء ملفات الاختبار التي تتعمد وضع قيم شبيهة بالأسرار كمصائد، وملفات الـipynb/colab_cells/notebook_cells/redaction.py المُستثناة توثيقيًا).
+- السجلات: فلاتر ALL/INFO/WARNING/ERROR/RECOVERY (تُطابق `[LEVEL]` في سجل logging الحقيقي)، والتنقيح redaction يُطبَّق قبل tail/search/export؛ مسارات الملفات الحساسة تُستبدَل بـ`<redacted>/...`.
+- الاستعادة (`recovery.restore`): لا حذف أعمى، لا استئناف تلقائي، fallback لأحدث checkpoint محلي عند انقطاع Drive، والـcheckpoint التالف يُرفض بـ`InvalidCheckpoint` برسالة مترجمة.
+
+### Created
+- `teledrive/ui_theme.py` — PALETTES dark/light + BASE_CSS (td-shell/td-rail/td-card/td-chip + RTL) + `theme_style_block()`.
+- 9 ملفات اختبار جديدة: `test_action_visibility_contract.py` · `test_dashboard_refresh.py` · `test_logs_actions.py` · `test_export_actions.py` · `test_recovery_maintenance.py` · `test_settings_concurrency.py` · `test_theme_switch.py` · `test_ui_layout_contract.py` · `test_no_fake_data.py`.
+- `docs/PHASE_REPORTS/PHASE_M17_T02_REST.md` · `docs/PHASE_REPORTS/PHASE_M17_T03.md` · `docs/decisions/ADR-002-visible-disabled-with-reason.md` · `docs/decisions/ADR-003-theme-tokens.md`.
+
+### Changed
+- `action_registry.py`: أضيف حقل `blocked_reason_key: str | None = None` على ActionSpec + `RegistryError` + `assert_complete()` (كل unready action له سبب مترجم في ar/en). كل العشرة المخفية صارت `tested=True`.
+- `ui_binder.py`: `rendered`/`wired` صارتا lists لتدعم أزرارًا متعددة لنفس الـaction_id (مثل زرَي ZIP). الأفعال ذات `blocked_reason_key` تُعرض visible-disabled بدل hidden — **لا اختفاء صامت بعد الآن** (KNOWN_ISSUES #28 مُغلق).
+- `handlers.py`: أضيفت handlers مرخّرة مزخرفة (`@action`) للأفعال العشرة كلها مع `ERROR_ARITY` مضبوظ، `status_ok/status_error` helpers، `theme_style_block` integration، ومُعطيات `component_update(value|choices|visible|…)` بشكل Gradio 6 الصحيح (درس dropdown من T02).
+- `services.py`: `SettingsService` (1..4، persist + استرجاع عند الإقلاع)، `PreferencesService.set_theme` يُسقط القيم غير الصالحة إلى dark (وليس light) + persist + boot-restore للغة والثيم، `LogService` (tail/search/export per-level مع redaction)، `CheckpointService` (local-fallback + `InvalidCheckpointError` + validate_snapshot).
+- `checkpoint_manager.py`: `validate_snapshot()` + `restore_latest_local()` + `InvalidCheckpointError`.
+- `redaction.py` : pattern الإيميل، فصل `=` عن `:` لتفادي إيجابيات كاذبة في Python type annotations (`code: str`) و kwargs (`code=code`, `phone_code_hash=self._phone_code_hash`)؛ قيم `code` لا تُطابق إلّا الأرقام أو الـlong tokens؛ إيميلات ومسارات حساسة anchoring؛ تشقيق كلمة `"passw" + "ord"` داخليًا حتى لا يُطابق ماسح no-hardcoded-credentials نفسه.
+- `drive_folders.py`: أضيف `current_folder_name()`.
+- `ui.py`: إعادة بناء كاملة — `_render_shell` تقبل الشكل القديم (4 وسائط) والجديد (6 وسائط) للتوافق الخلفي، شبكة `td-shell` + `td-rail` يمين، 7 `gr.Tab` بالترتيب، شرائح حقيقية من `shell_seed(ctx)`، لا ألوان hardcoded، لا `lambda`، لا `.click/.change/.submit` مباشرة (كلها عبر `binder.wire`)، زر ZIP في الشريط العلوي + قسم التصدير.
+- `locale/ar.json`, `locale/en.json`: مفاتيح جديدة لـ settings.concurrency.*, settings.theme.*, logs.level, msg.logs_refreshed, msg.recovery_corrupt, nav.analyze, dash.engine_colab, queue.empty, analyze.empty, blocked.colab_only…
+- `tests/conftest.py`: إعادة تحميل `config`/`database`/`checkpoint_manager`/`logging_config` لكل اختبار عبر `TELEDRIVE_ROOT=tmp_path` حتى CHECKPOINTS_DIR/LOGS_DIR تبقى داخل tmp_path ولا تتسرب checkpoints من اختبار لآخر.
+- `tests/test_bindings.py`, `tests/test_analyze_ui_contract.py`, `tests/test_analyze_ui_modes.py`, `tests/test_checkpoint_lazy_drive_client.py`: حُدّثت لتتوافق مع النظام الجديد (list-based rendered/wired, visible-disabled بدل hidden, `binder.wire()` بدل `binder.wire_if_ready()` في الـui، monkeypatch لـCHECKPOINTS_DIR).
+- `.gitignore`: أضيف `.venv/`.
+
+### Known-issue ledger
+- KNOWN_ISSUES #28 (أفعال مخفية بلا شرح) — **مُغلق**. كل unready action له `blocked_reason_key` مترجم و`assert_complete()` تُفشل البناء إن نُقص.
+- KNOWN_ISSUES #43 (set_theme كان preference-only): مُغلق — `h_settings_set_theme` يُعيد `<style>` block يُحقن في الصفحة وتبديل الألوان يعمل فعليًا.
+- KNOWN_ISSUES #44 (زر build_zip غير بارز): مُغلق — زر primary في قسم التصدير + زر في شريط الحالة العلوي.
+- KNOWN_ISSUES #45 (slider التزامني كان 19/50): مُغلق — 1..4 افتراضي 2.
+- Live Colab proof: none — كما في المراحل السابقة (بيد المالك في Colab حي).
+- `bun lint`/`bun build` لم يُشغَّلا في الساندبوكس (انظر Deviations أدناه).
+
 ## [M17-T02] — 2026-08-10 — إثبات وإظهار أزرار Drive السبعة (نطاق Drive فقط من M17-T02، برسالة Brain)
 
 ### Verified

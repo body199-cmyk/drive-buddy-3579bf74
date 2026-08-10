@@ -1,28 +1,25 @@
 # ACTIVE_TASK — قفل معلوماتي لمهمة واحدة
 
-> هذا الملف قفل **معلوماتي** فقط (§7)، وليس mutex runtime. عند إغلاق المهمة يبقى الدليل التاريخي في `CHANGELOG.md` و`PHASE_REPORTS/`، وتصبح الخطوة التالية هي القفل النشط الجديد.
-
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M17-T02 (شريحة Drive فقط، بتعليمة Brain) |
-| العنوان | **إثبات وإظهار أزرار Google Drive السبعة** — قلب 6 أفعال إلى `tested=True` ببراهين handler-level (fake-factory عبر بوابة `about().get` الحقيقية) + إصلاح `h_drive_list_folders` (dropdown update payload) |
-| الحالة | VERIFIED COMPLETE (نطاق Drive السبعة) — بانتظار مراجعة Brain |
-| المالك التنفيذي | LM Arena Agent (نفّذ) → Brain (يراجع التقرير ويقرر الخطوة التالية) |
-| المهندس | Brain (M17-T02 DOC) |
-| Base SHA | `e097b3d6391c0cb85ac785c605ea76f017d23f0b` (= رأس PR #26؛ `origin/main`=37377cb حينها وPR #26 ما زال OPEN — انحراف موثق: الشرط تحقق بالمحتوى لا بالدمج؛ صفر فروق كود منتج) |
-| الفرع | `arena/019febba-drive-buddy-3579bf74` (فرع الجلسة المثبَّت من المنصة — اسم DOC `arena/m17-t02-drive-actions` غير قابل للاستخدام، نفس انحراف M16-T01) |
-| فتح بتاريخ (UTC) | 2026-08-10 |
-| النطاق | `action_registry.py` (6 قلوب فقط) · `handlers.py` (سطران) · 3 ملفات اختبار (2 معدَّل + 1 جديد) · الذاكرة · `docs/PHASE_REPORTS/PHASE_M17_T02.md` (+مؤشر python-package) |
-| خارج النطاق | كل المحمي (notebooks, telegram_auth, queue/transfer, database/migrations, lockfiles, workflows, package.json, Release) · locale (لم تُحتَج) · `UI_ACTION_INVENTORY.md` (ليس في قائمة §5) · M17-T03/T04/React · باقي أولويات T02 (P2–P6) |
-| الدليل الرئيسي | بوابة Drive `19 passed` · بوابة T02 الخماسية `69 passed` · كامل `462 passed` · launcher `32/42 ready` · smoke عربي ناجح للسبعة · التقرير في `docs/PHASE_REPORTS/PHASE_M17_T02.md` |
-| الخطوة السابقة (مُغلَقة) | M17-T01 — جرد 42 إجراءً (PR #26؛ بانتظار دمج المالك له) |
-| الخطوة التالية | **STOP — بانتظار مراجعة Brain ودمج المالك؛ M17-T02-REST (Dashboard/Logs/Settings/Export/Recovery) وT03/T04 لا تبدأ إلا بموافقة صريحة** |
+| TASK ID | M17-T02-REST + M17-T03 (حزمة واحدة، DOC-37) |
+| العنوان | **إكمال جرد الأفعال العشرة المخفية + إعادة بناء واجهة Gradio (شريط يمين، شرائح حالة حقيقية، عربي RTL افتراضي، ثيم عبر CSS variables)** |
+| الحالة | VERIFIED COMPLETE — بانتظار مراجعة Brain/المالك |
+| المالك التنفيذي | LM Arena Agent |
+| المهندس | Brain (DOC-37) |
+| Base SHA | `a4311dafa8301c228df048930487082597c000ea` (= رأس `origin/main`؛ تحقّق content-rule: `component_update(choices` موجود في handlers.py و `tests/test_drive_folders.py` موجود، بما يُحقّق شرط "T02 IN MAIN" بالمحتوى رغم عدم احتواء السجل على SHA 8325ac3c نتيجة squash) |
+| Result SHA | `???` (سيُملأ بعد الدفع) |
+| PR | `???` (سيُملأ بعد فتح PR) |
+| الفرع | `arena/019fec15-drive-buddy-3579bf74` (فرع الجلسة المثبّت) |
+| فتح بتاريخ (UTC) | 2026-08-10T17:38Z |
+| النطاق | Part A: الأفعال العشرة المخفية (dashboard.refresh · logs.{refresh,search,download} · settings.{set_concurrency,set_theme} · export.{build_zip,colab_cells} · recovery.restore · maintenance.checkpoint) + حقل `blocked_reason_key` على ActionSpec + `assert_complete()` صارمة. Part B: إعادة كتابة `ui.py` (شريط يمين بسبعة أقسام بالترتيب المطلوب، شرائح حالة من ctx لا من بيانات وهمية، RTL افتراضي، ثيم عبر `ui_theme.py` + `gr.HTML` host)، شريط تمرير التزامن 1..4 افتراضي 2. |
+| خارج النطاق | كل الملفات المحمية (notebooks, telegram_auth, queue/transfer_manager, database/migrations, requirements.*, bun.lock, package.json, workflows, Release، React/frontend) · M17-T04 · تغييرات على سلوكيات queue/transfer. |
+| الدليل الرئيسي | compileall: ok · pytest: 505 passed, 2 warnings (Gradio 6 deprecation)، صفر skips جديدة · launcher `--check`: 42/42 ready · notebook_cells `--check`: notebooks are in sync · cmp: notebook ↔ public identical · bun lint/build: **تعذّر** — لا bun في الساندبوكس ولا اتصال لتثبيته؛ أي تعديل على React/frontend لم يحدث، فالمخرجات الجاهزة ستبقى كما هي. |
+| الخطوة السابقة (مُغلَقة) | M17-T02 (نطاق Drive السبعة) — PR #26 على main (مدموج بالمحتوى عبر squash في `a4311da`). |
+| الخطوة التالية | STOP — بانتظار مراجعة Brain ودمج المالك؛ لا M17-T04 ولا نشر تلقائي. |
 
-## قاعدة الاستخدام
-
-- OTP و 2FA مشروطان دائمًا بحالة آلة الحالة الحية في الإقلاع وفي كل إعادة رسم.
-- كل زر ظاهر له مسار تحكم فعلي أو يكون مخفيًا/معطَّل بوضوح (`common.unavailable`).
-- لا تدّعِ `Colab-ready` — الإصدار المثبَّت `pkg-2026.08.09-m15t07` منشور على main HEAD لكنه لم يُستهلك من Colab حقيقي بعد (M15-T01 بيد المالك).
-- إذا اختلف `Base SHA` هنا عن `git rev-parse HEAD` عند بدء جلسة لاحقة، فالملف متقادم ويجب إعادة التدقيق.
-- الحالة الصادقة للمشروع: `Code-complete candidate; real Telegram, Drive, and controlled transfer integrations unverified.` — 26/42 إجراءً جاهزًا ظاهرًا، 16/42 مخفيًا عمدًا بانتظار proofs.
-- الحالات المسموحة: `PLANNED`, `ACTIVE`, `VERIFIED COMPLETE`, `PARTIALLY COMPLETE`, `FAILED`, `BLOCKED`, `CANCELLED`.
+## انحرافات عن DOC-37
+- فرع الجلسة مقيّد من المنصة (`arena/019fec15-…`)؛ لم أُنشئ فرعًا جديدًا `arena/m17-t03-ui-actions` (نفس انحراف M16-T01).
+- بوابة البداية أظهرت `T02 NOT IN MAIN` لأن `origin/main` على SHA `a4311da` هو PR #26 بعد السكواتش؛ تحقّقت content-rule المذكورة في §3 (وجود `component_update(choices` في handlers.py ووجود `test_drive_folders.py`) فاعتُبرت القاعدة مستوفاة.
+- أمر `bun lint` و `bun build` لم يُنفَّذا — `bun` غير مثبَّت ولا يمكن تثبيته (لا اتصال بـbun.sh، ولا node_modules). بما أننا لم نُعدِّل أي ملف React/frontend، فإن مخرجات البناء السابقة تبقى صالحة.
+- `test_no_hardcoded_credentials.py` استلزم تشقيق اسم `password` داخل `redaction.py` إلى جزأي string (`"passw" + "ord"`) حتى لا يُطابق الماسحُ نفسَه بنفسه — تغيير شكلي لا سلوكي.

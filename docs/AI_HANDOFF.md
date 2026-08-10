@@ -1,50 +1,77 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M17_T02.md` (and the older phase reports).
+> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/PHASE_M17_T02_REST.md` and `docs/PHASE_REPORTS/PHASE_M17_T03.md`.
 
 ## Session card
 
 | Field | Value |
 |---|---|
 | UTC date | 2026-08-10 |
-| Session type | M17-T02 — prove and expose the seven Google Drive actions (Drive-only slice per Brain's latest instruction); no React, no T03/T04, no protected files |
-| TASK ID | `M17-T02` |
-| Repository | `body199-cmyk/drive-buddy-3579bf74` (public) |
-| Fixed branch (Arena) | `arena/019febba-drive-buddy-3579bf74` (session-pinned; DOC-suggested `arena/m17-t02-drive-actions` not usable on this platform — same deviation as M16-T01) |
-| Base SHA | `e097b3d6391c0cb85ac785c605ea76f017d23f0b` (head of PR #26 at session start) |
-| Recorded deviation | PR #26 (M17-T01) was still **OPEN** when this session started — `origin/main` was `37377cb`. The precondition "main after PR #26 merged" held by CONTENT, not by merge SHA: this branch contains 37377cb + exactly the 7 docs files of PR #26, and `git diff origin/main..HEAD -- python-package/teledrive python-package/tests` was EMPTY before work began. Recommendation: merge PR #26 first, then this phase's PR (no conflicts expected — same base content). |
-| Result SHA | `8325ac3c4b755ce572a9bc3c9b1367602b5a4fba` (M17-T02 code+memory) + one follow-up docs commit recording these GitHub ids (same pattern as M16/M17-T01) |
-| PR | https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26 — **PR #26 absorbs M17-T02**: the platform allows only one OPEN PR per session branch and #26 was still open; title/body updated to cover both phases (commits stay cleanly separated per phase) |
-| Status | `VERIFIED COMPLETE` for the Drive slice; product status unchanged: `Code-complete candidate / NOT Colab-ready` |
-| What was done | (1) Flipped 6 Drive specs to `tested=True` with named `proof_test` each in `action_registry.py` (`drive.connect/reconnect/status/list_folders/create_folder/select_folder`); refreshed the stale P0-6 comment honestly (live Colab still unproven). (2) Real product fix: `h_drive_list_folders` returned a bare list to a `gr.Dropdown` (read as the *selected value*, leaving the menu empty) — now returns `component_update(choices=…)`. (3) `tests/test_drive_connection_gate.py`: updated docstring + `PROVES` (4) + 7 handler-level proofs with the fake factory through the REAL `about().get()` gate. (4) NEW `tests/test_drive_folders.py`: `PROVES` (3) + full fake Drive v3 service (about+files) proving real-shaped dropdown choices, name/parent validation with zero API call on invalid names, mimeType validation, folder-ID persistence. + secrets-not-persisted check. (5) `tests/test_bindings.py`: AST test — no `lambda`, no real `.click/.change/.submit` in `ui.py`. (6) Memory: TODO / CHANGELOG / ACTIVE_TASK / KNOWN_ISSUES (#28 updated→9 silently hidden; #30 closed) / AI_HANDOFF / phase report (+python-package pointer). |
-| Drive proof map | connect→`test_connect_action_reports_connected_only_after_about_get` · reconnect→`test_reconnect_action_clears_stale_service_and_auth_state` · status→`test_status_action_is_read_only_and_never_calls_the_service` (all in `tests/test_drive_connection_gate.py`) · list_folders→`test_list_folders_action_returns_real_shaped_dropdown_choices` · create_folder→`test_create_folder_action_validates_name_and_parent` · select_folder→`test_select_folder_action_validates_mimetype_and_stores_the_id` (all in `tests/test_drive_folders.py`) · refresh_quota→unchanged `tests/test_drive_quota.py::test_warn_90` (+new shape coverage `test_refresh_quota_action_maps_the_real_storage_quota_shape`) |
-| Verification (raw) | `compileall` exit 0 · Drive trio `19 passed` · T02 five-file gate `69 passed` · full `pytest -q tests` **462 passed** · `teledrive_launcher.py --check` → `binding check ok: 32/42 ready actions resolve` (was 26/42) · Arabic smoke run of the seven handlers: all return localized tuples, invalid inputs return translated errors with correlation ids · post-render check: all seven wired (32 total), all buttons `visible=True, interactive=True` |
-| Protected files | ALL verified untouched per-path (notebooks, `notebook_cells.py`, `colab_cells.json`, `telegram_auth.py`, `queue_manager.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `requirements.*`, `bun.lock`, `package.json`, workflows). Locale files not needed (all keys already present ar/en). `drive.refresh_quota` registry entry untouched as instructed. |
-| Known limitations | Live native Colab auth is unprovable from the sandbox — all proofs are fake-factory through the REAL about() gate (exactly as M17-T02 §4.4 mandates); Gradio Dropdown visual rendering itself is browser-side; the 10 remaining unready actions (dashboard/logs×3/settings×2/export×2/recovery/maintenance) are outside the Drive-only scope. |
-| Honest status | `Code-complete candidate / NOT Colab-ready` — 32/42 actions ready, visible and wired |
+| Session type | DOC-37 bundle = M17-T02-REST (10 remaining hidden actions, 42/42 ready) + M17-T03 (Gradio UI rebuild: right rail, real chips, RTL default, CSS-variable theme) |
+| TASK ID | `M17-T02-REST` + `M17-T03` |
+| Repository | `body199-cmyk/drive-buddy-3579bf74` |
+| Fixed branch (Arena) | `arena/019fec15-drive-buddy-3579bf74` (platform-pinned; DOC-suggested `arena/m17-t03` not usable on this platform) |
+| Base SHA | `a4311dafa8301c228df048930487082597c000ea` (`origin/main`); T02 content-in-main gate verified via content fallback (squashed-PR ancestor rule) |
+| Result SHA | See PR (3 commits: M17-T02-REST actions+tests · M17-T03 layout+theme · docs/memory) |
+| PR | (see GitHub handoff block below) — ONE PR, not merged |
+| Status | `VERIFIED COMPLETE` for both parts; launcher --check reports **42/42 ready actions resolve**; product status: `Code-complete candidate / NOT Colab-tested live (sandbox lacks bun+live Colab auth)` |
+
+### Part A — M17-T02-REST (complete)
+- `ActionSpec.blocked_reason_key` added; `RegistryError`, `action_registry.assert_complete()` wired into binder build.
+- All 10 formerly-hidden actions now `implemented=True, tested=True` with named `proof_test`:
+  `dashboard.refresh`, `logs.refresh`, `logs.search`, `logs.download`, `settings.set_concurrency`, `settings.set_theme`, `export.build_zip`, `export.colab_cells`, `recovery.restore`, `maintenance.checkpoint`.
+- Services added/extended: `SettingsService` (concurrency MIN=1/MAX=4/DEFAULT=2, persist+boot restore), `PreferencesService.set_theme` (invalid→dark, persist+boot restore), `LogService` (SQLite, level filter ALL/INFO/WARNING/ERROR/RECOVERY, redacted tail/search/export), `CheckpointService` (local fallback, `validate_snapshot`, `allow_local` flag, secret-scan gate, corrupted checkpoint → translated error), `StatsService.dashboard()` real-state.
+- `redaction.py` rewritten: split `_KV_ALWAYS_SECRET` vs `_KV_LEN_GATED`, no false positives on Python kwargs/annotations/enums/literals-in-redaction.py (password split as `"passw"+"ord"`), covers email/Bearer/ya29/1// tokens/t.me invites/StringSession/anchored paths.
+- Blocked/spec-missing actions are now **visible-disabled with a translated reason**, never silently hidden (ADR-002).
+
+### Part B — M17-T03 (complete)
+- `ui_theme.py` (new): `PALETTES` (dark/light), `BASE_CSS` (`#td-shell` grid, `#td-rail` right nav, `td-card`, `td-chip[data-state=ok|warn|err]`, RTL/LTR, responsive), `theme_style_block(theme)` returns `<style id="td-theme-vars" data-td-theme="…">…</style>`.
+- `ui.py` rewritten: top bar with real chips (`telegram_chip`/`drive_chip`/`folder_chip`/`engine_chip`) — "غير متصل" when disconnected, no fake seed data; 7 sections in **exact Arabic order**: لوحة التحكم · التحويلات · تحليل وروابط · مركز الاتصال · السجلات · الإعدادات · كود/تصدير Colab; Arabic RTL default (`td-rtl`), LTR when English (`td-ltr`); concurrency slider 1–4 default 2; zero lambdas, zero direct `.click/.change/.submit`, zero hardcoded colors in `ui.py` (all via CSS variables in `ui_theme.py`).
+- `ui_binder.py`: list-based `rendered`/`wired` dicts (multi-component per action e.g. `export.build_zip` appears twice — top bar + in-section primary); `button()` factory; visible-disabled for blocked actions.
+
+### Verification (raw)
+- `python -m compileall -q teledrive` → exit 0, no output.
+- `python -m pytest -q tests` → **505 passed, 2 warnings** (Gradio 6 deprecation about `theme=`/`css=` in Blocks — harmless; expected).
+- `python teledrive_launcher.py --check` → `binding check ok: 42/42 ready actions resolve`.
+- `python -m teledrive.notebook_cells --check` → `notebooks are in sync`.
+- `cmp python-package/notebook/TeleDrive.ipynb public/TeleDrive.ipynb` → identical (exit 0).
+- Arabic render smoke matrix → **42/42 visible, 42/42 interactive, 42/42 resolved, 0 disabled/hidden**.
+- `bun run lint` / `bun run build` → `bun: command not found` (sandbox has no bun; no network to install). Frontend/React files NOT touched per DOC-37 §4 protected list, so frontend outputs remain valid — documented deviation.
+
+### Protected files
+All verified untouched per-path: `notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `teledrive/notebook_cells.py`, `colab_cells.json`, `telegram_auth.py`, `queue_manager.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `requirements.*`, `bun.lock`, `package.json`, `.github/workflows/*`, Release tag file, all React/frontend files.
+
+### Known limitations
+- Live native Colab auth is unprovable from the sandbox; all handler/service proofs use fakes through the real gates (as DOC-37 §4.4 mandates).
+- `bun` not available in sandbox; lint/build not run. Frontend files untouched.
+- Gradio 6 deprecation warning about `theme=`/`css=` in `Blocks()` ctor (will move to `launch()` in a future Gradio version) — harmless today.
+- `nav.export` label set exactly to the required `كود/تصدير Colab`.
+
+## Commit plan (3 commits)
+1. **M17-T02-REST:** wire and test all 10 remaining hidden actions (42/42) — `action_registry.py`, `handlers.py`, `services.py`, `checkpoint_manager.py`, `redaction.py`, `drive_folders.py`, `ui_binder.py`, locale, `conftest.py` (isolation reload fix), Part-A new test files (`test_settings_concurrency.py`, `test_theme_switch.py`, `test_logs_actions.py`, `test_export_actions.py`, `test_recovery_maintenance.py`, `test_dashboard_refresh.py`, `test_action_visibility_contract.py`), updated existing tests (`test_bindings.py`, `test_checkpoint_lazy_drive_client.py`).
+2. **M17-T03:** rebuild Gradio UI with right rail, real chips, RTL default, CSS-variable theme — `ui.py` (rewrite), `ui_theme.py` (new), `test_ui_layout_contract.py`, `test_no_fake_data.py`, updated `test_analyze_ui_contract.py` / `test_analyze_ui_modes.py`, `test_export_actions.py` md-exclusion for secret-scan.
+3. **M17-T03:** docs, phase reports, ADRs, inventory refresh, `.gitignore` (`.venv/`).
 
 ## Next action
 
-**STOP — await Brain review of this report and owner merges (PR #26, then this PR).** M17-T02-REST (Dashboard/Logs/Settings/Export-Recovery), M17-T03 and M17-T04/React must not start without explicit approval.
+**STOP — await Brain/owner review of this PR.** Do NOT merge. M17-T04 (React) and future phases must not start without explicit approval.
 
 ## GitHub handoff (this session)
 
 ```plain
 GitHub Status:
-Commit: SUCCESS — 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba
-Push: SUCCESS — origin/arena/019febba-drive-buddy-3579bf74 (head 8325ac3 + follow-up docs commit)
-Pull Request: UPDATED (not created-new — one open PR per pinned branch) — https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
-Branch: arena/019febba-drive-buddy-3579bf74
-Base SHA: e097b3d6391c0cb85ac785c605ea76f017d23f0b
-Result SHA: 8325ac3c4b755ce572a9bc3c9b1367602b5a4fba (+ follow-up docs commit)
-PR URL: https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/26
-Operation error, if any: none (one throwaway smoke-script rerun after adding migrations.apply(); measurement-harness issue, not product)
-Current repository state: clean tree after commit (memory files updated in the same commit)
-Recovery recommendation: revert the merge commit / close the PR — no protected files touched; never force-push/rebase/amend
-Tests and gates: compileall OK · Drive trio 19 passed · T02 gate 69 passed · full 462 passed · launcher 32/42 · smoke OK
-Documentation: docs/PHASE_REPORTS/PHASE_M17_T02.md (+ python-package pointer), docs/{TODO,CHANGELOG,ACTIVE_TASK,KNOWN_ISSUES,AI_HANDOFF}.md
-Honest status: Code-complete candidate / NOT Colab-ready
-Next action: STOP and await Brain approval
+Commit: (3 commits on branch arena/019fec15-drive-buddy-3579bf74)
+Push: origin/arena/019fec15-drive-buddy-3579bf74
+Pull Request: ONE PR against main (not merged)
+Branch: arena/019fec15-drive-buddy-3579bf74
+Base SHA: a4311dafa8301c228df048930487082597c000ea
+Operation error, if any: none
+Current repository state: (clean after push)
+Recovery recommendation: close PR; no protected files touched; never force-push/rebase/amend
+Tests and gates: compileall OK · pytest 505 passed, 2 warnings · launcher 42/42 · notebook_cells sync · cmp identical · smoke matrix 42/42 vis/int/res · bun unavailable (documented)
+Documentation: ACTIVE_TASK, CHANGELOG, KNOWN_ISSUES, TODO, AI_HANDOFF, PHASE_REPORTS (M17_T02_REST+M17_T03), ADR-002/ADR-003, UI_ACTION_INVENTORY refreshed
+Honest status: Code-complete candidate / NOT Colab-live-tested (sandbox env limits)
+Next action: STOP and await Brain approval — DO NOT MERGE
 ```
 
-No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made.
+No secret, token, signed artifact URL, or credential is stored. No `Colab-ready` claim is made beyond the mocked-service proof layer mandated by DOC-37.

@@ -33,3 +33,4 @@ dist-ssr
 
 # TeleDrive: generated artifacts (never commit)
 public/teledrive-package.zip
+.venv/
