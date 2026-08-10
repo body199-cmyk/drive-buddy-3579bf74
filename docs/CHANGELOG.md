@@ -2,6 +2,20 @@
 
 > الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
 
+## [M16-T01 published] — 2026-08-10 — دمج PR #24 (docs) + إعادة نشر التاج `pkg-2026.08.09-m15t07` بيد المالك — متحقَّقة عبر API
+
+### Verified
+- PR #24 (docs-only — ملفات الذاكرة الخمسة) مدمج في `main` (merge commit `5956c1e`)؛ CI على الـPR كان أخضر (Frontend build + Python package)؛ و`origin/main` بعد الدمج = `5956c1e266a354194e9f16edcc739d3ac1b81a30`.
+- المالك شغّل `Publish current TeleDrive package` يدويًا بعد دمج #23 (الوكيل محظور 403 — KNOWN_ISSUES #27): run `31385543199` (`workflow_dispatch`، فرع `main` @ `4a2dac6`,‎ 2026-08-10T11:54:04Z) → **success** — وبوابة `PUBLIC VERIFICATION OK` داخل الـrun (تنزيل عام بلا مصادقة + مطابقة sha256/الحجم من runner جيتهاب نفسه).
+- الإصدار أُعيد نشره فعليًا: أصول `pkg-2026.08.09-m15t07` رُفعت 2026-08-10T11:55:09Z — `teledrive_v4.5.zip` **222699 بايت** (= حجم بناء M16-T01 الموثَّق في PR #23؛ القديم كان 212474 بايت على `f8c0ec2`) + `teledrive_manifest.json` 378 بايت، target = `4a2dac6` — **الإصدار الحي يحوي M16-T01 الآن** (تحقق عبر `gh run list` / `gh release view`؛ التنزيل المباشر من الساندبوكس محجوب بقيد TLS المعروف — لا يؤثر على Colab ولا runners).
+
+### Next (بيد المالك)
+1. Colab: Restart session → Cell 1 (توقع `Package update: SUCCESS` وsha256 مختلف عن `167d25d4…`) → Cells 2–4 → اختبار حي بنقل ملف واحد (نمط «رسالة واحدة»).
+2. إرسال مخرجات Cells 1–4 إلى Brain → موافقة منفصلة لـM16-T02.
+
+### Not changed — عمدًا
+- M16-T02/T03/T04 لم تبدأ (بانتظار الموافقة المنفصلة بعد نجاح Colab الحي). الحالة تبقى `Code-complete candidate / NOT Colab-ready`.
+
 ## [M16-T01 merged] — 2026-08-10 — دمج PR #23 في main بعد موافقة Brain + خطوة إعادة النشر (بيد المالك)
 
 ### Verified
