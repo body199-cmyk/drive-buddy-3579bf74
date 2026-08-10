@@ -52,6 +52,12 @@ jobs:
           grep -q "test_handler_passes_bounded_scan_request" tests/test_scoped_scan.py
           echo "M15-T11 source and proof tests present"
 
+      - name: Install pinned Python 3.11 (same as CI)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
       - name: Install pinned dependencies
         run: |
           python -m pip install --upgrade pip
