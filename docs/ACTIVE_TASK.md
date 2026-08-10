@@ -6,8 +6,8 @@
 |---|---|
 | TASK ID | M16-T01 |
 | العنوان | **إصلاح Analyze الحي** — `analyze.set_mode` + حقول حسب النمط + تعريب + أخطاء مترجمة (من ملف M16 MASTER، المرجع الوحيد بقرار M16 AUTHORITY) |
-| الحالة | VERIFIED COMPLETE — **PR #23 MERGED في main `4a2dac6`** (موافقة Brain) — الخطوة الحية (إعادة النشر + Colab) بيد المالك |
-| المالك التنفيذي | LM Arena Agent (نفّذ ودمج) → المالك (إعادة نشر + Colab حي) → Brain (موافقة T02) |
+| الحالة | VERIFIED COMPLETE — **PR #23 MERGED في main `4a2dac6`** (موافقة Brain) · PR #24 (docs) MERGED `5956c1e` · **إعادة النشر تمت ومتحقَّقة** (run `31385543199` ناجح على `4a2dac6` — التاج يقدّم حزمة 222699 بايت الحاوية لـM16-T01) — المتبقي الحي: Colab بيد المالك |
+| المالك التنفيذي | LM Arena Agent (نفّذ ودمج ووثّق) → المالك (إعادة النشر ✅ تمت — المتبقي Colab حي) → Brain (موافقة T02) |
 | المهندس | Brain (ClickUp DOC — M16 MASTER) |
 | Base SHA | `f8c0ec2de972c6e7a5b14752742cc5ad48e7cc93` (متوقع من MASTER) — HEAD الفعلي عند البدء `612115941af6747fdf4719576cdf10f6fbd21a21` (تغييرات ما بعد f8c0ec2 docs-only فقط: PR #21 + PR #22) |
 | الفرع | `arena/019fe96c-drive-buddy-3579bf74` (فرع الجلسة المثبَّت من المنصة — اسم فرع MASTER غير قابل للاستخدام) |
@@ -16,7 +16,7 @@
 | خارج النطاق | Notebooks، `PKG_RELEASE_TAG`، workflows، lockfiles، `package.json`، Release، أي ملف محمي في M16 MASTER؛ وM16-T02/T03/T04 حتى موافقة Brain |
 | الدليل الرئيسي | بوابة T01 `97 passed` · كامل `443 passed` · launcher `26/42 ready` · notebooks identical · package build OK · التقرير الكامل في `docs/PHASE_REPORTS/PHASE_M16_T01.md` |
 | الخطوة السابقة (مُغلَقة) | M15-T12: نشر حزمة الـmain الحالية على التاج `pkg-2026.08.09-m15t07` — VERIFIED COMPLETE (run `31345898521`) |
-| الخطوة التالية | **بيد المالك:** تشغيل `Publish current TeleDrive package` على `main` (نفس التاج `pkg-2026.08.09-m15t07`) ثم Colab: Restart → Cells 1–4 → اختبار حي بنقل ملف واحد → إرسال المخرجات إلى Brain → **موافقة منفصلة لـM16-T02** (M16-T02/T03/T04 متوقفة) |
+| الخطوة التالية | إعادة النشر **تمت ومتحقَّقة** (run `31385543199` على `4a2dac6` — التاج `pkg-2026.08.09-m15t07` يقدّم الآن حزمة 222699 بايت الحاوية لـM16-T01). **بيد المالك:** Colab: Restart → Cells 1–4 (توقع `Package update: SUCCESS` بـsha256 جديد ≠ `167d25d4…`) → اختبار حي بنقل ملف واحد (نمط «رسالة واحدة») → إرسال المخرجات إلى Brain → **موافقة منفصلة لـM16-T02** (M16-T02/T03/T04 متوقفة) |
 
 ## قاعدة الاستخدام
 
