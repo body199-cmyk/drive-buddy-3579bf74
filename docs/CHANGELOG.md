@@ -1,5 +1,31 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M18-T02] — 2026-08-10 — §10: إصلاح «خطأ غير معروف» عند ربط Telegram بعد M18-T01 (cid d75de588)
+
+### Verified
+- بوابة §10 من `python-package`: `compileall` OK · `pytest -q tests` → **582 passed** (كان 580؛ +2 اختباران) · `teledrive_launcher.py --check` → **45/45 ready actions resolve** · `python -m teledrive.notebook_cells --check` → `notebooks are in sync` · `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` → متطابقان (صفر تعديل على ملفات محمية).
+- **السبب الجذري (لا mismatch من M18-T01):** `git diff 2735523 faff35a` على `telegram_auth.py` = فارغ، و`ui_binder.py` = فارغ، ومسار `telegram.*` في `handlers.py`/`ui.py`/`action_registry.py` دون تغيير في الأسماء/الarity/المدخلات/المخرجات (فقط شريحة الحالة العليا Textbox→HTML متّسقة الطرفين). الخطأ الحقيقي: `TelegramAuth.set_credentials` (ملف محمي) يستدعي `connect()/is_authorized()` **بلا معالج استثناءات**، فأي فشل نقل/DC (`IncompleteReadError`/`TimeoutError`/`ConnectionError`/`OSError`/RPC) يفلت ويصبح `err.unknown` + cid. أُعيد إنتاج التتبع محليًا بنفس المسار بلا أسرار (عميل Telethon حقيقي + بيانات وهمية).
+- **الإصلاح (أصغر patch، غير محمي):** `handlers.py` — `h_telegram_set_credentials` تصنّف فشل النقل إلى `err.tg_connect_failed` المترجم القابل لإعادة المحاولة مع إبقاء التتبع الكامل redacted في السجلات (`_log.exception`)، و`TeleDriveError` (bad api id/hash) يمرّ دون مساس؛ مفتاحان في `locale/ar.json`+`en.json`؛ اختباران في `test_telegram_flow_contract.py`.
+- Live app (gradio 6.22) بفيكتور وهمي: `binder complete: 45 action kinds wired (55 controls), 0 visible-disabled/hidden` — كل أفعال telegram الـ7 موصولة.
+- نتيجة التشغيل بعد الإصلاح (نفس سيناريو الإعادة): «تعذر الاتصال بخوادم تيليجرام. تحقق من اتصال الإنترنت وحاول مرة أخرى. [cid]» بدل «خطأ غير معروف» + سطر `failed: TeleDriveError: telegram connect failed: IncompleteReadError`.
+
+### Changed
+- `teledrive/handlers.py` · `teledrive/locale/ar.json` + `en.json` · `tests/test_telegram_flow_contract.py` (+2).
+- ذاكرة: `docs/CHANGELOG.md` · `docs/KNOWN_ISSUES.md` (#40) · `docs/AI_HANDOFF.md` · `docs/ACTIVE_TASK.md` · `docs/TODO.md` · `python-package/docs/PHASE_REPORTS/PHASE_M18_T02.md`.
+
+### Protected (لم تُلمس)
+`telegram_auth.py` · `telegram_client.py` · `drive_auth.py` · `database.py` · `migrations.py` · `queue_manager.py` · `transfer_manager.py` · `notebook_cells.py` · `colab_cells.json` · النوت‌بوكات · `requirements.*` · `bun.lock` · `package.json` · `.github/workflows/*` · React/frontend.
+
+### للمالك (تشغيل Colab على التحديث)
+Restart runtime ← إعادة تشغيل Cell 1 فقط (بوابة التحديث عبر التاج `pkg-2026.08.09-m15t07` — يتطلب إعادة نشر التاج من main الجديد عبر `release-current.yml` أو يدويًا؛ توكن Arena بلا `actions:write` — KNOWN_ISSUES #27) ← Cells 2–4.
+
+### Known-issue ledger
+- KNOWN_ISSUES #40 مضافة ومُغلقة (مؤقتًا على مستوى الواجهة؛ التصنيف العميق داخل `telegram_auth.py` يتطلب تفويضًا).
+
+
+
+> الأرشيف الكامل: `docs/CHANGELOG_ARCHIVE.md` — هذا الملف للجلسات الأخيرة فقط.
+
 ## [M18-T01] — 2026-08-10 — DOC-39: إصلاح الواجهة الحالية والاختيار قبل النقل (بدون React)
 
 ### Verified
