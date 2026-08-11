@@ -51,6 +51,11 @@ class TelegramNotReadyError(TeleDriveError):
     message_key = "err.reauth"
 
 
+class TelegramCodeSendError(TeleDriveError):
+    """Telegram code request failed after the bounded retry policy."""
+    message_key = "err.tg_code_send_failed"
+
+
 class QuotaRefusedError(TeleDriveError):
     message_key = "err.drive_full"
 

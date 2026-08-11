@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable, Optional
 
+TELEGRAM_REQUEST_TIMEOUT_SECONDS = 30
+
 from .config import TELEGRAM_SESSION
 from .logging_config import get_logger
 
@@ -36,8 +38,10 @@ class TelegramService:
         self._connected = False
 
     async def connect(self) -> None:
-        self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
-        await self.client.connect()
+        if self.client is None:
+            self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
+        if not self.client.is_connected():
+            await self.client.connect()
         self._connected = True
 
     async def is_authorized(self) -> bool:
@@ -47,7 +51,10 @@ class TelegramService:
 
     async def start_login(self, phone: str) -> str:
         assert self.client
-        sent = await self.client.send_code_request(phone)
+        sent = await asyncio.wait_for(
+            self.client.send_code_request(phone),
+            timeout=TELEGRAM_REQUEST_TIMEOUT_SECONDS,
+        )
         return sent.phone_code_hash
 
     async def sign_in_code(self, phone: str, code: str, phone_code_hash: str):

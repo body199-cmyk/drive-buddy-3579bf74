@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional
 
 from . import database as db
 from .config import TELEGRAM_SESSION
-from .errors import AuthStateError, CooldownError, TeleDriveError
+from .errors import AuthStateError, CooldownError, TelegramCodeSendError, TeleDriveError
 from .logging_config import get_logger
 from .redaction import mask_phone, safe_exception
 
@@ -141,10 +141,16 @@ class TelegramAuth:
             return self._do_send_code()
 
     def _do_send_code(self) -> TelegramStatus:
-        try:
-            sent_hash = self._run(self.client.start_login(self._phone))
-        except BaseException as exc:  # noqa: BLE001 — classified below
-            return self._handle_send_error(exc)
+        restart_retried = False
+        while True:
+            try:
+                sent_hash = self._run(self.client.start_login(self._phone))
+                break
+            except BaseException as exc:  # noqa: BLE001 — classified below
+                if _exc_name(exc) == "AuthRestartError" and not restart_retried:
+                    restart_retried = True
+                    continue
+                return self._handle_send_error(exc)
         self._phone_code_hash = sent_hash
         self._last_code_sent_at = self._clock()
         self._set_state(CODE_REQUESTED)
@@ -159,9 +165,12 @@ class TelegramAuth:
             self._set_state(CODE_REQUESTED if self._phone_code_hash else READY_FOR_PHONE,
                             "flood wait")
             raise CooldownError(f"flood wait {seconds}s", "err.floodwait")
-        self.last_error_key = "err.unknown"
+        self.last_error_key = "err.tg_code_send_failed"
         self._set_state(ERROR, safe_exception(exc))
-        raise TeleDriveError(safe_exception(exc))
+        raise TelegramCodeSendError(
+            f"telegram code request failed: {name}",
+            "err.tg_code_send_failed",
+        ) from exc
 
     def verify_code(self, code: str) -> TelegramStatus:
         with self._lock:

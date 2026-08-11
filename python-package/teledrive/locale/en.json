@@ -104,6 +104,7 @@
   "err.tests_failed": "Tests failed, package not produced",
   "err.transient": "Transient error, will auto-retry.",
   "err.tg_connect_failed": "Could not reach Telegram servers. Check your internet connection and try again.",
+  "err.tg_code_send_failed": "Could not send the Telegram code. Check your connection and try again.",
   "err.unknown": "Unknown error. Try again.",
   "err.unknown_action": "Unknown action",
   "err.verify_failed": "Drive verification of the uploaded file failed.",
