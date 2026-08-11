@@ -26,6 +26,7 @@ from teledrive.i18n import t
 # fake, no duplicated Telegram double.
 from .test_telegram_auth import (
     FakeClient,
+    FloodWaitError,
     PhoneCodeInvalidError,
     SessionPasswordNeededError,
 )
@@ -286,6 +287,137 @@ def test_bad_api_id_is_not_swallowed_by_the_transport_classifier(handlers, auth)
     message, *_ = _panels(handlers.h_telegram_set_credentials("not-a-number", "abc"))
     assert t("err.bad_api_id") in message
     assert auth.created == [] and auth.client is None
+
+
+# ---- send-code failures are NAMED, never err.unknown (M18-T03) ----
+#
+# The owner's Colab run (cid fd41da8b): Connect succeeds, but pressing
+# «إرسال الكود» answers "خطأ غير معروف. جرّب مرة أخرى." and no code arrives.
+# auth.sendCode is the FIRST call that carries the api_id/api_hash pair (and
+# the phone), so every real rejection lands in _handle_send_error — which used
+# to know only FloodWaitError and flatten everything else into err.unknown.
+# Name-based doubles below stand in for the real Telethon exception classes,
+# exactly like the FloodWaitError/PhoneCodeInvalidError doubles in
+# tests/test_telegram_auth.py.
+
+
+class ApiIdInvalidError(Exception):
+    """Telegram rejected the api_id/api_hash pair (API_ID_INVALID)."""
+
+
+class PhoneNumberInvalidError(Exception):
+    """Telegram rejected the phone number itself (PHONE_NUMBER_INVALID)."""
+
+
+class PhoneNumberFloodError(Exception):
+    """Telegram rate-limited this number (PHONE_NUMBER_FLOOD)."""
+
+
+def test_bad_api_pair_at_send_code_is_named_and_recovers_via_reconnect(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    auth.client.send_error = ApiIdInvalidError("API_ID_INVALID")
+    message, _, code_visible, password_visible = _panels(
+        handlers.h_telegram_send_code(PHONE)
+    )
+    assert t("err.bad_api_pair") in message
+    assert t("err.unknown") not in message
+    assert auth.state == ta.ERROR                       # stop: credentials must change
+    assert code_visible is False and password_visible is False
+    # recovery: re-entering corrected credentials from ERROR state works
+    handlers.h_telegram_set_credentials("12345", "abc")
+    assert auth.state == ta.READY_FOR_PHONE
+
+
+def test_rejected_phone_returns_to_the_phone_step_with_a_named_message(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    auth.client.send_error = PhoneNumberInvalidError("PHONE_NUMBER_INVALID")
+    message, _, code_visible, _ = _panels(handlers.h_telegram_send_code(PHONE))
+    assert t("err.tg_phone_invalid") in message
+    assert t("err.unknown") not in message
+    assert auth.state == ta.READY_FOR_PHONE
+    assert code_visible is False
+    # a corrected number is accepted immediately afterwards
+    handlers.h_telegram_send_code("+971500000001")
+    assert auth.state == ta.CODE_REQUESTED
+
+
+def test_phone_flood_is_named_instead_of_unknown(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    auth.client.send_error = PhoneNumberFloodError("PHONE_NUMBER_FLOOD")
+    message, *_ = _panels(handlers.h_telegram_send_code(PHONE))
+    assert t("err.tg_phone_flood") in message
+    assert t("err.unknown") not in message
+    assert auth.state == ta.READY_FOR_PHONE
+
+
+def test_transport_failure_at_send_code_is_classified_and_retryable(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    auth.client.send_error = ConnectionError("dc unreachable")
+    message, _, code_visible, _ = _panels(handlers.h_telegram_send_code(PHONE))
+    assert t("err.tg_connect_failed") in message
+    assert t("err.unknown") not in message
+    assert auth.state == ta.READY_FOR_PHONE
+    assert code_visible is False
+    # one-shot failure: the retry takes the happy path untouched
+    handlers.h_telegram_send_code(PHONE)
+    assert auth.state == ta.CODE_REQUESTED
+    assert auth.client.sent == [PHONE]
+
+
+def test_transport_failure_at_verify_code_keeps_hash_and_otp_panel(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    handlers.h_telegram_send_code(PHONE)
+    auth.client.code_error = ConnectionError("dc dropped mid-verify")
+    message, _, code_visible, password_visible = _panels(
+        handlers.h_telegram_verify_code(CODE)
+    )
+    assert t("err.tg_connect_failed") in message
+    assert t("err.unknown") not in message
+    assert auth.state == ta.CODE_REQUESTED              # NOT a wrong code
+    assert auth._phone_code_hash == FIRST_HASH          # noqa: SLF001 - kept for retry
+    assert code_visible is True and password_visible is False
+    handlers.h_telegram_verify_code(CODE)               # the same code retries fine
+    assert auth.state == ta.AUTHORIZED
+
+
+def test_transport_failure_at_verify_password_is_not_mislabeled(handlers, auth):
+    """A dropped DC connection during 2FA used to render «كلمة المرور غير
+    صحيحة» — sending the user to retype a perfectly good password forever."""
+    handlers.h_telegram_set_credentials("12345", "abc")
+    handlers.h_telegram_send_code(PHONE)
+    auth.client.code_error = SessionPasswordNeededError()
+    handlers.h_telegram_verify_code(CODE)
+
+    async def drop(password):
+        raise ConnectionError("dc dropped at 2fa")
+
+    auth.client.sign_in_password = drop
+    message, _, code_visible, password_visible = _panels(
+        handlers.h_telegram_verify_password("top-secret-2fa")
+    )
+    assert t("err.tg_connect_failed") in message
+    assert t("err.password_invalid") not in message
+    assert auth.state == ta.PASSWORD_REQUIRED
+    assert password_visible is True and code_visible is False
+
+
+def test_flood_at_verify_password_is_not_mislabeled_as_wrong_password(handlers, auth):
+    handlers.h_telegram_set_credentials("12345", "abc")
+    handlers.h_telegram_send_code(PHONE)
+    auth.client.code_error = SessionPasswordNeededError()
+    handlers.h_telegram_verify_code(CODE)
+
+    async def flood(password):
+        raise FloodWaitError(300)
+
+    auth.client.sign_in_password = flood
+    message, _, code_visible, password_visible = _panels(
+        handlers.h_telegram_verify_password("top-secret-2fa")
+    )
+    assert t("err.floodwait") in message
+    assert t("err.password_invalid") not in message
+    assert auth.state == ta.PASSWORD_REQUIRED
+    assert password_visible is True and code_visible is False
 
 
 # ---- logout closes both panels ----

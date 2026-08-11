@@ -1,5 +1,28 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M18-T03] — 2026-08-12 — التصنيف العميق لأخطاء تسجيل دخول Telegram (لا «خطأ غير معروف» عند «إرسال الكود» — cid fd41da8b)
+
+### Verified
+- فحص §9 قبل أي تعديل: HEAD=`1d72ba1` (PR #31=M18-T02 مدموج) · التاج `pkg-2026.08.09-m15t07` مُعاد نشره من الكوميت نفسه · الشجرة مطابقة لـAI_HANDOFF/ACTIVE_TASK.
+- البوابات بعد التعديل: `compileall` OK · `pytest -q tests` → **589 passed** (كان 582؛ +7) · `launcher --check` → **45/45** · `notebook_cells --check` في المزامنة · `cmp` النوت‌بوكان متطابقان · `package_service --build` (بوابته تعيد تشغيل الاختبارات) OK · `git diff --stat`: 4 ملفات، +193/−0.
+- **السبب الجذري (بلاغ المالك: «بضغط إرسال الكود لكن الكود لا يصل»):** `auth.sendCode` أول استدعاء يحمل زوج api_id/api_hash؛ و`_handle_send_error` في الملف المحمي `telegram_auth.py` لم يكن يصنّف سوى `FloodWaitError` — كل رفض آخر (`ApiIdInvalidError`/`PhoneNumberInvalidError`/`PhoneNumberFloodError`/أخطاء النقل) كان ينهي إلى `err.unknown` الجامد.
+
+### Changed (بتفويض المالك الصريح للمس الملف المحمي — تصنيف فقط)
+- `teledrive/telegram_auth.py` (+55، صفر حذف): `_TRANSPORT_EXC` + `_SEND_CODE_RPC_KEYS`؛ `_handle_send_error` يسمّي السبب (`err.bad_api_pair`→ERROR قابلة للاسترداد عبر «ربط» · `err.tg_phone_invalid`/`err.tg_phone_flood`→READY_FOR_PHONE · نقل→`err.tg_connect_failed`+READY_FOR_PHONE)؛ `_handle_code_error` فرع نقل→يبقى CODE_REQUESTED بالهاش محفوظًا؛ `verify_password` فرعا نقل/flood——لا «كلمة المرور غير صحيحة» كاذبة بعد الآن. **منطق الدخول نفسه لم يُمس.**
+- `locale/ar.json`+`en.json`: مفاتيح `err.bad_api_pair`/`err.tg_phone_invalid`/`err.tg_phone_flood`.
+- `tests/test_telegram_flow_contract.py`: +7 اختبارات إثبات (تسمية كل صنف + الاسترداد + عدم بلع الحالة السعيدة).
+- ذاكرة: `docs/*` + `python-package/docs/PHASE_REPORTS/PHASE_M18_T03.md`.
+
+### Protected (لم تُلمس)
+النوت‌بوكات · `notebook_cells.py` · `colab_cells.json` · `database.py` · `migrations.py` · `queue_manager.py` · `transfer_manager.py` · `telegram_client.py` · `drive_auth.py` · `requirements.*` · `bun.lock` · `package.json` · `.github/workflows/*` · React/frontend.
+
+### للمالك (تشغيل Colab على التحديث)
+دمج PR ← إعادة نشر التاج يدويًا من main الجديد (KNOWN_ISSUES #27) ← Restart runtime ← Cell 1 ← الخلايا 2–4 ← إعادة «إرسال الكود»: الرسالة ستسمّي السبب الحقيقي.
+
+### Known-issue ledger
+- KNOWN_ISSUES #40 مُغلقة بالكامل (اكتمل التصنيف العميق داخل `telegram_auth.py`). أصناف RPC نادرة أخرى تبقى في `err.unknown` عمدًا حتى تظهر في سجل حي.
+
+
 ## [M18-T02] — 2026-08-10 — §10: إصلاح «خطأ غير معروف» عند ربط Telegram بعد M18-T01 (cid d75de588)
 
 ### Verified
