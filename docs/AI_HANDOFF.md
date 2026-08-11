@@ -12,8 +12,8 @@
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
 | Branch (Arena, platform-pinned) | `arena/019ff2cd-drive-buddy-3579bf74` |
 | Base SHA | `1d72ba12e93bb929f9392a1c67bae50fb998007b` (`main` = merged PR #31 = M18-T02) |
-| Result SHA | see PR (single PR from `arena/019ff2cd-…`) |
-| Status | **COMPLETE** — code + all gates green (589 passed, launcher 45/45); merge + tag re-publish + live-Colab proof are owner-side |
+| Result SHA | **`6281a66`** — PR #33 **merged on the owner's instruction** (2026-08-12); post-merge CI green (run `31544521923`) |
+| Status | **MERGED** — remaining owner-side only: manual tag re-publish (`gh workflow run` → HTTP 403, retried this session per KNOWN_ISSUES #27) + live Colab proof |
 | Launcher | `binding check ok: 45/45 ready actions resolve` |
 
 ## §9 resume verification of the previous milestone (M18-T02)
@@ -89,18 +89,22 @@ React/frontend files.
   `err.unknown` until seen in a live log.
 - No browser/Colab in the sandbox → live proof stays owner-side (KNOWN_ISSUES #41, M15-T01).
 
-## Next action
+## Next action (after the merge — owner-side only)
 
-**STOP — await the owner's merge of the M18-T03 PR.** After merge:
-1. Owner re-publishes tag `pkg-2026.08.09-m15t07` from the new main (manual `release-current.yml`
-   dispatch — Arena token lacks `actions:write`, KNOWN_ISSUES #27).
-2. Owner in Colab: Runtime → Restart runtime → Cell 1 → Cells 2–4.
-3. Owner presses «إرسال الكود» again — the message MUST name the reason
+1. Owner dispatches **Actions → Publish current TeleDrive package → Run workflow (branch: main)**
+   so the pinned tag `pkg-2026.08.09-m15t07` rebuilds from `6281a66` (expect ≈2m like run
+   `31441568038`; zip should grow past 403931 bytes).
+2. Owner in Colab: Runtime → Restart runtime → Cell 1 (update gate pulls the new manifest
+   digest) → Cells 2–4.
+3. Owner presses «إرسال الكود» — the UI MUST name the reason
    (`err.bad_api_pair` / `err.tg_phone_invalid` / `err.tg_phone_flood` / `err.tg_connect_failed`)
    instead of `err.unknown`; the redacted `failed:` line in the Logs tab confirms the class.
 
 ## GitHub handoff (this session)
 
 - Branch: `arena/019ff2cd-drive-buddy-3579bf74`
-- PR: one fix PR from this branch (M18-T03) — see PR URL in the report
-- Commit: code+tests+docs, single commit prefixed `M18-T03`
+- Commit: `c01a3b5` (code+tests+docs, prefixed `M18-T03`)
+- PR: **#33 — MERGED** on the owner's instruction (merge commit `6281a66` on main; post-merge CI
+  run `31544521923` success 1m33s)
+- Tag re-publish attempt: `gh workflow run release-current.yml --ref main` → **HTTP 403**
+  (KNOWN_ISSUES #27 stands — owner dispatches manually)
