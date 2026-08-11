@@ -2,20 +2,22 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M18-T02 (§10 fix) |
-| العنوان | **إصلاح «خطأ غير معروف. جرّب مرة أخرى. [cid]» عند ربط Telegram بعد M18-T01** — السبب الجذري: أخطاء طبقة النقل/الاتصال بـTelegram تفلت غير مصنّفة من `TelegramAuth.set_credentials` (ملف محمي، ثابت قبل/بعد M18-T01) فتصبح `err.unknown`؛ الإصلاح في `handlers.py` يصنّفها إلى `err.tg_connect_failed` المترجم مع بقاء التتبع في السجلات |
-| الحالة | COMPLETE — الكود والبوابات خضراء (582 passed · launcher 45/45 · notebooks identical · cmp ok)؛ لقطة Colab بمتصفح حقيقي بيد المالك (لا متصفح في الساندبوكس) |
+| TASK ID | M18-T03 |
+| العنوان | **التصنيف العميق لأخطاء تسجيل دخول Telegram — «خطأ غير معروف. [fd41da8b]» عند «إرسال الكود» والكود لا يصل** — السبب الجذري: `_handle_send_error` في `telegram_auth.py` (ملف محمي، بتفويض المالك) لم يكن يصنّف سوى `FloodWaitError`؛ و`auth.sendCode` أول استدعاء يحمل زوج api_id/api_hash فكل رفض (`ApiIdInvalidError`/`PhoneNumberInvalidError`/`PhoneNumberFloodError`/نقل) كان ينتهي `err.unknown` |
+| الحالة | COMPLETE — الكود والبوابات خضراء (589 passed · launcher 45/45 · notebooks identical · cmp ok · package build ok)؛ الدمج وإعادة نشر التاج والإثبات الحي في Colab بيد المالك |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (§10) |
-| Base SHA | `faff35a3af12adb1adf891049917f7add8dc7751` (= رأس `origin/main`، PR #30 = M18-T01) |
-| Result SHA | انظر PR من الفرع `arena/019fede6-drive-buddy-3579bf74` (غير مدموج) |
-| النطاق | فحص مسار Telegram المتأثر بـM18-T01 فقط (مقارنة 5 ملفات قبل/بعد) · استخراج التتبع المنقّح (إعادة إنتاج محلية بلا أسرار) · تصنيف فشل النقل عند الزر (connect) إلى رسالة مترجمة قابلة لإعادة المحاولة · مفتاحا locale ar/en · اختباران proof · تحديثات الذاكرة (§10 قالب التقرير) |
-| خارج النطاق | كل الملفات المحمية (telegram_auth.py تحديدًا — التصنيف العميق داخله يتطلب تفويضًا صريحًا) · تغيير بيانات اعتماد المالك · إعادة تصميم الواجهة · React · أي PR آخر |
-| الدليل الرئيسي | compileall: ok · pytest: **582 passed** · launcher `--check`: **45/45 ready** · notebook_cells `--check`: in sync · cmp: notebook ↔ public identical · إعادة إنتاج محلية لنفس المسار: `action=telegram.set_credentials cid=… crashed` → `asyncio.exceptions.IncompleteReadError` في `telegram_client.py:40 connect()` · بعد الإصلاح: «تعذر الاتصال بخوادم تيليجرام… [cid]» + `failed: TeleDriveError: telegram connect failed: IncompleteReadError` |
-| الخطوة السابقة (مُغلَقة) | M18-T01 (DOC-39) — PR #30 مدمج في `faff35a` |
-| الخطوة التالية | **STOP — بانتظار مراجعة المالك ودمج PR**؛ ثم إعادة نشر التاج `pkg-2026.08.09-m15t07` من main الجديد (release-current.yml أو يدويًا — توكن Arena بلا actions:write، KNOWN_ISSUES #27)؛ في Colab: Restart runtime ← Cell 1 فقط ← Cells 2–4 |
+| Base SHA | `1d72ba12e93bb929f9392a1c67bae50fb998007b` (= رأس `main`، PR #31 = M18-T02 — مُتحقق بفحص §9 كاملًا) |
+| Result SHA | انظر PR من الفرع `arena/019ff2cd-drive-buddy-3579bf74` (غير مدموج — الدمج بيد المالك) |
+| النطاق | تصنيف فقط داخل الملف المحمي `telegram_auth.py` (بتفويض صريح): `_TRANSPORT_EXC` + `_SEND_CODE_RPC_KEYS` + 3 فروع تصنيف (`_handle_send_error`/`_handle_code_error`/`verify_password`) · 3 مفاتيح locale × لغتين · 7 اختبارات إثبات · تحديثات الذاكرة |
+| خارج النطاق | منطق تسجيل الدخول نفسه (لم يُمس) · `set_credentials` (مغطى بـM18-T02 في handlers.py) · كل الملفات المحمية الأخرى · النوت‌بوكات · locks · frontend · أسرار المالك |
+| الدليل الرئيسي | compileall ok · pytest: **589 passed** (كان 582) · launcher `--check`: **45/45** · notebook_cells `--check` in sync · cmp identical · `package_service --build` ok · `git diff --stat`: 4 ملفات **+193/−0** |
+| الخطوة السابقة (مُغلَقة) | M18-T02 — PR #31 مدموج في `1d72ba1`، والتاج أُعيد نشره منه (run `31441568038`) — كلاهما مُتحقق عبر git/gh هذه الجلسة |
+| الخطوة التالية | **STOP — بانتظار دمج المالك لـPR**؛ ثم: إعادة نشر التاج `pkg-2026.08.09-m15t07` يدويًا من main الجديد (KNOWN_ISSUES #27) ← في Colab: Restart runtime ← Cell 1 ← الخلايا 2–4 ← محاولة «إرسال كود» حقيقية: الرسالة يجب أن تسمّي السبب (`err.bad_api_pair`/`err.tg_phone_invalid`/`err.tg_phone_flood`/`err.tg_connect_failed`) بدل `err.unknown` — سطر `failed:` المنقّح في تبويب Logs هو سجل التأكيد |
 
-## انحرافات عن §10
-- سجلات جلسة المالك (`cid d75de588`) غير متاحة من الساندبوكس — التتبع المنقّح أُعيد إنتاجه على **نفس المسار** محليًا بلا أسرار (عميل Telethon حقيقي + بيانات وهمية)؛ النوع الدقيق في جلسة المالك قد يكون شقيقًا لـ`IncompleteReadError` (Timeout/Connection/OSError/RPC) وكلها تُصنَّف الآن بالمفتاح نفسه.
-- لم ألمس `telegram_auth.py` (§10: الخطأ داخله فعلًا → توقف وأبلغ): سدّدت الفجوة من جهة الواجهة (`handlers.py` غير محمي) وأبلغت أن التصنيف العميق داخل الملف المحمي يحتاج تفويضًا صريحًا.
-- لا متصفح في الساندبوكس → الإثبات الحي في Colab بيد المالك (الخطوات في `PHASE_M18_T02.md` §6).
+## انحرافات عن §10 / نقاط صدق
+
+- السبب الدقيق في جلسة المالك (أي صنف من الجدول) لم يُثبت بسطر سجل — المالك أرسل رسالة الواجهة فقط؛ الإصلاح مصمم ليجعل المحاولة القادمة تسمّي السبب بنفسها (لا ادعاء بمعرفة الصنف قبل ظهوره — §17/§20).
+- أصناف RPC نادرة أخرى في `send_code` (مثل `ApiIdPublishedFloodError`) تبقى في fallback `err.unknown` عمدًا.
+- لا متصفح/Colab حي في الساندبوكس → الإثبات الحي بيد المالك (KNOWN_ISSUES #41، M15-T01).
+- توكن Arena بلا `actions:write` → إعادة نشر التاج يدويًا بيد المالك كما في M15-T16/M18-T02.

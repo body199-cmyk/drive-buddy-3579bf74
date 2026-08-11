@@ -36,6 +36,23 @@ STATES = (
 
 RESEND_COOLDOWN_SECONDS = 60
 
+# M18-T03 — deep error classification (owner-authorized per §10 / KNOWN_ISSUES #40).
+# Telethon's exception CLASSES stay unimported here, so the classifiers match by
+# class NAME exactly like the FloodWaitError branch below; transport failures are
+# matched by isinstance against stdlib network classes.
+# (asyncio.IncompleteReadError subclasses EOFError; ConnectionError/TimeoutError
+# subclass OSError — listed explicitly so the intent is greppable.)
+_TRANSPORT_EXC = (ConnectionError, TimeoutError, OSError, EOFError)
+
+# auth.sendCode RPC rejections → localized key. `err.bad_api_pair` means Telegram
+# rejected the api_id/api_hash PAIR itself — auth.sendCode is the FIRST call that
+# carries both halves, so a bad pair fails here, not at connect().
+_SEND_CODE_RPC_KEYS = {
+    "ApiIdInvalidError": "err.bad_api_pair",
+    "PhoneNumberInvalidError": "err.tg_phone_invalid",
+    "PhoneNumberFloodError": "err.tg_phone_flood",
+}
+
 
 def _exc_name(exc: BaseException) -> str:
     return type(exc).__name__
@@ -159,6 +176,23 @@ class TelegramAuth:
             self._set_state(CODE_REQUESTED if self._phone_code_hash else READY_FOR_PHONE,
                             "flood wait")
             raise CooldownError(f"flood wait {seconds}s", "err.floodwait")
+        # M18-T03 — name the real cause instead of the dead-end err.unknown.
+        if isinstance(exc, _TRANSPORT_EXC):
+            # network/DC failure before Telegram even saw the request — retryable
+            self.last_error_key = "err.tg_connect_failed"
+            self._set_state(READY_FOR_PHONE, f"send_code transport: {name}")
+            raise TeleDriveError(f"telegram connect failed: {name}",
+                                 "err.tg_connect_failed")
+        rpc_key = _SEND_CODE_RPC_KEYS.get(name)
+        if rpc_key is not None:
+            self.last_error_key = rpc_key
+            if rpc_key == "err.bad_api_pair":
+                # credentials themselves rejected — user fixes them via Connect
+                self._set_state(ERROR, f"send_code rpc: {name}")
+            else:
+                # number rejected/rate-limited — user may retry a corrected phone
+                self._set_state(READY_FOR_PHONE, f"send_code rpc: {name}")
+            raise TeleDriveError(safe_exception(exc), rpc_key)
         self.last_error_key = "err.unknown"
         self._set_state(ERROR, safe_exception(exc))
         raise TeleDriveError(safe_exception(exc))
@@ -199,6 +233,13 @@ class TelegramAuth:
             self.last_error_key = "err.code_expired"
             self._set_state(READY_FOR_PHONE, "expired code")
             raise TeleDriveError("expired code", "err.code_expired")
+        # M18-T03 — a transport drop mid-verification is NOT a wrong code:
+        # the hash is still valid, keep CODE_REQUESTED so the same code retries.
+        if isinstance(exc, _TRANSPORT_EXC):
+            self.last_error_key = "err.tg_connect_failed"
+            self._set_state(CODE_REQUESTED, f"verify_code transport: {name}")
+            raise TeleDriveError(f"telegram connect failed: {name}",
+                                 "err.tg_connect_failed")
         self.last_error_key = "err.unknown"
         self._set_state(ERROR, safe_exception(exc))
         raise TeleDriveError(safe_exception(exc))
@@ -213,6 +254,20 @@ class TelegramAuth:
                 # same client, no new code requested
                 self._run(self.client.sign_in_password(password))
             except BaseException as exc:  # noqa: BLE001
+                name = _exc_name(exc)
+                # M18-T03 — never mislabel a dropped connection as a wrong password.
+                if isinstance(exc, _TRANSPORT_EXC):
+                    self.last_error_key = "err.tg_connect_failed"
+                    self._set_state(PASSWORD_REQUIRED,
+                                    f"verify_password transport: {name}")
+                    raise TeleDriveError(f"telegram connect failed: {name}",
+                                         "err.tg_connect_failed")
+                if name == "FloodWaitError":
+                    seconds = int(getattr(exc, "seconds", RESEND_COOLDOWN_SECONDS) or 0)
+                    self.last_error_key = "err.floodwait"
+                    self._set_state(PASSWORD_REQUIRED,
+                                    f"verify_password flood {seconds}s")
+                    raise CooldownError(f"flood wait {seconds}s", "err.floodwait")
                 self.last_error_key = "err.password_invalid"
                 self._set_state(PASSWORD_REQUIRED, safe_exception(exc))
                 raise TeleDriveError("password rejected", "err.password_invalid")
