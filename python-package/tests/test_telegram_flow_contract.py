@@ -80,9 +80,21 @@ def _panels(result):
 
 def test_set_credentials_creates_exactly_one_client(auth):
     auth.set_credentials("12345", "abc")
+    first = auth.client
+    auth.set_credentials("12345", "abc")
     assert len(auth.created) == 1
-    assert auth.client is auth.created[0]
+    assert auth.client is first
     assert auth.state == ta.READY_FOR_PHONE
+
+
+def test_changing_credentials_closes_old_client_before_replacement(auth):
+    auth.set_credentials("12345", "abc")
+    old = auth.client
+    auth.set_credentials("67890", "def")
+    assert len(auth.created) == 2
+    assert old.closed is True
+    assert auth.client is auth.created[1]
+    assert auth.client is not old
 
 
 def test_non_numeric_api_id_is_refused_before_any_client_exists(auth):

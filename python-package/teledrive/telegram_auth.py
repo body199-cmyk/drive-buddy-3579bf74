@@ -105,9 +105,21 @@ class TelegramAuth:
                 raise TeleDriveError("api id must be numeric", "err.bad_api_id")
             if not str(api_hash).strip():
                 raise TeleDriveError("api hash required", "err.bad_api_hash")
-            self._api_id = parsed_id
-            self._api_hash = str(api_hash).strip()
-            self.client = self._client_factory(self._api_id, self._api_hash)
+            normalized_hash = str(api_hash).strip()
+            same_credentials = (
+                self.client is not None
+                and self._api_id == parsed_id
+                and self._api_hash == normalized_hash
+            )
+            if not same_credentials:
+                if self.client is not None:
+                    try:
+                        self._run(self.client.logout())
+                    except Exception:  # noqa: BLE001 — best-effort safe close
+                        _log.exception("telegram client close failed during credential change")
+                self._api_id = parsed_id
+                self._api_hash = normalized_hash
+                self.client = self._client_factory(self._api_id, self._api_hash)
             self._run(self.client.connect())
             if self._run(self.client.is_authorized()):
                 self.account_label = self._describe_account()

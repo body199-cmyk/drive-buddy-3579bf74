@@ -47,6 +47,7 @@ class FakeClient:
         self.code_error = None
         self.send_error = None
         self.instances = 1
+        self.closed = False
 
     async def connect(self):
         return None
@@ -74,6 +75,7 @@ class FakeClient:
 
     async def logout(self):
         self.authorized = False
+        self.closed = True
 
 
 @pytest.fixture()
