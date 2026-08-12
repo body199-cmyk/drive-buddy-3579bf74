@@ -4,17 +4,16 @@
 |---|---|
 | TASK ID | `M24-POST-MERGE-P1` |
 | العنوان | إصلاحات ما بعد الدمج: null safety + ترتيب الطلبات (P1) |
-| الحالة | **Code-complete candidate + Fake-tested** — إصلاحات P1 مطبّقة محليًا على فرع الجلسة؛ **ليس** Colab-ready ولا Complete |
+| الحالة | **MERGED INTO MAIN · Code-complete candidate + Fake-tested** — PR #42 مدموج؛ **ليس** Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس/المراجع | Brain عبر ClickUp Docs |
 | الفرع | `arena/019ff805-drive-buddy-3579bf74` |
-| Base SHA | `504ec5e547b7b5270d3cd00fbdb69909bbe69621` (`origin/main` = PR #40+#41 merged) |
-| PR الأساس المدموج | [#40](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/40) MERGED → `bbea9bf` · [#41](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/41) MERGED → `504ec5e` |
-| ما تغيّر | `TeleDriveSandbox.tsx` (optional chaining + `latestRequest` Map) · `viewModel.ts` · `panel.bundle.gz`/`panel.css.gz` · contract tests 19–20 · docs |
-| ما لم يتغيّر (محمي) | notebooks · telegram_auth · queue/transfer · database/migrations · requirements.* · bun.lock · package.json · workflows |
-| Concurrency | 1..100 default 2 warn>8 (CONSTITUTION + ADR-0001) — **لم** يُرجَع إلى 1..4 |
-| البوابات المحلية | contracts **20/20** · tsc PASS · lint 0 errors · build PASS · launcher **47/47** |
-| الخطوة التالية | دفع الفرع + فتح PR → Brain review → Colab smoke بيد المالك |
+| Base SHA | `504ec5e547b7b5270d3cd00fbdb69909bbe69621` |
+| PR #42 | [MERGED](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/42) → merge `71d092822d9022aa9daebd869616cde6ce4c028d` (2026-08-12T22:21:27Z) · CI على الـPR: Frontend PASS + Python PASS |
+| main الحالي | `71d0928` = M24 bridge + post-merge P1 |
+| حزمة Colab المنشورة | ⚠️ **قديمة** — تاج `pkg-2026.08.09-m15t07` ما زال يستهدف `33a7767` (PR #37 فقط) · zip 432370 بايت · **بلا M24/React bridge ولا P1** |
+| حظر النشر من الوكيل | `gh workflow run "Publish current TeleDrive package"` → **HTTP 403** (KNOWN_ISSUES #27) — **يجب أن يشغّله المالك يدويًا** |
+| الخطوة التالية | ① المالك: Actions → Publish current TeleDrive package → Run on `main` · ② Colab Restart → Cell 1 (توقع Package update SUCCESS + sha مختلف) · ③ Cells 2–7 + 12-step smoke |
 
 ## انحرافات
 
