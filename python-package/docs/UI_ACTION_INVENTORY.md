@@ -1,16 +1,17 @@
-# UI_ACTION_INVENTORY — M18-T01: جرد الأفعال بعد DOC-39 (إصلاح الواجهة + الاختيار قبل النقل)
-> **TASK ID:** M18-T01 (DOC-39) — محدِّث على جرد M17-T02-REST + M17-T03 (DOC-37)
-> **Base SHA:** `27355232f15d07761fb9a226f8161dd22b5e0e82` (origin/main)
-> **الحالة:** 45/45 ready, visible, wired — launcher `--check` 45/45
+# UI_ACTION_INVENTORY — M24: React bridge داخل Gradio فوق السجل القائم
+> **TASK ID:** M24-T01..T05 — تحديث لجرد M18-T01 وM20
+> **Base SHA:** `16797ca9b540d8a22885fffb38012643713ef851` (origin/main عند بدء M24)
+> **Code SHA:** `56a285b5bea01b07c74d7e3ba1a2a2b26461c5fd`
+> **الحالة:** 47/47 ready وموصولة — launcher `--check` = 47/47
 
 ## ملخص الأرقام
 
 | المقياس | القيمة |
 |---|---|
-| إجمالي الأفعال | 45 |
-| ready (implemented+tested) | **45** |
+| إجمالي الأفعال | 47 |
+| ready (implemented+tested) | **47** |
 | unready (blocked_reason_key) | **0** |
-| wired عبر binder.wire | 45 action kinds (تصدير ZIP له زرّان، folder create/select لكل لوحة من 4) |
+| wired عبر binder.wire | 47 action kinds: 46 السابقة + `react.bridge.request` مرة واحدة؛ النقل الرسمي value/submit |
 
 ## الجرد الكامل
 
@@ -61,6 +62,8 @@
 | 43 | `export.colab_cells` |
 | 44 | `recovery.restore` |
 | 45 | `maintenance.checkpoint` |
+| 46 | `flow.sync` |
+| 47 | `react.bridge.request` |
 
 ## الأقسام السبعة (right rail, M17-T03 §6)
 
@@ -75,3 +78,5 @@
 RTL افتراضي (عربي) · LTR للإنجليزية · الثيم عبر CSS variables من `teledrive/ui_theme.py` · لا بيانات وهمية.
 
 DOC-39 (M18-T01): لوحة مجلد Drive رابعة داخل التحويلات (4 لوحات من مصدر حقيقة واحد، broadcast من 10 مخارج) · مرحلة اختيار قبل النقل (جدول 8 أعمدة بخانة ☑/☐ جزءًا من قيمة الجدول، نطاق من/إلى بسقف 1000، مجموعة، معاينة، بوابة enqueue) · الاختيار لا يلمس Telegram/Drive قبل زر الإضافة.
+
+M24: `ReactPanel(gr.HTML)` هو السطح الأساسي داخل Gradio 6.20.0. الحدث الوحيد الجديد `react.bridge.request` يمر عبر `UIBinder.wire(..., event="submit")` ثم `Handlers` والسجل الحالي. React لا يستعمل `fetch`/XHR/WebSocket ولا يملك client أو DB. أفعال Telegram الحساسة الأربعة (`set_credentials`/`send_code`/`verify_code`/`verify_password`) محظورة في الـbridge العام وتبقى في حقول Gradio الآمنة داخل Accordion؛ بقية أزرار React تستعمل IDs القائمة أعلاه حرفيًا.

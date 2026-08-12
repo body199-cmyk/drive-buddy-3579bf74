@@ -1,9 +1,7 @@
-/* eslint-disable prettier/prettier -- bun CI prettier wraps Arabic JSX differently than local npm prettier */
-import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
-  CircleHelp,
   Cloud,
   FileArchive,
   FileText,
@@ -24,41 +22,41 @@ import {
   UserRound,
 } from "lucide-react";
 import {
-  DEMO_FOLDERS,
-  initialState,
+  newRequestId,
+  unavailableBridge,
+  type BridgeLanguage,
+  type BridgeResponse,
+  type FolderChoice,
+  type LiveUiState,
+  type TeleDriveBridge,
+} from "./bridgeTypes";
+import {
+  enqueueBlockReason,
+  formatBytes,
+  localize,
   mediaChoices,
-  modeLabel,
-  modes,
   pageLabels,
-  scanHint,
-  statusLabel,
-  typeLabel,
+  queueMetrics,
+  scanModes,
+  selectableCandidates,
+  selectedVisibleCandidates,
+  validateAnalyzeInput,
   type MediaType,
-  type MockFile,
-  type Notice,
   type Page,
-  type SandboxState,
   type ScanMode,
-} from "./mockState";
+} from "./viewModel";
 
-type SetSandbox = Dispatch<SetStateAction<SandboxState>>;
-
-function setNotice(setState: SetSandbox, notice: Notice) {
-  setState((current) => ({ ...current, notice }));
-}
+type Notice = { kind: "info" | "success" | "warning" | "error"; text: string } | null;
+type RunAction = <T = unknown>(
+  actionId: string,
+  payload?: Record<string, unknown>,
+) => Promise<BridgeResponse<T> | null>;
 
 function NoticeBar({ notice }: { notice: Notice }) {
   if (!notice) return null;
-  const Icon =
-    notice.kind === "success"
-      ? Check
-      : notice.kind === "error"
-        ? AlertCircle
-        : notice.kind === "warning"
-          ? CircleHelp
-          : Info;
+  const Icon = notice.kind === "success" ? Check : notice.kind === "error" ? AlertCircle : Info;
   return (
-    <div className={`td-notice td-notice-${notice.kind}`} role="status">
+    <div className={`td-notice td-notice-${notice.kind}`} role="status" aria-live="polite">
       <Icon size={16} aria-hidden="true" />
       <span>{notice.text}</span>
     </div>
@@ -74,7 +72,7 @@ function SectionTitle({
   eyebrow: string;
   title: string;
   description: string;
-  titleId?: string;
+  titleId: string;
 }) {
   return (
     <header className="td-section-title">
@@ -85,144 +83,126 @@ function SectionTitle({
   );
 }
 
-function StatusChip({
-  label,
-  connected,
-  icon,
-}: {
-  label: string;
-  connected: boolean;
-  icon: ReactNode;
-}) {
+function StateChip({ label, status, icon }: { label: string; status: string; icon: ReactNode }) {
+  const connected = ["authorized", "connected", "running"].includes(status.toLowerCase());
   return (
-    <span className={`td-chip ${connected ? "is-connected" : ""}`}>
+    <span className={`td-chip ${connected ? "is-connected td-status-live" : ""}`}>
       <span className="td-chip-dot" aria-hidden="true" />
       {icon}
-      {label}: {connected ? "متصل" : "غير متصل"}
+      {label}: {status || "—"}
     </span>
   );
 }
 
-function TopBar({ state }: { state: SandboxState }) {
+function ActionButton({
+  actionId,
+  busyAction,
+  live,
+  className = "td-button td-button-secondary",
+  disabled = false,
+  onClick,
+  children,
+}: {
+  actionId: string;
+  busyAction: string | null;
+  live: boolean;
+  className?: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const blocked = !live || disabled || busyAction !== null;
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={blocked}
+      data-action-id={actionId}
+      title={!live ? "Backend bridge unavailable" : undefined}
+      onClick={onClick}
+    >
+      {busyAction === actionId ? (
+        <RefreshCw className="td-spin" size={15} aria-hidden="true" />
+      ) : null}
+      {children}
+    </button>
+  );
+}
+
+const navItems: Array<{ id: Page; icon: ReactNode }> = [
+  { id: "connection", icon: <UserRound size={15} aria-hidden="true" /> },
+  { id: "analyze", icon: <Search size={15} aria-hidden="true" /> },
+  { id: "queue", icon: <UploadCloud size={15} aria-hidden="true" /> },
+  { id: "logs", icon: <Terminal size={15} aria-hidden="true" /> },
+  { id: "settings", icon: <Settings size={15} aria-hidden="true" /> },
+];
+
+function TopBar({
+  state,
+  language,
+  live,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+}) {
   return (
     <header className="td-topbar">
       <div className="td-brand">
         <span className="td-mark">TD</span>
         <strong>TeleDrive</strong>
-        <small>v4.5.0</small>
       </div>
-      <div className="td-prototype">
+      <div className={`td-prototype ${live ? "td-status-live" : "td-status-demo"}`}>
         <Terminal size={13} aria-hidden="true" />
-        Prototype · Local demo
+        {live ? "Gradio · Live bridge" : "Backend bridge unavailable"}
       </div>
       <div className="td-chips">
-        <StatusChip
-          label="تيليجرام"
-          connected={state.telegramConnected}
+        <StateChip
+          label={localize(language, "تيليجرام", "Telegram")}
+          status={state?.telegram.status ?? "—"}
           icon={<UserRound size={13} aria-hidden="true" />}
         />
-        <StatusChip
-          label="درايف"
-          connected={state.driveConnected}
+        <StateChip
+          label={localize(language, "درايف", "Drive")}
+          status={state?.drive.status ?? "—"}
           icon={<Cloud size={13} aria-hidden="true" />}
         />
-        <span className={`td-chip ${state.folder ? "is-connected" : ""}`}>
+        <span className={`td-chip ${state?.folder.id ? "is-connected" : ""}`}>
           <span className="td-chip-dot" aria-hidden="true" />
           <Folder size={13} aria-hidden="true" />
-          المجلد: {state.folder ?? "غير محدد"}
+          {localize(language, "المجلد", "Folder")}: {state?.folder.name ?? "—"}
         </span>
-        <span className="td-chip">
-          <span className="td-chip-dot" aria-hidden="true" />
-          المحرك: محاكاة
-        </span>
+        <StateChip
+          label={localize(language, "المحرك", "Engine")}
+          status={state?.engine ?? "—"}
+          icon={<Gauge size={13} aria-hidden="true" />}
+        />
       </div>
     </header>
   );
 }
 
-const navItems: Array<{ id: Page; label: string; icon: ReactNode }> = [
-  {
-    id: "connection",
-    label: pageLabels.connection,
-    icon: <UserRound size={15} aria-hidden="true" />,
-  },
-  { id: "analyze", label: pageLabels.analyze, icon: <Search size={15} aria-hidden="true" /> },
-  { id: "queue", label: pageLabels.queue, icon: <UploadCloud size={15} aria-hidden="true" /> },
-  { id: "logs", label: pageLabels.logs, icon: <Terminal size={15} aria-hidden="true" /> },
-  { id: "settings", label: pageLabels.settings, icon: <Settings size={15} aria-hidden="true" /> },
-];
+function ConnectionSection({
+  state,
+  language,
+  live,
+  busyAction,
+  run,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  busyAction: string | null;
+  run: RunAction;
+}) {
+  const [parentId, setParentId] = useState("root");
+  const [folderName, setFolderName] = useState("");
+  const [folderId, setFolderId] = useState("");
+  const [folders, setFolders] = useState<FolderChoice[]>([]);
 
-function SectionNav({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
-  return (
-    <nav className="td-nav" aria-label="أقسام TeleDrive">
-      {navItems.map((item) => (
-        <button
-          type="button"
-          key={item.id}
-          className={`td-nav-button ${page === item.id ? "is-active" : ""}`}
-          aria-current={page === item.id ? "page" : undefined}
-          onClick={() => onNavigate(item.id)}
-        >
-          {item.icon}
-          {item.label}
-        </button>
-      ))}
-    </nav>
-  );
-}
-
-function ConnectionSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [codeVisible, setCodeVisible] = useState(false);
-
-  const sendCode = () => {
-    setCodeVisible(true);
-    setNotice(setState, {
-      kind: "info",
-      text: "محاكاة: تم إظهار خطوة الرمز. لم يُرسل أي رمز حقيقي.",
-    });
-  };
-
-  const verifyCode = () => {
-    setState((current) => ({
-      ...current,
-      telegramConnected: true,
-      notice: {
-        kind: "success",
-        text: "محاكاة: تغيّرت شريحة تيليجرام إلى متصل. لا يوجد جلسة حقيقية.",
-      },
-    }));
-  };
-
-  const logout = () => {
-    setCodeVisible(false);
-    setCode("");
-    setState((current) => ({
-      ...current,
-      telegramConnected: false,
-      notice: { kind: "info", text: "محاكاة: أُعيد تيليجرام إلى غير متصل." },
-    }));
-  };
-
-  const connectDrive = () => {
-    setState((current) => ({
-      ...current,
-      driveConnected: true,
-      notice: { kind: "success", text: "محاكاة: تغيّرت شريحة درايف إلى متصل. لا يوجد OAuth." },
-    }));
-  };
-
-  const selectFolder = (folder: string) => {
-    if (!state.driveConnected) {
-      setNotice(setState, { kind: "warning", text: "اربط Drive تجريبيًا قبل اختيار المجلد." });
-      return;
-    }
-    setState((current) => ({
-      ...current,
-      folder,
-      notice: { kind: "success", text: `محاكاة: تم اختيار المجلد ${folder}.` },
-    }));
+  const listFolders = async () => {
+    const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
+    if (response?.status === "ok") setFolders(response.data?.folders ?? []);
   };
 
   return (
@@ -230,814 +210,933 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
       <SectionTitle
         titleId="connection-title"
         eyebrow="CONNECTION CENTER"
-        title="مركز الاتصال"
-        description="تيليجرام على اليمين ودرايف على اليسار. كل زر هنا يغيّر الحالة المحلية فقط ولا يفتح أي اتصال."
+        title={pageLabels.connection[language]}
+        description={localize(
+          language,
+          "الحالة من ApplicationContext الحي. حقول Telegram السرية تبقى في لوحة Gradio الآمنة ولا تدخل React.",
+          "Status comes from the live ApplicationContext. Secret Telegram fields stay in the secure Gradio panel and never enter React.",
+        )}
       />
       <div className="td-split">
         <article className="td-panel">
           <div className="td-conn-head">
             <UserRound size={18} aria-hidden="true" />
             <div>
-              <h2>تيليجرام</h2>
-              <p>
-                {state.telegramConnected ? "حالة الشريحة: متصل (تجريبي)" : "حالة الشريحة: غير متصل"}
-              </p>
+              <h2>Telegram</h2>
+              <p>{state?.telegram.status ?? "—"}</p>
+              {state?.telegram.accountLabel ? <small>{state.telegram.accountLabel}</small> : null}
             </div>
           </div>
           <div className="td-stack">
-            <label className="td-label" htmlFor="td-phone">
-              رقم الهاتف
-              <input
-                id="td-phone"
-                className="td-input"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="+9665xxxxxxxx"
-                autoComplete="off"
-              />
-            </label>
-            <div className="td-button-row">
-              <button type="button" className="td-button td-button-primary" onClick={sendCode}>
-                إرسال الرمز
-              </button>
-              <button type="button" className="td-button td-button-secondary" onClick={sendCode}>
-                إعادة الإرسال
-              </button>
+            <div className="td-bridge-blocked">
+              <ShieldCheck size={16} aria-hidden="true" />
+              {localize(
+                language,
+                "API hash ورقم الهاتف والرمز و2FA تُدخل فقط في عناصر Gradio الآمنة أسفل لوحة React.",
+                "API hash, phone, code, and 2FA are entered only in the secure Gradio controls below React.",
+              )}
             </div>
-            {codeVisible ? (
-              <div className="td-otp-panel">
-                <label className="td-label" htmlFor="td-code">
-                  رمز التحقق
-                  <input
-                    id="td-code"
-                    className="td-input"
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                    placeholder="12345"
-                    autoComplete="one-time-code"
-                  />
-                </label>
-                <button type="button" className="td-button td-button-primary" onClick={verifyCode}>
-                  تأكيد الرمز
-                </button>
-              </div>
-            ) : null}
+            <button type="button" className="td-button td-button-secondary" disabled>
+              {localize(language, "استخدم لوحة مصادقة Gradio", "Use secure Gradio authentication")}
+            </button>
             <div className="td-button-row">
-              <button type="button" className="td-button td-button-danger" onClick={logout}>
+              <ActionButton
+                actionId="telegram.status"
+                busyAction={busyAction}
+                live={live}
+                onClick={() => void run("telegram.status")}
+              >
+                <RefreshCw size={15} aria-hidden="true" />
+                {localize(language, "تحديث الحالة", "Refresh status")}
+              </ActionButton>
+              <ActionButton
+                actionId="telegram.logout"
+                busyAction={busyAction}
+                live={live}
+                className="td-button td-button-danger"
+                onClick={() => void run("telegram.logout")}
+              >
                 <LogOut size={15} aria-hidden="true" />
-                تسجيل الخروج
-              </button>
+                {localize(language, "تسجيل الخروج", "Log out")}
+              </ActionButton>
             </div>
           </div>
         </article>
+
         <article className="td-panel">
           <div className="td-conn-head">
             <Cloud size={18} aria-hidden="true" />
             <div>
               <h2>Google Drive</h2>
-              <p>
-                {state.driveConnected ? "حالة الشريحة: متصل (تجريبي)" : "حالة الشريحة: غير متصل"}
-              </p>
+              <p>{state?.drive.status ?? "—"}</p>
+              {state?.drive.accountLabel ? <small>{state.drive.accountLabel}</small> : null}
             </div>
           </div>
           <div className="td-stack">
             <div className="td-button-row">
-              <button type="button" className="td-button td-button-primary" onClick={connectDrive}>
-                ربط Drive
-              </button>
-              <button
-                type="button"
-                className="td-button td-button-secondary"
-                onClick={connectDrive}
+              <ActionButton
+                actionId="drive.connect"
+                busyAction={busyAction}
+                live={live}
+                className="td-button td-button-primary"
+                onClick={() => void run("drive.connect")}
               >
-                إعادة الربط
-              </button>
+                {localize(language, "ربط Drive الأصلي", "Native Drive connect")}
+              </ActionButton>
+              <ActionButton
+                actionId="drive.reconnect"
+                busyAction={busyAction}
+                live={live}
+                onClick={() => void run("drive.reconnect")}
+              >
+                {localize(language, "إعادة الربط", "Reconnect")}
+              </ActionButton>
+              <ActionButton
+                actionId="drive.refresh_quota"
+                busyAction={busyAction}
+                live={live}
+                onClick={() => void run("drive.refresh_quota")}
+              >
+                {localize(language, "تحديث الحصة", "Refresh quota")}
+              </ActionButton>
             </div>
-            <div>
-              <span className="td-label-text">مجلد الوجهة التجريبي</span>
-              <div className="td-folder-list" role="list">
-                {DEMO_FOLDERS.map((folder) => (
-                  <button
-                    type="button"
-                    key={folder}
-                    className={`td-folder-option ${state.folder === folder ? "is-selected" : ""}`}
-                    onClick={() => selectFolder(folder)}
-                    disabled={!state.driveConnected}
-                  >
-                    <span>
-                      <Folder size={15} aria-hidden="true" /> {folder}
-                    </span>
-                    {state.folder === folder ? <Check size={15} aria-hidden="true" /> : null}
-                  </button>
+            <div className="td-quota-line">
+              <span>
+                {localize(language, "الاستخدام", "Usage")}:{" "}
+                {formatBytes(state?.drive.quotaUsed ?? null)}
+              </span>
+              <span>
+                {localize(language, "السعة", "Limit")}:{" "}
+                {formatBytes(state?.drive.quotaLimit ?? null)}
+              </span>
+            </div>
+            <label className="td-label" htmlFor="td-parent-id">
+              {localize(language, "معرّف المجلد الأب", "Parent folder ID")}
+              <input
+                id="td-parent-id"
+                className="td-input"
+                value={parentId}
+                onChange={(event) => setParentId(event.target.value)}
+              />
+            </label>
+            <ActionButton
+              actionId="drive.list_folders"
+              busyAction={busyAction}
+              live={live}
+              disabled={state?.drive.status.toLowerCase() !== "connected"}
+              onClick={() => void listFolders()}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+              {localize(language, "عرض المجلدات الحقيقية", "List live folders")}
+            </ActionButton>
+            <label className="td-label" htmlFor="td-folder-choice">
+              {localize(language, "مجلد الوجهة", "Destination folder")}
+              <select
+                id="td-folder-choice"
+                className="td-input"
+                value={folderId}
+                onChange={(event) => setFolderId(event.target.value)}
+              >
+                <option value="">—</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
                 ))}
-              </div>
-            </div>
-            <p className="td-hint">
-              <Info size={15} aria-hidden="true" />
-              الحصة المعروضة للتجربة فقط: 42.7٪ · تبقّى 57.3 GB
-            </p>
+              </select>
+            </label>
+            <ActionButton
+              actionId="drive.select_folder"
+              busyAction={busyAction}
+              live={live}
+              disabled={!folderId}
+              onClick={() => void run("drive.select_folder", { folderId })}
+            >
+              <Folder size={15} aria-hidden="true" />
+              {localize(language, "اختيار المجلد", "Select folder")}
+            </ActionButton>
+            <label className="td-label" htmlFor="td-new-folder">
+              {localize(language, "اسم مجلد جديد", "New folder name")}
+              <input
+                id="td-new-folder"
+                className="td-input"
+                value={folderName}
+                onChange={(event) => setFolderName(event.target.value)}
+              />
+            </label>
+            <ActionButton
+              actionId="drive.create_folder"
+              busyAction={busyAction}
+              live={live}
+              disabled={!folderName.trim()}
+              onClick={() => void run("drive.create_folder", { name: folderName, parentId })}
+            >
+              {localize(language, "إنشاء واختيار", "Create and select")}
+            </ActionButton>
           </div>
         </article>
       </div>
-      <NoticeBar notice={state.notice} />
     </section>
   );
 }
 
 function AnalyzeSection({
   state,
-  setState,
+  language,
+  live,
+  busyAction,
+  run,
   onNavigate,
 }: {
-  state: SandboxState;
-  setState: SetSandbox;
-  onNavigate: (page: Page) => void;
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  busyAction: string | null;
+  run: RunAction;
+  onNavigate(page: Page): void;
 }) {
-  const filteredFiles = state.files.filter(
-    (file) => state.mediaTypes.includes("all") || state.mediaTypes.includes(file.type),
-  );
-  const selectedCount = filteredFiles.filter(
-    (file) => file.selected && file.status !== "quarantined",
-  ).length;
-  const canEnqueue = selectedCount > 0 && Boolean(state.folder);
-
-  const setMode = (scanMode: ScanMode) => {
-    setState((current) => ({ ...current, scanMode }));
-  };
+  const [sourceLink, setSourceLink] = useState("");
+  const [mode, setMode] = useState<ScanMode>("message");
+  const [messageId, setMessageId] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [limit, setLimit] = useState("100");
+  const [selectionFrom, setSelectionFrom] = useState("");
+  const [selectionTo, setSelectionTo] = useState("");
+  const [mediaTypes, setMediaTypes] = useState<MediaType[]>(["all"]);
+  const candidates = state?.candidates ?? [];
+  const selected = selectedVisibleCandidates(candidates);
+  const blockReason = enqueueBlockReason(state, candidates);
 
   const toggleMedia = (value: MediaType) => {
-    setState((current) => {
-      if (value === "all") return { ...current, mediaTypes: ["all"] };
-      const withoutAll = current.mediaTypes.filter((item) => item !== "all" && item !== value);
-      if (!current.mediaTypes.includes(value)) withoutAll.push(value);
-      return { ...current, mediaTypes: withoutAll.length ? withoutAll : ["all"] };
+    if (value === "all") return setMediaTypes(["all"]);
+    setMediaTypes((current) => {
+      const next = current.filter((item) => item !== "all" && item !== value);
+      if (!current.includes(value)) next.push(value);
+      return next.length ? next : ["all"];
     });
   };
 
-  const toggleFile = (id: string) => {
-    setState((current) => ({
-      ...current,
-      files: current.files.map((file) =>
-        file.id === id ? { ...file, selected: !file.selected } : file,
-      ),
-    }));
+  const analyze = async () => {
+    const invalid = validateAnalyzeInput({
+      sourceLink,
+      mode,
+      messageId,
+      rangeFrom,
+      rangeTo,
+      limit,
+    });
+    if (invalid) return;
+    await run("analyze.run", {
+      link: sourceLink,
+      mode,
+      messageId: messageId || null,
+      startId: rangeFrom || null,
+      endId: rangeTo || null,
+      limit,
+      mediaTypes,
+    });
   };
 
-  const selectAll = () => {
-    setState((current) => ({
-      ...current,
-      files: current.files.map((file) =>
-        file.status === "quarantined" ? file : { ...file, selected: true },
-      ),
-    }));
-  };
-
-  const clearSelection = () => {
-    setState((current) => ({
-      ...current,
-      files: current.files.map((file) => ({ ...file, selected: false })),
-    }));
-  };
-
-  const analyze = () => {
-    if (!state.scanMode) {
-      setNotice(setState, { kind: "error", text: "اختر نوع فحص صريحًا قبل التحليل." });
-      return;
-    }
-    if ((state.scanMode === "message" || state.scanMode === "group") && !state.messageId.trim()) {
-      setNotice(setState, { kind: "error", text: "أدخل رقم الرسالة قبل التحليل." });
-      return;
-    }
-    if (state.scanMode === "range") {
-      const from = Number(state.rangeFrom);
-      const to = Number(state.rangeTo);
-      if (!from || !to || from < 1 || to < 1 || to < from || to - from + 1 > 1000) {
-        setNotice(setState, {
-          kind: "error",
-          text: "النطاق غير صالح، يجب أن يكون من 1 إلى 1000 رسالة.",
-        });
-        return;
-      }
-    }
-    if (state.scanMode === "latest") {
-      const limit = Number(state.latestLimit);
-      if (!state.latestLimit || limit < 1 || limit > 1000) {
-        setNotice(setState, { kind: "error", text: "عدد الرسائل يجب أن يكون بين 1 و1000." });
-        return;
-      }
-    }
-    setState((current) => ({
-      ...current,
-      analyzed: true,
-      notice: {
-        kind: "success",
-        text: `محاكاة: ظهرت نتائج التحليل بنمط «${modeLabel(current.scanMode)}»، لم تتم إضافة أي ملف للطابور.`,
-      },
-    }));
-  };
-
-  const enqueue = () => {
-    if (!state.folder) {
-      setNotice(setState, {
-        kind: "warning",
-        text: "اختر مجلد Drive الوجهة قبل إضافة الملفات للطابور.",
-      });
-      return;
-    }
-    const chosen = state.files.filter((file) => file.selected && file.status !== "quarantined");
-    if (!chosen.length) {
-      setNotice(setState, {
-        kind: "warning",
-        text: "حدد ملفًا واحدًا على الأقل قبل الإضافة للطابور.",
-      });
-      return;
-    }
-    setState((current) => ({
-      ...current,
-      queue: chosen.map((file) => ({ ...file, status: "queued" as const })),
-      files: current.files.map((file) =>
-        chosen.some((item) => item.id === file.id) ? { ...file, status: "queued" as const } : file,
-      ),
-      notice: {
-        kind: "success",
-        text: `محاكاة: تمت إضافة ${chosen.length} ملفات إلى الطابور.`,
-      },
-    }));
-    onNavigate("queue");
-  };
+  const blockText =
+    blockReason === "bridge"
+      ? "Backend bridge unavailable"
+      : blockReason === "folder"
+        ? localize(language, "اختر مجلد Drive حقيقيًا أولًا.", "Choose a live Drive folder first.")
+        : blockReason === "selection"
+          ? localize(
+              language,
+              "حدد ملفًا حقيقيًا واحدًا على الأقل.",
+              "Select at least one live candidate.",
+            )
+          : localize(language, "جاهز للإضافة الصريحة إلى الطابور.", "Ready for explicit enqueue.");
 
   return (
     <section className="td-page" aria-labelledby="analyze-title">
       <SectionTitle
         titleId="analyze-title"
         eyebrow="ANALYZE & SELECT"
-        title="التحليل والاختيار"
-        description="اختر نطاق الفحص ونوع الوسائط، ثم راجع الملفات وحدد ما تريد نقله قبل إضافته إلى القائمة."
+        title={pageLabels.analyze[language]}
+        description={localize(
+          language,
+          "التحليل يحدّث المرشحين فقط؛ الإضافة للطابور إجراء مستقل.",
+          "Analyze updates candidates only; enqueue is always a separate action.",
+        )}
       />
       <div className="td-analysis-line td-panel">
         <label className="td-label td-grow" htmlFor="td-link">
-          رابط الرسالة أو القناة
+          {localize(language, "رابط الرسالة أو القناة", "Message or channel link")}
           <input
             id="td-link"
             className="td-input"
+            value={sourceLink}
+            onChange={(event) => setSourceLink(event.target.value)}
             placeholder="https://t.me/channel/123"
-            autoComplete="off"
           />
         </label>
         <label className="td-label" htmlFor="td-scan-mode">
-          نوع الفحص
+          {localize(language, "نوع الفحص", "Scan mode")}
           <select
             id="td-scan-mode"
             className="td-input"
-            value={state.scanMode}
+            value={mode}
             onChange={(event) => setMode(event.target.value as ScanMode)}
           >
-            {modes.map((mode) => (
-              <option value={mode.value} key={mode.value}>
-                {mode.label}
+            {scanModes.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label[language]}
               </option>
             ))}
           </select>
         </label>
-        <button
-          type="button"
+        <ActionButton
+          actionId="analyze.run"
+          busyAction={busyAction}
+          live={live}
           className="td-button td-button-primary td-align-end"
-          onClick={analyze}
+          onClick={() => void analyze()}
         >
           <Search size={16} aria-hidden="true" />
-          تحليل
-        </button>
+          {localize(language, "تحليل", "Analyze")}
+        </ActionButton>
       </div>
       <div className="td-panel td-mode-panel">
         <div className="td-mode-fields">
-          {state.scanMode === "message" || state.scanMode === "group" ? (
-            <label className="td-label" htmlFor="td-message-id">
-              رقم الرسالة
+          {mode === "message" ? (
+            <label className="td-label">
+              {localize(language, "رقم الرسالة", "Message ID")}
               <input
-                id="td-message-id"
                 className="td-input"
-                value={state.messageId}
-                onChange={(event) =>
-                  setState((current) => ({ ...current, messageId: event.target.value }))
-                }
+                value={messageId}
+                onChange={(event) => setMessageId(event.target.value)}
               />
             </label>
           ) : null}
-          {state.scanMode === "range" ? (
+          {mode === "range" ? (
             <>
-              <label className="td-label" htmlFor="td-range-from">
-                من رسالة
+              <label className="td-label">
+                {localize(language, "من", "From")}
                 <input
-                  id="td-range-from"
                   className="td-input"
-                  value={state.rangeFrom}
-                  onChange={(event) =>
-                    setState((current) => ({ ...current, rangeFrom: event.target.value }))
-                  }
+                  value={rangeFrom}
+                  onChange={(event) => setRangeFrom(event.target.value)}
                 />
               </label>
-              <label className="td-label" htmlFor="td-range-to">
-                إلى رسالة
+              <label className="td-label">
+                {localize(language, "إلى", "To")}
                 <input
-                  id="td-range-to"
                   className="td-input"
-                  value={state.rangeTo}
-                  onChange={(event) =>
-                    setState((current) => ({ ...current, rangeTo: event.target.value }))
-                  }
+                  value={rangeTo}
+                  onChange={(event) => setRangeTo(event.target.value)}
                 />
               </label>
             </>
           ) : null}
-          {state.scanMode === "latest" ? (
-            <label className="td-label" htmlFor="td-latest-limit">
-              عدد أحدث الرسائل
+          {mode === "latest" || mode === "chat" ? (
+            <label className="td-label">
+              {localize(language, "الحد الأقصى", "Limit")}
               <input
-                id="td-latest-limit"
                 className="td-input"
                 type="number"
                 min={1}
                 max={1000}
-                value={state.latestLimit}
-                onChange={(event) =>
-                  setState((current) => ({ ...current, latestLimit: event.target.value }))
-                }
+                value={limit}
+                onChange={(event) => setLimit(event.target.value)}
               />
             </label>
           ) : null}
-          <div className="td-hint">
+          <span className="td-hint">
             <Info size={15} aria-hidden="true" />
-            {scanHint(state.scanMode)}
-          </div>
+            {localize(
+              language,
+              "الفحص محدود بحد أقصى 1000 رسالة.",
+              "The scan is bounded to at most 1,000 messages.",
+            )}
+          </span>
         </div>
         <div className="td-media-filter">
-          <span className="td-label-text">نوع الوسائط</span>
+          <span className="td-label-text">{localize(language, "نوع الوسائط", "Media types")}</span>
           {mediaChoices.map((choice) => (
             <button
               type="button"
               key={choice.value}
-              className={`td-filter ${state.mediaTypes.includes(choice.value) ? "is-selected" : ""}`}
-              aria-pressed={state.mediaTypes.includes(choice.value)}
+              className={`td-filter ${mediaTypes.includes(choice.value) ? "is-selected" : ""}`}
+              aria-pressed={mediaTypes.includes(choice.value)}
               onClick={() => toggleMedia(choice.value)}
             >
-              {choice.label}
+              {choice.label[language]}
             </button>
           ))}
         </div>
       </div>
-      <NoticeBar notice={state.notice} />
-      {state.analyzed ? (
-        <>
-          <div className="td-results-head">
-            <div>
-              <span className="td-eyebrow">RESULTS</span>
-              <h2>
-                النتائج{" "}
-                <small>
-                  · {filteredFiles.length} عناصر · محدد {selectedCount}
-                </small>
-              </h2>
-            </div>
-            <div className="td-button-row">
-              <button type="button" className="td-button td-button-secondary" onClick={selectAll}>
-                تحديد الكل
-              </button>
-              <button
-                type="button"
-                className="td-button td-button-secondary"
-                onClick={clearSelection}
-              >
-                مسح التحديد
-              </button>
-              <button
-                type="button"
-                className="td-button td-button-primary"
-                onClick={enqueue}
-                disabled={!canEnqueue}
-              >
-                <UploadCloud size={15} aria-hidden="true" />
-                إضافة للطابور
-              </button>
-            </div>
-          </div>
-          <div className="td-table-wrap">
-            <table className="td-table">
-              <thead>
-                <tr>
-                  <th>اختيار</th>
-                  <th>الملف</th>
-                  <th>النوع</th>
-                  <th>الحجم</th>
-                  <th>التاريخ</th>
-                  <th>الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFiles.map((file) => (
-                  <tr key={file.id}>
-                    <td data-label="اختيار">
-                      <label className="td-check">
-                        <input
-                          type="checkbox"
-                          checked={file.selected}
-                          disabled={file.status === "quarantined"}
-                          onChange={() => toggleFile(file.id)}
-                          aria-label={`اختيار ${file.name}`}
-                        />
-                      </label>
+      <div className="td-results-head">
+        <div>
+          <span className="td-eyebrow">LIVE CANDIDATES</span>
+          <h2>
+            {localize(language, "النتائج", "Results")}{" "}
+            <small>
+              · {candidates.length} · {selected.length}
+            </small>
+          </h2>
+        </div>
+        <div className="td-button-row">
+          <ActionButton
+            actionId="analyze.select_all"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("analyze.select_all")}
+          >
+            {localize(language, "تحديد الكل الظاهر", "Select visible")}
+          </ActionButton>
+          <ActionButton
+            actionId="analyze.clear_selection"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("analyze.clear_selection")}
+          >
+            {localize(language, "مسح التحديد", "Clear")}
+          </ActionButton>
+          <ActionButton
+            actionId="analyze.enqueue_selected"
+            busyAction={busyAction}
+            live={live}
+            disabled={blockReason !== null}
+            className="td-button td-button-primary"
+            onClick={() =>
+              void run("analyze.enqueue_selected").then((response) => {
+                if (response?.status === "ok") onNavigate("queue");
+              })
+            }
+          >
+            <UploadCloud size={15} aria-hidden="true" />
+            {localize(language, "إضافة للطابور", "Enqueue")}
+          </ActionButton>
+        </div>
+      </div>
+      <p className={`td-control-reason ${blockReason === null ? "is-ready" : ""}`}>{blockText}</p>
+      <div className="td-selection-tools td-panel">
+        <label className="td-label">
+          {localize(language, "تحديد من رسالة", "Select from message")}
+          <input
+            className="td-input"
+            value={selectionFrom}
+            onChange={(event) => setSelectionFrom(event.target.value)}
+          />
+        </label>
+        <label className="td-label">
+          {localize(language, "إلى رسالة", "To message")}
+          <input
+            className="td-input"
+            value={selectionTo}
+            onChange={(event) => setSelectionTo(event.target.value)}
+          />
+        </label>
+        <ActionButton
+          actionId="analyze.select_range"
+          busyAction={busyAction}
+          live={live}
+          disabled={!selectionFrom || !selectionTo}
+          onClick={() =>
+            void run("analyze.select_range", { startId: selectionFrom, endId: selectionTo })
+          }
+        >
+          {localize(language, "تحديد النطاق", "Select range")}
+        </ActionButton>
+      </div>
+      {!candidates.length ? (
+        <div className="td-empty-state">
+          {localize(language, "لا توجد مرشحات حية بعد.", "No live candidates yet.")}
+        </div>
+      ) : null}
+      {candidates.length ? (
+        <div className="td-table-wrap">
+          <table className="td-table">
+            <thead>
+              <tr>
+                <th>{localize(language, "اختيار", "Select")}</th>
+                <th>{localize(language, "الملف", "File")}</th>
+                <th>{localize(language, "النوع", "Type")}</th>
+                <th>{localize(language, "الحجم", "Size")}</th>
+                <th>{localize(language, "المجموعة", "Group")}</th>
+                <th>{localize(language, "الحالة", "Status")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.map((candidate) => {
+                const selectable = selectableCandidates([candidate]).length === 1;
+                return (
+                  <tr key={candidate.sourceId}>
+                    <td data-label="Select">
+                      <ActionButton
+                        actionId="analyze.toggle_row"
+                        busyAction={busyAction}
+                        live={live}
+                        disabled={!selectable}
+                        className="td-link-button"
+                        onClick={() =>
+                          void run("analyze.toggle_row", { sourceId: candidate.sourceId })
+                        }
+                      >
+                        {candidate.selected ? "☑" : "☐"}
+                      </ActionButton>
                     </td>
-                    <td data-label="الملف">
-                      <strong>{file.name}</strong>
-                      <small>{file.meta}</small>
+                    <td data-label="File">
+                      <strong>{candidate.name}</strong>
+                      <small>{candidate.dateLabel ?? "—"}</small>
                     </td>
-                    <td data-label="النوع">{typeLabel(file.type)}</td>
-                    <td className="td-number" data-label="الحجم">
-                      {file.size}
+                    <td data-label="Type">{candidate.mediaType}</td>
+                    <td className="td-number" data-label="Size">
+                      {formatBytes(candidate.sizeBytes)}
                     </td>
-                    <td className="td-number" data-label="التاريخ">
-                      {file.date}
-                    </td>
-                    <td data-label="الحالة">
-                      <span className={`td-status td-status-${file.status}`}>
-                        {statusLabel(file.status)}
+                    <td data-label="Group">{candidate.groupLabel ?? "—"}</td>
+                    <td data-label="Status">
+                      <span className={`td-status td-status-${candidate.status.toLowerCase()}`}>
+                        {candidate.status}
                       </span>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="td-selection-summary">
-            <strong>قبل الإضافة:</strong> {selectedCount} ملفات · الوجهة:{" "}
-            {state.folder ?? "لم يتم اختيار مجلد Drive"}
-            <button
-              type="button"
-              className="td-link-button"
-              onClick={() => onNavigate("connection")}
-            >
-              اختيار مجلد الوجهة
-            </button>
-          </div>
-        </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </section>
   );
 }
 
-function QueueSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
-  const rows: MockFile[] = state.queue.length ? state.queue : state.files.slice(0, 4);
-  const runningCount = state.engine === "running" ? Math.min(2, state.queue.length) : 0;
-
-  const start = () => {
-    if (!state.queue.length) {
-      setNotice(setState, { kind: "warning", text: "الطابور فارغ." });
-      return;
-    }
-    if (!state.folder) {
-      setNotice(setState, { kind: "warning", text: "حدد مجلد الوجهة قبل البدء." });
-      return;
-    }
-    setState((current) => ({
-      ...current,
-      engine: "running",
-      queue: current.queue.map((file, index) =>
-        index < 2
-          ? { ...file, status: "running", progress: 68, speed: "14.2 MB/s", remaining: "0:34" }
-          : file,
-      ),
-      notice: {
-        kind: "info",
-        text: "محاكاة محلية، لم يتم نقل أي ملف. لم يتم تنزيل أو رفع أي ملف حقيقي.",
-      },
-    }));
-  };
-
-  const pause = () =>
-    setState((current) => ({
-      ...current,
-      engine: "paused",
-      notice: { kind: "info", text: "محاكاة: تم الإيقاف المؤقت." },
-    }));
-
-  const resume = () =>
-    setState((current) => ({
-      ...current,
-      engine: "running",
-      notice: { kind: "info", text: "محاكاة: تم الاستئناف. لا يوجد نقل حقيقي." },
-    }));
-
-  const stop = () =>
-    setState((current) => ({
-      ...current,
-      engine: "stopped",
-      notice: { kind: "info", text: "محاكاة: تم الإيقاف." },
-    }));
-
+function QueueSection({
+  state,
+  language,
+  live,
+  busyAction,
+  run,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  busyAction: string | null;
+  run: RunAction;
+}) {
+  const rows = state?.queue ?? [];
+  const metrics = queueMetrics(rows);
   return (
     <section className="td-page" aria-labelledby="queue-title">
       <SectionTitle
         titleId="queue-title"
-        eyebrow="TRANSFERS"
-        title="التحويلات"
-        description="تنزيل محلي إلى ملف .part ثم رفع قابل للاستئناف. هذه الشاشة تجريبية ولا تنقل ملفات."
+        eyebrow="LIVE TRANSFERS"
+        title={pageLabels.queue[language]}
+        description={localize(
+          language,
+          "كل الأرقام والصفوف مشتقة من queue وSQLite الحيين.",
+          "Every count and row is derived from the live queue and SQLite state.",
+        )}
       />
       <div className="td-metrics">
         <div>
-          <span>في الطابور</span>
-          <strong>{state.queue.length}</strong>
+          <span>{localize(language, "في الانتظار", "Queued")}</span>
+          <strong>{metrics.queued}</strong>
         </div>
         <div>
-          <span>قيد التنفيذ</span>
+          <span>{localize(language, "قيد التنفيذ", "Running")}</span>
           <strong>
-            {runningCount}
-            <small> / 100</small>
+            {metrics.running}
+            <small> / {state?.concurrency ?? "—"}</small>
           </strong>
         </div>
         <div>
-          <span>مكتمل</span>
-          <strong>37</strong>
+          <span>{localize(language, "مكتمل", "Completed")}</span>
+          <strong>{metrics.uploaded}</strong>
         </div>
         <div>
-          <span>فشل</span>
-          <strong>1</strong>
+          <span>{localize(language, "فشل", "Failed")}</span>
+          <strong>{metrics.failed}</strong>
         </div>
         <div>
-          <span>المنقول</span>
-          <strong>18.4 GB</strong>
+          <span>{localize(language, "المنقول", "Transferred")}</span>
+          <strong>{formatBytes(metrics.transferredBytes)}</strong>
         </div>
       </div>
-      <NoticeBar notice={state.notice} />
       <div className="td-button-row td-transfer-actions">
-        <button type="button" className="td-button td-button-primary" onClick={start}>
+        <ActionButton
+          actionId="queue.start_selected"
+          busyAction={busyAction}
+          live={live}
+          className="td-button td-button-primary"
+          onClick={() => void run("queue.start_selected")}
+        >
           <Play size={15} aria-hidden="true" />
-          بدء
-        </button>
-        <button type="button" className="td-button td-button-secondary" onClick={pause}>
+          {localize(language, "بدء", "Start")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.pause"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void run("queue.pause")}
+        >
           <Pause size={15} aria-hidden="true" />
-          إيقاف مؤقت
-        </button>
-        <button type="button" className="td-button td-button-secondary" onClick={resume}>
-          <RefreshCw size={15} aria-hidden="true" />
-          استئناف
-        </button>
-        <button type="button" className="td-button td-button-danger" onClick={stop}>
-          <Square size={15} aria-hidden="true" />
-          إيقاف
-        </button>
-        <button
-          type="button"
-          className="td-button td-button-secondary"
-          onClick={() => setNotice(setState, { kind: "info", text: "محاكاة: تم تحديث القائمة." })}
+          {localize(language, "إيقاف مؤقت", "Pause")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.resume"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void run("queue.resume")}
         >
           <RefreshCw size={15} aria-hidden="true" />
-          تحديث
-        </button>
+          {localize(language, "استئناف", "Resume")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.stop"
+          busyAction={busyAction}
+          live={live}
+          className="td-button td-button-danger"
+          onClick={() => void run("queue.stop")}
+        >
+          <Square size={15} aria-hidden="true" />
+          {localize(language, "إيقاف", "Stop")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.refresh"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void run("queue.refresh")}
+        >
+          <RefreshCw size={15} aria-hidden="true" />
+          {localize(language, "تحديث", "Refresh")}
+        </ActionButton>
       </div>
       <div className="td-destination-banner">
         <Folder size={15} aria-hidden="true" />
-        مجلد الوجهة: <strong>{state.folder ?? "غير محدد"}</strong>
+        {localize(language, "مجلد الوجهة", "Destination")}:{" "}
+        <strong>{state?.folder.name ?? "—"}</strong>
       </div>
-      <div className="td-table-wrap">
-        <table className="td-table">
-          <thead>
-            <tr>
-              <th>الملف</th>
-              <th>الحالة</th>
-              <th>التقدم</th>
-              <th>السرعة</th>
-              <th>المتبقي</th>
-              <th>تحكم</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((file) => (
-              <tr key={file.id}>
-                <td data-label="الملف">
-                  <strong>{file.name}</strong>
-                  <small>{file.meta}</small>
-                </td>
-                <td data-label="الحالة">
-                  <span className={`td-status td-status-${file.status}`}>
-                    {statusLabel(file.status)}
-                  </span>
-                </td>
-                <td data-label="التقدم">
-                  <div className="td-progress">
-                    <span style={{ width: `${file.progress}%` }} />
-                  </div>
-                  <small>{file.progress}%</small>
-                </td>
-                <td className="td-number" data-label="السرعة">
-                  {file.speed || "—"}
-                </td>
-                <td className="td-number" data-label="المتبقي">
-                  {file.remaining || "—"}
-                </td>
-                <td data-label="تحكم">
-                  <button
-                    type="button"
-                    className="td-link-button"
-                    onClick={() =>
-                      setNotice(setState, {
-                        kind: "info",
-                        text: `محاكاة: إجراء العنصر ${file.name}.`,
-                      })
-                    }
-                  >
-                    إجراء
-                  </button>
-                </td>
+      {!rows.length ? (
+        <div className="td-empty-state">
+          {localize(language, "الطابور الحي فارغ.", "The live queue is empty.")}
+        </div>
+      ) : (
+        <div className="td-table-wrap">
+          <table className="td-table">
+            <thead>
+              <tr>
+                <th>{localize(language, "الملف", "File")}</th>
+                <th>{localize(language, "الحالة", "Status")}</th>
+                <th>{localize(language, "التقدم", "Progress")}</th>
+                <th>{localize(language, "الحجم", "Size")}</th>
+                <th>{localize(language, "تحكم", "Controls")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td data-label="File">
+                    <strong>{row.name}</strong>
+                    <small>{row.id}</small>
+                  </td>
+                  <td data-label="Status">
+                    <span className={`td-status td-status-${row.status.toLowerCase()}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  <td data-label="Progress">
+                    <div className="td-progress">
+                      <span style={{ width: `${Math.max(0, Math.min(100, row.progress))}%` }} />
+                    </div>
+                    <small>{row.progress.toFixed(0)}%</small>
+                  </td>
+                  <td data-label="Size">{formatBytes(row.sizeBytes)}</td>
+                  <td data-label="Controls">
+                    <div className="td-button-row">
+                      <ActionButton
+                        actionId="queue.pause_item"
+                        busyAction={busyAction}
+                        live={live}
+                        className="td-link-button"
+                        onClick={() => void run("queue.pause_item", { itemId: row.id })}
+                      >
+                        {localize(language, "إيقاف", "Pause")}
+                      </ActionButton>
+                      <ActionButton
+                        actionId="queue.resume_item"
+                        busyAction={busyAction}
+                        live={live}
+                        className="td-link-button"
+                        onClick={() => void run("queue.resume_item", { itemId: row.id })}
+                      >
+                        {localize(language, "استئناف", "Resume")}
+                      </ActionButton>
+                      <ActionButton
+                        actionId="queue.retry_item"
+                        busyAction={busyAction}
+                        live={live}
+                        className="td-link-button"
+                        onClick={() => void run("queue.retry_item", { itemId: row.id })}
+                      >
+                        {localize(language, "إعادة", "Retry")}
+                      </ActionButton>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
 
-const SAMPLE_LOGS = [
-  "04:02:11.884  OK    upload.verified id=1aQ9x…kP2 size=4292118",
-  "04:02:03.117  INFO  upload.start item=7d2a94 resumable session opened",
-  "04:01:58.402  INFO  download.complete item=7d2a94 local=/content/tmp/7d2a94.part",
-  "04:01:12.660  WARN  quota.check usage=42.7% remaining=57.3GB",
-  "04:00:47.031  ERROR transfer.failed item=7d2a95 reason=size_mismatch",
-  "03:59:20.775  INFO  queue.enqueue count=3 concurrency=2",
-];
-
-function LogsSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
+function LogsSection({
+  language,
+  live,
+  busyAction,
+  run,
+}: {
+  language: BridgeLanguage;
+  live: boolean;
+  busyAction: string | null;
+  run: RunAction;
+}) {
   const [query, setQuery] = useState("");
-  const visible = SAMPLE_LOGS.filter((line) =>
-    line.toLowerCase().includes(query.trim().toLowerCase()),
-  );
-
+  const [level, setLevel] = useState("ALL");
+  const [logs, setLogs] = useState("");
+  const load = async (actionId: "logs.refresh" | "logs.search") => {
+    const response = await run<{ logs?: string }>(actionId, { query, level });
+    if (response?.status === "ok") setLogs(response.data?.logs ?? "");
+  };
   return (
     <section className="td-page" aria-labelledby="logs-title">
       <SectionTitle
         titleId="logs-title"
-        eyebrow="AUDIT TRAIL"
-        title="السجلات"
-        description="سجلات منقّحة. لا أرقام هواتف ولا رموز ولا توكنات، حتى في التنزيل."
+        eyebrow="REDACTED AUDIT TRAIL"
+        title={pageLabels.logs[language]}
+        description={localize(
+          language,
+          "المحتوى يأتي من LogService ويمر بالتنقيح قبل المتصفح.",
+          "Content comes from LogService and is redacted before reaching the browser.",
+        )}
       />
       <div className="td-log-toolbar">
-        <label className="td-label td-grow" htmlFor="td-log-search">
-          بحث
+        <label className="td-label td-grow">
+          {localize(language, "بحث", "Search")}
           <input
-            id="td-log-search"
             className="td-input"
-            placeholder="ابحث في السجلات"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <button
-          type="button"
-          className="td-button td-button-secondary"
-          onClick={() =>
-            setNotice(setState, {
-              kind: "info",
-              text: `محاكاة: بحث محلي في ${visible.length} أسطر.`,
-            })
-          }
+        <label className="td-label">
+          {localize(language, "المستوى", "Level")}
+          <select
+            className="td-input"
+            value={level}
+            onChange={(event) => setLevel(event.target.value)}
+          >
+            {["ALL", "INFO", "WARNING", "ERROR", "RECOVERY"].map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <ActionButton
+          actionId="logs.search"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void load("logs.search")}
         >
           <Search size={15} aria-hidden="true" />
-          بحث
-        </button>
-        <button
-          type="button"
-          className="td-button td-button-secondary"
-          onClick={() =>
-            setNotice(setState, { kind: "info", text: "محاكاة: تم تحديث السجلات المحلية." })
-          }
+          {localize(language, "بحث", "Search")}
+        </ActionButton>
+        <ActionButton
+          actionId="logs.refresh"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void load("logs.refresh")}
         >
           <RefreshCw size={15} aria-hidden="true" />
-          تحديث
-        </button>
+          {localize(language, "تحديث", "Refresh")}
+        </ActionButton>
       </div>
-      <NoticeBar notice={state.notice} />
       <div className="td-log-box">
-        {visible.map((line) => (
-          <code key={line}>{line}</code>
-        ))}
+        {logs ? (
+          logs.split("\n").map((line, index) => <code key={`${index}-${line}`}>{line}</code>)
+        ) : (
+          <div className="td-empty-state">
+            {localize(language, "لا توجد سجلات حية معروضة.", "No live logs displayed.")}
+          </div>
+        )}
       </div>
       <div className="td-inline-note">
         <ShieldCheck size={15} aria-hidden="true" />
-        هذه السجلات محاكاة محلية، ولا تمثل تشغيلًا حقيقيًا.
+        {localize(
+          language,
+          "لا يُعرض payload الخام أو المسار المحلي أو بيانات الاعتماد.",
+          "Raw payloads, local paths, and credentials are never displayed.",
+        )}
       </div>
     </section>
   );
 }
 
-function SettingsSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
-  const [workers, setWorkers] = useState(2);
-
+function SettingsSection({
+  state,
+  language,
+  live,
+  busyAction,
+  run,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  busyAction: string | null;
+  run: RunAction;
+}) {
+  const [concurrency, setConcurrency] = useState(state?.concurrency ?? 2);
+  useEffect(() => {
+    if (state) setConcurrency(state.concurrency);
+  }, [state]);
   return (
     <section className="td-page" aria-labelledby="settings-title">
       <SectionTitle
         titleId="settings-title"
-        eyebrow="PREFERENCES"
-        title="الإعدادات والتصدير"
-        description="تجربة شكل الإعدادات فقط. لا يتم حفظ أي تغيير في SQLite من هذه الصفحة."
+        eyebrow="LIVE PREFERENCES"
+        title={pageLabels.settings[language]}
+        description={localize(
+          language,
+          "الإعدادات تُكتب عبر الخدمات الحالية؛ لا تخزين متصفح ولا حالة نجاح محلية.",
+          "Settings are written through existing services; there is no browser storage or optimistic success state.",
+        )}
       />
-      <NoticeBar notice={state.notice} />
       <div className="td-panel">
         <div className="td-setting-row">
           <div>
-            <h2>الخيوط المتزامنة</h2>
-            <p>القيمة الافتراضية 2، والحد الأقصى 100. فوق 8 يظهر تحذير.</p>
+            <h2>{localize(language, "التحويلات المتزامنة", "Concurrent transfers")}</h2>
+            <p>
+              {localize(
+                language,
+                "النطاق الدستوري 1–100، الافتراضي 2، وتحذير فوق 8.",
+                "Constitutional range 1–100, default 2, with a warning above 8.",
+              )}
+            </p>
           </div>
           <div className="td-setting-control">
-            <strong className="td-big-number">{workers}</strong>
-            <label className="td-label" htmlFor="td-workers">
-              عدد الخيوط
-              <input
-                id="td-workers"
-                type="range"
-                min={1}
-                max={100}
-                value={workers}
-                onChange={(event) => setWorkers(Number(event.target.value))}
-              />
-            </label>
-            <div className="td-range-labels">
-              <span>1</span>
-              <span>100</span>
-            </div>
-            {workers > 8 ? (
+            <strong className="td-big-number">{concurrency}</strong>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={concurrency}
+              onChange={(event) => setConcurrency(Number(event.target.value))}
+            />
+            <ActionButton
+              actionId="settings.set_concurrency"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("settings.set_concurrency", { value: concurrency })}
+            >
+              {localize(language, "حفظ في Python", "Save in Python")}
+            </ActionButton>
+            {concurrency > 8 ? (
               <p className="td-warn-line">
-                تحذير تجريبي: أكثر من 8 خيوط غير مختبر مقابل ذاكرة Colab.
+                {localize(
+                  language,
+                  "تحذير: هذه القيمة غير مثبتة على ذاكرة Colab الحية.",
+                  "Warning: this value is not proven against live Colab memory.",
+                )}
               </p>
             ) : null}
           </div>
         </div>
         <div className="td-setting-row">
           <div>
-            <h2>اللغة</h2>
-            <p>هذه النسخة التجريبية عربية RTL فقط. لا يوجد theme switcher.</p>
+            <h2>{localize(language, "اللغة", "Language")}</h2>
+            <p>Arabic RTL · English LTR</p>
           </div>
           <div className="td-segment">
-            <button type="button" className="is-active">
-              العربية
-            </button>
-            <button type="button" disabled>
-              English
+            <ActionButton
+              actionId="settings.toggle_language"
+              busyAction={busyAction}
+              live={live}
+              className="td-link-button"
+              onClick={() => void run("settings.toggle_language")}
+            >
+              {language === "ar" ? "English" : "العربية"}
+            </ActionButton>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "المظهر", "Theme")}</h2>
+            <p>
+              {localize(
+                language,
+                "M20 يفرض الوضع النهاري؛ الداكن غير متاح.",
+                "M20 enforces light mode; dark mode is unavailable.",
+              )}
+            </p>
+          </div>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="settings.set_theme"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("settings.set_theme", { theme: "light" })}
+            >
+              {localize(language, "تطبيق النهاري", "Apply light")}
+            </ActionButton>
+            <button type="button" className="td-button td-button-secondary" disabled>
+              {localize(language, "الداكن محظور", "Dark is blocked")}
             </button>
           </div>
         </div>
         <div className="td-setting-row">
           <div>
-            <h2>الاستعادة ونقاط الحفظ</h2>
-            <p>لا يوجد اتصال حقيقي، لذلك هذه الأزرار تعرض حالة محلية فقط.</p>
+            <h2>{localize(language, "الاستعادة ونقاط الحفظ", "Recovery & checkpoints")}</h2>
           </div>
           <div className="td-button-row">
-            <button
-              type="button"
-              className="td-button td-button-secondary"
-              onClick={() =>
-                setNotice(setState, { kind: "info", text: "محاكاة: لا توجد نقطة حفظ محلية." })
-              }
+            <ActionButton
+              actionId="recovery.restore"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("recovery.restore")}
             >
               <RotateCcw size={15} aria-hidden="true" />
-              استعادة الحالة
-            </button>
-            <button
-              type="button"
-              className="td-button td-button-secondary"
-              onClick={() =>
-                setNotice(setState, { kind: "success", text: "محاكاة: تم حفظ نقطة محلية." })
-              }
+              {localize(language, "استعادة", "Restore")}
+            </ActionButton>
+            <ActionButton
+              actionId="maintenance.checkpoint"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("maintenance.checkpoint")}
             >
               <Check size={15} aria-hidden="true" />
-              حفظ نقطة
-            </button>
+              {localize(language, "حفظ نقطة", "Checkpoint")}
+            </ActionButton>
           </div>
         </div>
         <div className="td-setting-row">
           <div>
-            <h2>التصدير</h2>
-            <p>التصدير الحقيقي يتبع Notebook، وليس React Sandbox.</p>
+            <h2>{localize(language, "التصدير", "Export")}</h2>
           </div>
           <div className="td-button-row">
-            <button
-              type="button"
-              className="td-button td-button-secondary"
-              onClick={() =>
-                setNotice(setState, { kind: "info", text: "محاكاة: لا يتم إنشاء ZIP حقيقي." })
-              }
+            <ActionButton
+              actionId="export.build_zip"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("export.build_zip")}
             >
               <FileArchive size={15} aria-hidden="true" />
-              إنشاء ملف ZIP
-            </button>
-            <button
-              type="button"
-              className="td-button td-button-secondary"
-              onClick={() =>
-                setNotice(setState, { kind: "info", text: "محاكاة: خلايا Colab غير متصلة." })
-              }
+              ZIP
+            </ActionButton>
+            <ActionButton
+              actionId="export.colab_cells"
+              busyAction={busyAction}
+              live={live}
+              onClick={() => void run("export.colab_cells")}
             >
               <FileText size={15} aria-hidden="true" />
-              خلايا كولاب
-            </button>
+              Colab
+            </ActionButton>
           </div>
         </div>
       </div>
@@ -1045,39 +1144,159 @@ function SettingsSection({ state, setState }: { state: SandboxState; setState: S
   );
 }
 
-export default function TeleDriveSandbox() {
-  const [state, setState] = useState<SandboxState>(initialState);
-  const pages = useMemo(
-    () => ({
-      connection: <ConnectionSection state={state} setState={setState} />,
-      analyze: (
-        <AnalyzeSection
-          state={state}
-          setState={setState}
-          onNavigate={(page) => setState((current) => ({ ...current, page }))}
-        />
-      ),
-      queue: <QueueSection state={state} setState={setState} />,
-      logs: <LogsSection state={state} setState={setState} />,
-      settings: <SettingsSection state={state} setState={setState} />,
-    }),
-    [state],
-  );
+export type TeleDriveSandboxProps = { bridge?: TeleDriveBridge };
+
+export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDriveSandboxProps) {
+  const [liveState, setLiveState] = useState<LiveUiState | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [page, setPage] = useState<Page>("connection");
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const live = bridge.isLive();
+  const language = liveState?.language ?? "ar";
+
+  useEffect(() => bridge.subscribe(setLiveState), [bridge]);
+
+  const run: RunAction = async <T,>(actionId: string, payload: Record<string, unknown> = {}) => {
+    if (!bridge.isLive()) {
+      setNotice({ kind: "warning", text: "Backend bridge unavailable" });
+      return null;
+    }
+    setBusyAction(actionId);
+    try {
+      const response = await bridge.request<T>({
+        requestId: newRequestId(),
+        actionId,
+        payload,
+        language,
+      });
+      if (response.state) setLiveState(response.state);
+      if (response.status !== "ok") {
+        setNotice({
+          kind: response.status === "blocked" ? "warning" : "error",
+          text:
+            response.message ??
+            response.errorKey ??
+            localize(language, "فشل الإجراء.", "Action failed."),
+        });
+        return response;
+      }
+      setNotice({
+        kind: "success",
+        text:
+          response.message ??
+          localize(language, "تم تنفيذ الإجراء عبر Python.", "Action completed through Python."),
+      });
+      return response;
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : localize(language, "فشل bridge.", "Bridge failed."),
+      });
+      return null;
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const pages: Record<Page, ReactNode> = {
+    connection: (
+      <ConnectionSection
+        state={liveState}
+        language={language}
+        live={live}
+        busyAction={busyAction}
+        run={run}
+      />
+    ),
+    analyze: (
+      <AnalyzeSection
+        state={liveState}
+        language={language}
+        live={live}
+        busyAction={busyAction}
+        run={run}
+        onNavigate={setPage}
+      />
+    ),
+    queue: (
+      <QueueSection
+        state={liveState}
+        language={language}
+        live={live}
+        busyAction={busyAction}
+        run={run}
+      />
+    ),
+    logs: <LogsSection language={language} live={live} busyAction={busyAction} run={run} />,
+    settings: (
+      <SettingsSection
+        state={liveState}
+        language={language}
+        live={live}
+        busyAction={busyAction}
+        run={run}
+      />
+    ),
+  };
 
   return (
-    <div className="td-app" dir="rtl">
-      <TopBar state={state} />
-      <SectionNav
-        page={state.page}
-        onNavigate={(page) => setState((current) => ({ ...current, page }))}
-      />
+    <div
+      className="td-app"
+      lang={language}
+      dir={language === "ar" ? "rtl" : "ltr"}
+      data-theme="light"
+    >
+      <TopBar state={liveState} language={language} live={live} />
+      <nav
+        className="td-nav"
+        aria-label={localize(language, "أقسام TeleDrive", "TeleDrive sections")}
+      >
+        {navItems.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={`td-nav-button ${page === item.id ? "is-active" : ""}`}
+            aria-current={page === item.id ? "page" : undefined}
+            onClick={() => setPage(item.id)}
+          >
+            {item.icon}
+            {pageLabels[item.id][language]}
+          </button>
+        ))}
+      </nav>
       <main className="td-main">
-        <div className="td-demo-banner">
-          <Gauge size={15} aria-hidden="true" />
-          <strong>نسخة تجريبية محلية</strong>
-          <span>لا يوجد اتصال فعلي، ولا يتم نقل أي ملف.</span>
-        </div>
-        {pages[state.page]}
+        {!live || !liveState ? (
+          <div className="td-bridge-blocked" role="alert">
+            <AlertCircle size={16} aria-hidden="true" />
+            <strong>Backend bridge unavailable</strong>
+            <span>
+              {localize(
+                language,
+                "الأفعال الحساسة معطّلة، ولا تُعرض أي حالة نجاح متفائلة.",
+                "Sensitive actions are disabled and no optimistic success state is shown.",
+              )}
+            </span>
+          </div>
+        ) : (
+          <div className="td-demo-banner td-status-live">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <strong>
+              {localize(language, "متصل بـApplicationContext", "Connected to ApplicationContext")}
+            </strong>
+            <span>
+              {localize(
+                language,
+                "كل حالة ونتيجة أدناه من Python الحي.",
+                "Every state and result below comes from live Python.",
+              )}
+            </span>
+          </div>
+        )}
+        <NoticeBar notice={notice} />
+        {pages[page]}
       </main>
     </div>
   );

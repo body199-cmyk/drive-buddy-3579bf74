@@ -1,5 +1,19 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-T01..T05] — 2026-08-12 — React Bridge رسمي داخل Gradio وإصلاح PR #40
+
+- **Baseline:** `origin/main=16797ca9b540d8a22885fffb38012643713ef851`; PR #40 كان OPEN على `03c70d0` وM23 بقي fake prototype. تصنيف الاستئناف `RESUME_PARTIAL`. ادعاء DOC أن route يحوي `return;` كان متقادمًا؛ الفحص وSSR أثبتا `<TeleDriveSandbox />`.
+- **Frontend:** أزيل `mockState.ts` وكل demo files/folders/logs/quota/progress. أضيف `bridgeTypes.ts` و`gradioBridge.ts` و`gradioEntry.tsx` و`viewModel.ts`. خارج Gradio يعرض route `Backend bridge unavailable` ويعطل الأفعال بدل نجاح محلي.
+- **Bridge:** `ReactPanel(gr.HTML)` الرسمي في Gradio 6.20.0 يضم React bundle محليًا؛ transport الوحيد component JSON `value` + `trigger('submit')` → `UIBinder.wire` → `react.bridge.request` → handler/registry/service قائم → snapshot منقح. لا standalone server ولا fetch/XHR/WebSocket/browser storage.
+- **Live state:** `LiveUiStateService` يقرأ Telegram/Drive/folder/queue/candidates/concurrency الحقيقية؛ queue/metrics بلا fallback تجميلي. folder ID يحفظه `DriveFolders` فقط. Analyze لا enqueue، والـquarantined/final مستبعد من manual/all/range/group selection.
+- **Security:** generic bridge يرفض unknown/recursive/unready والـsecret-bearing payloads. أفعال Telegram الحساسة تبقى في عناصر Gradio الآمنة داخل Accordion؛ React لا يخزن API hash/phone/code/password/session/token. كل استجابة recursive-redacted، والخطأ غير المتوقع correlation ID بلا payload/traceback في log.
+- **Action Registry:** 47/47 ready؛ الجديد الوحيد `react.bridge.request` ومسجل مرة واحدة. Action IDs التوضيحية غير الموجودة في DOC لم تُخترع؛ استُخدمت أسماء السجل الفعلية.
+- **Protected:** `package.json` أُعيد إلى `origin/main`; zero diff في notebooks/notebook generator/colab cells/telegram_auth/queue/transfer/database/migrations/requirements/bun/workflows.
+- **Local gates:** compileall PASS · `646 passed` · launcher `47/47` · notebook check + cmp PASS · package build PASS · lint 0 errors · typecheck PASS · frontend contracts 18/18 · Vite build PASS · SSR route PASS.
+- **Same-process smoke:** Gradio `0.0.0.0:7860`; `/config` أثبت HTML component واحد + submit dependency إلى `h_react_bridge_request`. `queue.refresh` عبر Gradio client أعاد status=ok وحالة disconnected/empty الفعلية.
+- **GitHub code SHA:** `56a285b5bea01b07c74d7e3ba1a2a2b26461c5fd`. Push run `31640781460` PASS (Frontend + Python). Pull-request run `31640785475` PASS (Frontend + Python).
+- **Honest status:** PARTIALLY COMPLETE / Code-complete candidate + Fake-tested. Live Colab 12-step smoke، النقل الحقيقي، والتحقق من Drive، recovery/shutdown، ولقطات 1280/768/390 غير منفذة (#46–#48). لا merge قبل Brain review.
+
 ## [M20] — 2026-08-12 — واجهة نهارية إجبارية + تتابع منطقي 1→5 + سقف تزامن 100 (ADR-0001)
 
 > **مدموج:** PR [#35](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/35) → `main` = `2bd99b729255f1136b1667678b0255004d1101e3` (merge commit، بلا squash وبلا force-push حفاظًا على تاريخ Lovable). CI أخضر على رأس الـPR (`acfd473`) **وعلى `main` بعد الدمج**: `Python package (tests + Colab contract)` success · `Frontend build` success. الحالة تبقى **Code-complete candidate + Fake-tested** — الدمج ليس إثباتًا حيًا (#43).

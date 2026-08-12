@@ -15,7 +15,7 @@ from .i18n import t
 from .logging_config import get_logger
 from .media_scanner import DEFAULT_SCAN_MODE
 from .redaction import redact, safe_exception
-from .services import DEFAULT_THEME, candidate_rows_for, rows_for
+from .services import DEFAULT_THEME, LiveUiStateService, candidate_rows_for, rows_for
 from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
 from .ui_binder import component_update
 from .ui_theme import theme_style_block
@@ -126,6 +126,7 @@ ERROR_ARITY: dict[str, int] = {
     "maintenance.checkpoint": 1,
     # M20-T03: the whole derived step layout, in ui.py's flow_outputs order.
     "flow.sync": 12,
+    "react.bridge.request": 1,
 }
 DEFAULT_QUEUE_ARITY = 2
 
@@ -133,6 +134,13 @@ DEFAULT_QUEUE_ARITY = 2
 class Handlers:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
+        # M24: one adapter over this same context. It owns no runtime/client/DB.
+        from .react_bridge import ReactBridge
+
+        self.live_ui_state = LiveUiStateService(ctx)
+        self.react_bridge = ReactBridge(
+            ctx, action_registry, self.live_ui_state.snapshot
+        )
 
     # ---- plumbing ----
 
@@ -142,6 +150,14 @@ class Handlers:
         if spec is None:
             raise TeleDriveError(f"unknown action {action_id}", "err.unknown_action")
         return self.ctx.resolve(spec.service_path)(*args, **kwargs)
+
+    def bridge_request(self, request_payload):
+        """Service path for the single registered React bridge event."""
+        return self.react_bridge.handle(request_payload)
+
+    def bridge_initial_response(self) -> dict[str, Any]:
+        """The first browser value is a redacted snapshot, never demo data."""
+        return self.react_bridge.initial_response()
 
     def _error(self, action_id: str, message: str):
         if action_id.startswith("telegram."):
@@ -618,6 +634,13 @@ class Handlers:
     def h_maintenance_checkpoint(self):
         result = self.call("maintenance.checkpoint")
         return status_ok(f"{t('msg.checkpoint_saved')} · {result['at']}")
+
+    # ---- React bridge (M24, official Gradio component transport) ----
+
+    @action("react.bridge.request")
+    def h_react_bridge_request(self, request_payload):
+        response = self.call("react.bridge.request", request_payload)
+        return component_update(value=response)
 
     # ---- Flow ----
 

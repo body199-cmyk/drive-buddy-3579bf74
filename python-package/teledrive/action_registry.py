@@ -528,6 +528,17 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         tested=True,
         proof_test="tests/test_recovery_maintenance.py::test_checkpoint_writes_local_file",
     ),
+    # ---- React inside Gradio (M24): one official component event ----
+    ActionSpec(
+        action_id="react.bridge.request",
+        handler_name="h_react_bridge_request",
+        service_path="handlers.bridge_request",
+        label_key="app.title",
+        section="bridge",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_react_bridge.py::test_react_bridge_calls_existing_registered_handler",
+    ),
     # ---- Flow (M20-T03): derived step state, re-run after every action ----
     ActionSpec(
         action_id="flow.sync",

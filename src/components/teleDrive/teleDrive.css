@@ -26,11 +26,13 @@
   --shadow-md: 0 5px 20px oklch(23% 0.02 320 / 0.08);
   --td-touch: 44px;
   min-height: 100vh;
+  overflow-x: hidden;
   background: var(--td-bg);
   color: var(--td-text);
-  font-family: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.55;
+  color-scheme: light;
 }
 
 .td-app *,
@@ -390,6 +392,11 @@
   color: var(--td-primary-ink);
 }
 
+.td-folder-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .td-notice {
   display: flex;
   align-items: flex-start;
@@ -420,6 +427,29 @@
 .td-notice-error {
   background: var(--td-danger-soft);
   border-color: oklch(86% 0.06 24);
+}
+
+.td-control-reason {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0;
+  color: var(--td-warning);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.td-control-reason.is-ready {
+  color: var(--td-success);
+}
+
+.td-empty-state {
+  padding: 18px;
+  border: 1px dashed var(--td-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--td-surface-2);
+  color: var(--td-muted);
+  text-align: center;
 }
 
 .td-analysis-line {
@@ -780,6 +810,10 @@
 }
 
 .td-segment button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 36px;
   padding: 0 15px;
   border: 0;
@@ -965,5 +999,68 @@
 
   .td-progress {
     width: 100%;
+  }
+}
+
+/* M24 operational bridge states. */
+.td-table-wrap,
+.td-log-box {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.td-button,
+.td-filter,
+.td-nav-button,
+.td-folder-option {
+  min-height: 44px;
+}
+
+.td-status-live {
+  color: var(--td-success);
+}
+
+.td-status-demo {
+  color: var(--td-warning);
+}
+
+.td-bridge-blocked {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--td-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--td-warning-soft);
+  color: var(--td-text);
+}
+
+.td-quota-line,
+.td-selection-tools {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.td-quota-line {
+  justify-content: space-between;
+  color: var(--td-muted);
+  font-size: 0.82rem;
+}
+
+.td-selection-tools .td-label {
+  flex: 1;
+  min-width: 150px;
+}
+
+.td-spin {
+  animation: td-spin 0.9s linear infinite;
+}
+
+@keyframes td-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

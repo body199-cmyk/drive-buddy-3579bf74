@@ -1,107 +1,154 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/` and `python-package/docs/PHASE_REPORTS/`.
+> Latest session only. Historical evidence is under `docs/PHASE_REPORTS/`.
 
 ## Session card
 
 | Field | Value |
 |---|---|
 | UTC date | 2026-08-12 |
-| Session type | New session — M20 (T01…T05): light-only shell, five-step flow, concurrency cap 100 |
-| TASK ID | `M20-T01` … `M20-T05` (one interlocked package) |
+| TASK ID | `M24-T01..T05` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch (Arena, platform-pinned) | `arena/019ff3b0-drive-buddy-3579bf74` |
-| Base SHA | `77e97b789583b07b375f188894a5aca796b03b68` (`main` = merged PR #34, verified `git rev-parse HEAD` == `origin/main`) |
-| Result SHA | `2bd99b729255f1136b1667678b0255004d1101e3` (**PR #35 MERGED into `main`** 2026-08-12T09:28:41Z) |
-| Status | **Code-complete candidate + Fake-tested — MERGED into `main`** (all Python gates green: 629 passed, launcher 46/46, notebooks identical, package build OK; CI green on the PR head AND on the merged `main`). Live Colab visual proof is still owed (#43) |
-| Launcher | `binding check ok: 46/46 ready actions resolve` |
+| Branch | `arena/019ff78c-drive-buddy-3579bf74` (Arena platform-pinned) |
+| Base SHA | `16797ca9b540d8a22885fffb38012643713ef851` (`origin/main`) |
+| Previous PR head | `03c70d0797906eba34d1cf91d80a71bfea5c86a5` (M23 follow-up) |
+| Code result SHA | `56a285b5bea01b07c74d7e3ba1a2a2b26461c5fd` |
+| PR | [#40](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/40) — OPEN |
+| Status | **PARTIALLY COMPLETE — Code-complete candidate + Fake-tested**; live Colab/Telegram/Drive/transfer proof absent |
+| Launcher | `binding check ok: 47/47 ready actions resolve` |
 
-## §0 base verification
+## Resume report
 
-- `git rev-parse HEAD` = `77e97b7…` and `origin/main` = the same commit → **base IS the latest `main`** ✅.
-- The task document expects base `ad3a454…`. That commit is **not** the current head. The sandbox clone is shallow (`depth=1`, `.git/shallow` = `77e97b7`) so ancestry cannot be proven locally, and `gh api …/compare/…` returns `401 Bad credentials`, so it could not be proven through the API either. Work was built on the real latest `main` and the deviation is recorded instead of claimed away.
+- **Resume status:** `RESUME_PARTIAL`.
+- PR #40 was open and its M23 route/folder/selection fixes were present, but it remained a local fake prototype with no bridge. The ClickUp claim that the route contained `return;` was stale: source and SSR both proved `return <TeleDriveSandbox />` before M24.
+- `package.json` was modified by M23 to add a test script, but M24 protects it. It was restored to `origin/main`; sandbox tests now run directly through `node --test`.
+- Baseline memory files were stale at M20 and did not mention M23/PR #40. This handoff supersedes them without modifying Constitution or AI_RULES.
 
-## What was done (M20)
+## Implemented
 
-### T01 — concurrency cap 100 (ADR-0001)
-- `config.py`: `HARD_CONCURRENCY_CAP = 100`, plus `CONCURRENCY_MIN`, `DEFAULT_CONCURRENCY`, `CONCURRENCY_WARN_ABOVE = 8` and two new presets (`turbo=16`, `max=100`).
-- `services.SettingsService`: range 1..100, explicit refusal outside it (never a silent clamp), result carries `warn` above 8.
-- `handlers.h_settings_set_concurrency`: reports `n/100` and appends `warn.concurrency_high` above 8.
-- `transfer_manager.py` / `queue_manager.py` **untouched** — they import the constant at call time, so their ceiling rose automatically.
+### T01 — production React no longer fakes success
 
-### T02 — enforced light mode
-- New `teledrive/theme.py`: every Gradio CSS variable redefined under `:root` **and** `.dark` / `body.dark` / `.gradio-container.dark` with `!important` + `color-scheme: light`; `FORCE_LIGHT_JS` strips the `dark` class and keeps stripping it via `MutationObserver`.
-- Both guards are delivered through `head=` / `js=` on `launch()`. They are deliberately **not** delivered through `gr.HTML`: Gradio inserts component HTML with `innerHTML`, so a `<script>` inside it never executes (Gradio emitted that exact warning during this session — caught and fixed).
-- `services.DEFAULT_THEME = "light"` is now the single source read by `PreferencesService` and `shell_seed` → **KNOWN_ISSUES #42 closed**.
+- Added the shared contract `src/components/teleDrive/bridgeTypes.ts` and one `TeleDriveBridge` interface.
+- Replaced `mockState.ts` and all demo folders/files/logs/quotas/progress with `LiveUiState` rendering.
+- `TeleDriveSandbox` accepts an injected bridge. The standalone route uses the default unavailable bridge, visibly displays `Backend bridge unavailable`, and disables operational actions.
+- The route still returns `<TeleDriveSandbox />`, has no external font request, and describes the operational Gradio bridge.
+- React Action IDs match the actual registry; unsupported names from the DOC were not invented.
 
-### T03 — logical 1→5 flow
-- New `flow.py` (`FlowService` / `FlowState`, no Gradio import) and `ui_flow_view.py` (12 updates in `flow_outputs` order).
-- `ui.py` rebuilt: five vertical numbered cards instead of sibling `gr.Tab`s. Every reveal is derived from live context: step 2 needs Telegram **and** Drive **and** a destination folder; step 3 needs real results; step 4 needs a selection; step 5 needs queue items — and steps disappear again the moment a connection drops.
-- `ui_binder.py`: `register_sync` / `load_sync` + a `.then(flow.sync)` chained after every wired action; `release` added to the allowed events so a 1..100 slider drag writes once, not per pixel.
-- The **first paint** reads the same `FlowService`, so the server-rendered page and every later sync agree by construction.
-- Every `action_id`, handler, input order and output arity preserved verbatim; the four Drive folder panels and the duplicated `export.build_zip` still work as before.
+### T02/T03 — official Gradio component bridge
+
+```plain
+React bundle inside ReactPanel(gr.HTML)
+  -> props.value JSON + trigger('submit')
+  -> UIBinder.wire(..., event='submit')
+  -> react.bridge.request
+  -> h_react_bridge_request
+  -> handlers.bridge_request
+  -> ReactBridge.handle
+  -> existing named registered handler
+  -> existing service / queue / persistence
+  -> LiveUiStateService.snapshot
+  -> recursive redaction
+  -> same component value
+  -> React subscription
+```
+
+- No standalone server, FastAPI/Flask route, CORS, `fetch`, XHR, WebSocket, browser storage, or private `/api/*` transport.
+- `ReactBridge` owns no context/client/runtime/DB; it receives the existing context and a snapshot callable.
+- `LiveUiStateService` is read-only and builds Telegram/Drive/folder/queue/candidate/settings state from existing services and DB layer.
+- Generic bridge rejects unknown/recursive/unready actions and payloads carrying secret keys.
+- Telegram credential/code/password actions are intentionally blocked in the generic bridge. The existing secure Gradio controls remain in a collapsed fallback/authentication Accordion.
+- `folder.id` remains authoritative and is persisted only by existing `DriveFolders.select/create`; React has no demo folder list.
+- Analyze updates candidates only. Enqueue remains explicit. Quarantined/deleted/stopped candidates cannot be selected by manual/all/range/group paths.
+- Generated React/CSS assets are deterministic gzip members (mtime=0) under the Python package and are decompressed only when constructing the Gradio component. No dependency/lock change.
 
 ### T04 — proofs
-- New `tests/test_ui_contract_proofs.py` (18 binding proofs) and `tests/test_flow.py` (7 tests).
-- **Honest correction to the task doc:** it was written against `ad3a454`, where 18 actions were `tested=False` and rendered hidden. On the real base all 45 were already `tested=True` with *stronger* proofs than the doc's table proposes, so there were no dead buttons to un-hide and no proof was downgraded. `flow.sync` was added → 46 total.
 
-### T05 — memory
-ADR-0001 · CONSTITUTION (§ concurrency, § forbidden, §14 UI) · CHANGELOG · AI_HANDOFF · ACTIVE_TASK · TODO · KNOWN_ISSUES (#42 closed, #43/#44/#45 opened) · `docs/PHASE_REPORTS/PHASE_M20.md`.
+- Frontend: 18 `node:test` contracts for route, unavailable behavior, request/response shape, subscription, scanner bounds, selection/quarantine, folder/enqueue gates, live queue metrics, no fake production data, registry parity, network boundary, direction, CSS, and official panel transport.
+- Python: 12 tests in `test_react_bridge.py`, including all required bridge rejection/dispatch/redaction/snapshot/folder/analyze/single-context/single-loop/registry proofs.
+- Existing handler contract updated only with the new bridge request shape.
 
-## Verification (raw, from a real venv)
-
-```plain
-$ python -m compileall -q teledrive                → exit 0
-$ python -m pytest -q tests                        → 629 passed in 24.08s   (was 596; +33)
-$ python teledrive_launcher.py --check             → binding check ok: 46/46 ready actions resolve
-$ python -m teledrive.notebook_cells --check       → notebooks are in sync
-$ cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb → identical
-$ python -m teledrive.package_service --build --output teledrive_v4.5.zip → tests passed · archive OK
-$ npx eslint .                                     → ✖ 6 problems (0 errors, 6 warnings)   [pre-existing]
-$ npx vite build                                   → ✓ built in 269ms
-$ grep -rn "gr.Tab(\|themes.Soft" teledrive/ui.py  → (no output)
-```
-
-`bun` itself is not installable in this sandbox (`bun.sh` TLS blocked), so the two frontend gates were run with the equivalent npm invocations of the same `package.json` scripts. No frontend file is touched by this diff; CI still runs the bun versions on the PR.
-
-Live server proof inside the sandbox: Gradio launched on `0.0.0.0:7860`; the served HTML contains `--td-bg:#F4F0F5`, `color-scheme: light` and the `MutationObserver`. Step gating was exercised end to end against the live context:
+## Local verification
 
 ```plain
-fresh               [1,-,-,-,-]  step=connect
-telegram only       [1,-,-,-,-]  step=connect
-tg+drive, no folder [1,-,-,-,-]  step=connect
-connected           [1,2,-,-,-]  step=analyze
-analyzed            [1,2,3,-,-]  step=select
-selected            [1,2,3,4,-]  step=queue
-drive dropped again [1,-,-,-,-]  step=connect
+python -m compileall teledrive
+  PASS
+python -m pytest -q tests
+  646 passed in 78.36s
+python teledrive_launcher.py --check
+  binding check ok: 47/47 ready actions resolve
+python -m teledrive.notebook_cells --check
+  notebooks are in sync
+cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb
+  notebook cmp: identical
+python -m teledrive.package_service --build --output /tmp/teledrive_m24_v4.5.zip
+  tests passed; archive created
+npm run lint
+  PASS: 0 errors; 7 warnings locally (6 pre-existing Fast Refresh + one Prettier 3.8/3.9 compatibility directive)
+npx tsc --noEmit
+  PASS
+node --test tests/teledrive-sandbox.contract.test.mjs
+  18/18 passed
+npm run build
+  PASS
+SSR /teledrive-sandbox
+  PASS; topbar + five sections + unavailable warning, not blank
+git diff --check
+  PASS
 ```
+
+## Live same-process Gradio smoke (sandbox, no credentials)
+
+- Server: `0.0.0.0:7860`, `share=False`, same `ApplicationContext`.
+- `/config`: one component with `type=html`, `elem_id=td-react-panel`; dependency target `submit`; input/output both panel ID; API name `h_react_bridge_request`.
+- A `queue.refresh` call through Gradio's component API returned:
+  - `requestId=live-http-smoke-4`
+  - `actionId=queue.refresh`
+  - `status=ok`
+  - Telegram `DISCONNECTED`, Drive `DISCONNECTED`, folder `{id: null, name: null}`, queue `[]`, candidates `[]`.
+- This proves component transport and real empty snapshot, not Telegram/Drive integration and not Colab.
+
+## GitHub evidence on code SHA `56a285b`
+
+- **Push workflow:** run `31640781460` — Frontend PASS (17s), Python package/Colab contract PASS (1m49s).
+- **Pull-request workflow:** run `31640785475` — Frontend PASS (16s), Python package/Colab contract PASS (2m49s).
+- The old M23 duplicate push setup-bun failure belongs to SHA `03c70d0`; M24's push and PR runs both passed, so the cause is isolated from this code.
 
 ## Protected files
 
-Untouched (confirmed by `git diff --stat`): `transfer_manager.py`, `queue_manager.py`, `database.py`, `migrations.py`, `drive_auth.py`, `drive_client.py`, `telegram_auth.py`, `telegram_client.py`, `checkpoint_manager.py`, `storage_manager.py`, `async_runtime.py`, `redaction.py`, `tests/mocks/`, both notebooks, `notebook_cells.py`, `colab_cells.json`, `requirements.*`, `bun.lock`, `package.json`, `.github/`, all React/frontend files.
+Compared with `origin/main`, zero modified paths from:
 
-## Deviations (honest)
+```plain
+public/TeleDrive.ipynb
+python-package/notebook/TeleDrive.ipynb
+python-package/teledrive/notebook_cells.py
+python-package/teledrive/colab_cells.json
+python-package/teledrive/telegram_auth.py
+python-package/teledrive/queue_manager.py
+python-package/teledrive/transfer_manager.py
+python-package/teledrive/database.py
+python-package/teledrive/migrations.py
+python-package/requirements.*
+bun.lock
+package.json
+.github/workflows/*
+```
 
-- Base is `77e97b7`, not the `ad3a454` named in the doc (ancestry unprovable here — shallow clone + `gh` 401). Branch is the platform-pinned `arena/019ff3b0-…`, not the doc's suggested branch name.
-- `services.py`, `handlers.py`, `action_registry.py`, `ui_binder.py` were modified — the doc explicitly lists them under "files to modify"; none is on the protected list.
-- Per the owner's explicit "merge it anyway" instruction, `theme.py` was added **alongside** the existing `ui_theme.py` rather than replacing it, so the oklch palettes and the `settings.set_theme` binding keep working underneath the light-only guard. The doc's `ui.py` skeleton was merged into the existing shell instead of overwriting it, which is why all pre-existing UI contract tests still pass.
-- `export.build_zip` stays ready (it already was); the `unready_specs()` tests never break because they inject a synthetic unready spec instead of calling `next()` on the live registry — so the doc's suggested `pytest.skip` guard was unnecessary and no skip was added.
-- **No `Colab-ready` and no `Complete` claim.** Light mode and the flow are proven by build + tests + a live Gradio server in this sandbox, not by a Colab browser screenshot (#43).
+## Deviations
 
-## Merge result (done in-session, at the owner's instruction)
+- Platform branch is fixed; PR #40 was updated instead of creating `arena/m24-react-gradio-bridge`.
+- Existing action IDs/signatures were mapped rather than copying illustrative names from the DOC.
+- Constitution + ADR-0001 keeps concurrency 1..100/default 2/warn above 8. React mirrors that live contract.
+- M20 light-only policy remains authoritative; React offers the live light action and visibly blocks dark.
+- `npm run test:sandbox` does not exist on protected `package.json`; equivalent command was run directly.
+- No browser screenshot engine was available. The live preview is exposed, but 1280/768/390 pixel screenshots are not claimed.
+- One additional T04 commit removes Gradio's repeatedly generated development `.pyi` stub from the package tree; no history was amended.
 
-- **PR #35 is MERGED.** `main` = `2bd99b729255f1136b1667678b0255004d1101e3` (merge commit, history preserved — no squash, no force-push, per the Lovable rule in `AGENTS.md`).
-- CI on the PR head `acfd473` — both jobs green.
-- **CI re-run on the merged `main` `2bd99b7` — both jobs green:** `Python package (tests + Colab contract)` = success, `Frontend build` = success.
+## Not proven / owner action
 
-## Next action (owner-side only)
+1. Run current Notebook Cells 1..7 from reviewed main in real Colab.
+2. Confirm React renders inside Gradio, then complete Telegram and native Drive auth with no secrets recorded.
+3. List/select a real folder, bounded analyze, manual selection, explicit enqueue, real transfer, Drive verification, pause/resume/recovery/shutdown.
+4. Capture sanitized 1280×768, 768×768, and 390×844 screenshots.
+5. Record results in `PHASE_M24_T03_COLAB_SMOKE.md`.
 
-1. Re-publish tag `pkg-2026.08.09-m15t07` from the new `main` `2bd99b7` (manual dispatch — the Arena token lacks `actions:write`, #27). Until this is done, Colab Cell 1 still pulls the PREVIOUS package and none of M20 will be visible in Colab.
-2. In Colab: Runtime → Restart runtime → Cell 1 → Cells 2–4.
-3. Visual check: the page must be light on a dark-mode browser too, the stepper must show 🔵 1 with steps 2–5 hidden, and the concurrency slider must read 1..100 with the warning above 8.
-
-## GitHub handoff (this session)
-
-- Branch: `arena/019ff3b0-drive-buddy-3579bf74`
-- PR: [#35](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/35) — **MERGED** (merge commit `2bd99b7`, 31 files, +1984/−487)
-- Commits: five logical commits, each prefixed with its TASK ID
+**Next:** STOP and await Brain review. Do not merge PR #40 yet.
