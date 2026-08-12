@@ -2,24 +2,31 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M20 (T01…T05 — حزمة واحدة مترابطة) |
-| العنوان | **واجهة نهارية إجبارية + تتابع منطقي 1→5 + رفع سقف التزامن إلى 100** — `theme.py` يحيّد لوحة Gradio الداكنة على مستوى متغيرات CSS ويشطب صنف `dark` باستمرار؛ `flow.py` + `ui_flow_view.py` يشتقان الخطوة الحالية من حالة السياق الحية و`ui.py` أُعيد بناؤه إلى خمس بطاقات مرقّمة رأسية بدل التبويبات المتجاورة؛ `HARD_CONCURRENCY_CAP = 100` بموجب ADR-0001 مع تحذير إجباري فوق 8 |
-| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED · مدموج في `main`** — البوابات خضراء (`629 passed` · launcher `46/46` · النوت‌بوكان متطابقان · `cmp` OK · `package_service --build` OK · `eslint` 0 errors · `vite build` OK)؛ الإثبات البصري الحي في Colab بيد المالك (KNOWN_ISSUES #43). **ممنوع ادّعاء `Colab-ready` أو `Complete`** |
+| TASK ID | `M24-T01..T05` |
+| العنوان | React Bridge حقيقي داخل Gradio/Colab وإصلاح PR #40 |
+| الحالة | **PARTIALLY COMPLETE · Code-complete candidate + Fake-tested** — bridge الرسمي وCI مثبتان، لكن Live Colab smoke ونقل ملف حقيقي غير منفذين؛ ممنوع ادعاء `Colab-ready` أو `Complete` |
 | المالك التنفيذي | LM Arena Agent |
-| المهندس | Brain (§10) |
-| Base SHA | `77e97b789583b07b375f188894a5aca796b03b68` (= رأس `origin/main`، آخر مدموج PR #34 — مُتحقق `git rev-parse HEAD` == `origin/main`) |
-| Result SHA | `2bd99b729255f1136b1667678b0255004d1101e3` — **PR #35 مدموج في `main`** (2026-08-12T09:28:41Z، merge commit بلا squash حفاظًا على تاريخ Lovable) |
-| النطاق | **جديد:** `teledrive/theme.py` · `teledrive/flow.py` · `teledrive/ui_flow_view.py` · `tests/test_flow.py` · `tests/test_ui_contract_proofs.py` · `python-package/docs/decisions/ADR-0001-concurrency-cap-100.md`. **معدَّل:** `config.py` · `services.py` · `handlers.py` · `action_registry.py` · `ui_binder.py` · `app_context.py` · `app.py` · `ui.py` · `locale/ar.json`+`en.json` · 8 ملفات اختبار + ملفات الذاكرة |
-| خارج النطاق | `transfer_manager.py` · `queue_manager.py` · `database.py` · `migrations.py` · `drive_auth.py` · `drive_client.py` · `telegram_auth.py` · `telegram_client.py` · `checkpoint_manager.py` · `storage_manager.py` · `async_runtime.py` · `redaction.py` · `tests/mocks/` · النوت‌بوكات · `notebook_cells.py`/`colab_cells.json` · `requirements.*` · `.github/` · React/frontend |
-| الدليل الرئيسي | `compileall` OK · `pytest`: **629 passed** (كان 596؛ +33) · launcher: **46/46** (45 + `flow.sync`) · `grep "gr.Tab(\|themes.Soft" teledrive/ui.py` → لا شيء · خادم Gradio حي على `0.0.0.0:7860` والصفحة المُقدَّمة تحوي `--td-bg:#F4F0F5` و`color-scheme: light` و`MutationObserver` · فحص التتابع الحي: `connect → analyze → select → queue` ثم عودة إلى `connect` فور سقوط درايف · PHASE_M20 |
-| الخطوة السابقة (مُغلَقة) | M19-T01 — خمس مناطق + ثيم oklch (PR #34، مدموج في `77e97b7`) |
-| الخطوة التالية | **تم الدمج داخل الجلسة بأمر المالك.** CI أخضر على رأس الـPR (`acfd473`) وعلى `main` بعد الدمج (`2bd99b7`): `Python package` success و`Frontend build` success. **المتبقي بيد المالك حصرًا:** (1) إعادة نشر التاج `pkg-2026.08.09-m15t07` من `main` الجديد (#27 — توكن Arena بلا `actions:write`؛ وقبلها تبقى Cell 1 تسحب الحزمة القديمة فلن يظهر M20 في Colab) ← (2) Restart runtime ← Cell 1 ← الخلايا 2–4 ← (3) الفحص البصري: الصفحة نهارية حتى على متصفح داكن، المؤشر 🔵 1 والخطوات 2–5 مخفية، والسلايدر 1..100 مع التحذير فوق 8 |
+| المهندس/المراجع | Brain عبر ClickUp Docs |
+| الفرع | `arena/019ff78c-drive-buddy-3579bf74` (مثبّت من Arena؛ استُخدم لإصلاح PR #40 بدل فرع جديد) |
+| Base SHA | `16797ca9b540d8a22885fffb38012643713ef851` (`origin/main`) |
+| M23 head قبل M24 | `03c70d0797906eba34d1cf91d80a71bfea5c86a5` |
+| Code result SHA | `56a285b5bea01b07c74d7e3ba1a2a2b26461c5fd` |
+| PR | [#40](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/40) — OPEN، لا دمج قبل مراجعة Brain وColab evidence أو تسجيله صراحةً كغير منفذ |
+| النقل | `ReactPanel(gr.HTML)` في Gradio 6.20.0: component `value` JSON + حدث `submit` → `UIBinder.wire` → `react.bridge.request` → named handler → Action Registry/handlers/services الحالية → snapshot منقح. لا server إضافي ولا browser API transport |
+| حالة React standalone route | `/teledrive-sandbox` يرجع `<TeleDriveSandbox />`، لكنه يعرض `Backend bridge unavailable` ويعطّل الأفعال؛ النجاح لا يُحاكى خارج Gradio |
+| أمان المصادقة | API hash/phone/code/password/session/token ممنوعة في generic bridge. أفعال Telegram الحساسة تبقى في حقول Gradio القديمة داخل Accordion آمن؛ React يقرأ الحالة المنقحة فقط |
+| الأفعال | 47/47 ready؛ الجديد الوحيد `react.bridge.request` ومسجّل مرة واحدة. كل Action IDs المستخدمة في React موجودة فعليًا في السجل |
+| البوابات المحلية | `646 passed` · launcher `47/47` · compileall PASS · notebooks in sync + cmp identical · package build PASS · frontend `lint` 0 errors · typecheck PASS · 18/18 sandbox contracts · Vite build PASS · SSR route PASS |
+| GitHub push CI | run `31640781460` على `56a285b`: Frontend PASS (17s) + Python/Colab contract PASS (1m49s) |
+| GitHub pull_request CI | run `31640785475` على `56a285b`: Frontend PASS (16s) + Python/Colab contract PASS (2m49s) |
+| Live bridge smoke | Gradio حي على `0.0.0.0:7860`: `/config` يحوي component واحد `type=html`, `elem_id=td-react-panel`, dependency `submit` input/output لنفس component، API name `h_react_bridge_request`. جولة `queue.refresh` عبر Gradio client أعادت status=ok وحالة DISCONNECTED/empty حقيقية |
+| الملفات المحمية | diff مقابل `origin/main`: **0** من Notebook/Python protected/requirements/bun/package.json/workflows. تغيير M23 السابق في `package.json` أُعيد إلى main |
+| الخطوة التالية | **STOP and await Brain review.** المالك ينفذ Live Colab smoke المكوّن من 12 خطوة ويلتقط 1280×768 و768×768 و390×844 بدون أسرار؛ بعده فقط يعاد تقييم `Colab-ready` |
 
-## انحرافات عن §10 / نقاط صدق
+## انحرافات مسجلة
 
-- **الأساس ليس `ad3a454`** المذكور في ملف المهمة بل `77e97b7` (رأس `main` الفعلي). النسخة المحلية shallow بعمق 1 و`gh` يرد `401 Bad credentials`، فتعذّر إثبات علاقة النسب بين الاثنين — سُجِّل الانحراف بدل الادّعاء. اسم الفرع مثبَّت من المنصة (`arena/019ff3b0-…`) بدل الاسم المقترح في الملف.
-- **تصحيح أمين لملف المهمة:** الملف كُتب على `ad3a454` حيث 18 إجراءً كانت `tested=False` ومرسومة مخفية. على الأساس الحقيقي كانت الـ45 **كلها** `tested=True` ببراهين أقوى من الجدول المقترح، فلا وجود لأزرار ميتة تُظهَر ولم يُخفَّض أي برهان. أُضيف `flow.sync` فصار الإجمالي 46.
-- **الدمج بدل الاستبدال (بأمر المالك الصريح):** `theme.py` أُضيف بجانب `ui_theme.py` القائم، و`ui.py` الجديد دُمج في القشرة الحالية بدل استبدالها حرفيًا — لذلك بقيت لوحتا oklch وربط `settings.set_theme` واللوحات الأربع لمجلد Drive وكل اختبارات الواجهة السابقة تعمل.
-- **اكتشاف حقيقي أثناء التنفيذ:** الحارس الثاني لا يعمل عبر `gr.HTML` لأن Gradio يُدرج محتوى المكوّن بـ`innerHTML` فلا يُنفَّذ `<script>` (تحذير Gradio صريح)؛ نُقل إلى `head=`/`js=` في `launch()`.
-- **مخاطر مقبولة من المالك:** التزامن فوق 8 غير مختبر مقابل ذاكرة Colab الحقيقية وحدود تيليجرام (#44)، وبراهين M20 على مستوى الربط لا التكامل الحي (#45).
-- `bun` غير قابل للتنصيب في الساندبوكس (حاجز TLS على `bun.sh`)، فشُغِّلت بوابتا lint/build بنفس سكربتات `package.json` عبر npm — والتعديل لا يمس أي ملف frontend، وCI يشغّل نسختَي bun على الـPR.
+- DOC اقترح فرع `arena/m24-react-gradio-bridge`، لكن جلسة Arena مثبتة على `arena/019ff78c-drive-buddy-3579bf74`؛ تم إصلاح PR #40 نفسه بلا rebase/force-push/amend.
+- DOC قال إن route المنشور يحتوي `return;`، بينما فحص الشجرة الفعلي أثبت أن `origin/main` وPR #40 يرجعان `<TeleDriveSandbox />`; لم يُخترع إصلاح غير لازم، وأُبقي contract test.
+- DOC أعطى بعض Action IDs غير الموجودة؛ استُخدمت الأسماء القانونية الفعلية (`telegram.set_credentials`, `analyze.enqueue_selected`, `queue.start_selected`, `logs.search`, `export.build_zip` وغيرها).
+- الدستور/ADR-0001 أعلى من DOC: التزامن الحي 1..100 افتراضي 2 وتحذير فوق 8، وليس 1..4.
+- `package.json` محمي ولا يحتوي script `test:sandbox` على main؛ لذلك شُغّلت الاختبارات مباشرةً بـ`node --test tests/teledrive-sandbox.contract.test.mjs` بدل تعديل الملف المحمي.
