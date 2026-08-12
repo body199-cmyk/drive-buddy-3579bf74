@@ -155,7 +155,11 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         # trigger performs the initial page-load render as well as re-rendering
         # when lang_state changes. Restricting it left a blank shell on first
         # opening the Colab URL.
-        @gr.render(inputs=[lang_state])
+        # Do not rely on the queue/SSE transport for this initial render:
+        # Colab's reverse proxy can drop that connection during page startup,
+        # leaving the render container empty (a white page). This work is short
+        # and synchronous, so an ordinary request is the reliable transport.
+        @gr.render(inputs=[lang_state], queue=False, show_progress="hidden")
         def _language_root(lang: str) -> None:
             _render_shell(ctx, binder, lang_state, active_tab, theme_host, lang)
             # First paint reflects the real context, not an optimistic guess.

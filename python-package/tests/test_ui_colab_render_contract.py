@@ -122,6 +122,23 @@ def test_version_comes_from_config_not_a_literal(ctx):
     assert refs  # non-empty render
 
 
+def test_initial_render_bypasses_queue_transport(ctx):
+    """The shell must render through a plain request behind the Colab proxy.
+
+    A queued first render is allowed to remain empty when the proxy drops the
+    initial SSE stream, which presents to the user as an all-white page.
+    """
+    demo = ui.build(ctx)
+    render_dependencies = [
+        dep for dep in demo.config["dependencies"]
+        if any(event == "load" for _component_id, event in dep["targets"])
+        and dep.get("render_id") is not None
+    ]
+    assert len(render_dependencies) == 1
+    assert render_dependencies[0]["queue"] is False
+    assert render_dependencies[0]["show_progress"] == "hidden"
+
+
 def test_no_blank_first_render_and_no_orphan_layout_markers(ctx):
     """First render must contain every section's controls — nothing blank,
     nothing orphaned, no stray unformatted symbols in the top bar."""
