@@ -189,6 +189,11 @@ function Index() {
         <footer className="text-xs text-muted-foreground">
           v4.5 — لا رابط عام افتراضياً، ولا يُرسَل أي سرّ إلى هذا الموقع؛ كل شيء يبقى داخل حساباتك
           على Google و Telegram.
+          <div className="mt-3">
+            <a href="/teledrive-sandbox" className="underline underline-offset-2">
+              واجهة M19 التجريبية (Prototype / Local demo)
+            </a>
+          </div>
         </footer>
       </main>
     </div>
