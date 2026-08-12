@@ -1,5 +1,10 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M25-T01 MERGED] — 2026-08-12 — PR #44 مدموج في main `ce28004`
+
+- **دمج:** PR [#44](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/44) → main = `ce28004fda34943c7224877c5bd3eb5338ed4656` في 2026-08-12T23:30:45Z. CI على الـPR: Frontend PASS + Python PASS.
+- **فجوة Colab:** التاج `pkg-2026.08.09-m15t07` ما زال قديمًا حتى يعيد المالك تشغيل **Publish current TeleDrive package** على `main` (الوكيل محظور 403 — KNOWN_ISSUES #27).
+
 ## [M25-T01] — 2026-08-12 — جلسات الطابور + بدء كل المعلّق + مسح غير المكتمل
 
 - **المشكلة:** بعد Restart في Colab تبقى صفوف SQLite بينما التحديد في الذاكرة فارغ، فيرفض `queue.start_selected` البدء. Pause يُبقي الصفوف عمدًا وStop كان يوقف العمال فقط.

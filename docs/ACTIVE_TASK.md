@@ -4,12 +4,13 @@
 |---|---|
 | TASK ID | `M25-T01` |
 | العنوان | جلسات الطابور + بدء كل المعلّق + مسح غير المكتمل عند الإيقاف |
-| الحالة | **Code-complete candidate + Fake-tested** — بانتظار دمج PR ثم إعادة نشر الحزمة بيد المالك |
+| الحالة | **MERGED INTO MAIN · Code-complete candidate + Fake-tested** — PR #44 مدموج؛ **ليس** Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس/المراجع | Brain عبر ClickUp Docs |
 | الفرع | `arena/019ff846-drive-buddy-3579bf74` |
 | Base SHA | `0c394a859770844a0526d54f4369923d05385138` |
-| الخطوة التالية | ① دمج PR → ② المالك: Actions → Publish current TeleDrive package على `main` · ③ Colab Restart → Cell 1 → 2–4 |
+| PR #44 | [MERGED](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/44) → merge `ce28004fda34943c7224877c5bd3eb5338ed4656` (2026-08-12T23:30:45Z) · CI على الـPR: Frontend PASS + Python PASS |
+| الخطوة التالية | ① المالك: Actions → Publish current TeleDrive package → Run on `main` · ② Colab Restart → Cell 1 · ③ Cells 2–4 ثم Start للمعلّق أو إيقاف → مسح غير المكتمل |
 
 ## لماذا هذه المهمة
 
