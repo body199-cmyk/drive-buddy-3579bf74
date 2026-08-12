@@ -1,5 +1,14 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-MERGED] — 2026-08-12 — دمج PR #40 بعد تجديد الجلسة
+
+- **السابق:** PR #40 كان OPEN على الكود `a7d1c6c` (short `56a285b`) مع CI أخضر (push 31641715230 + PR 31641718211 — Frontend PASS + Python PASS). الكومِت المحلي `70b4e2d` doc-only فشل دفعه بسبب انتهاء `GH_TOKEN` في Arena.
+- **التجديد:** فرع جديد `arena/019ff7e0-drive-buddy-3579bf74` سحب `arena/019ff78c` ودمجه في `021c0e2` (no-ff) ثم دُفع. نفس الشجرة 100% مع `a7d1c6c`.
+- **الدمج:** `gh pr merge 40 --merge` → main = `bbea9bf20462671869bd17b245a85dda2e1a5908` في 2026-08-12T21:31:23Z. CI على `bbea9bf`: run `31642917698` — Python SUCCESS + Frontend **failure transient** (شجرة مطابقة لـ a7d1c6c الناجح). CI على فرع التجديد نفسه `021c0e2`: run `31642902305` — Frontend SUCCESS + Python SUCCESS، مما يثبت أن فشل main عابر وليس كود.
+- **المزامنة:** دمج main `bbea9bf` في فرع التجديد `20cac75` ثم تحديث التوثيق إلى حالة MERGED.
+- **الحالة الصادقة النهائية:** `MERGED INTO MAIN / PARTIALLY COMPLETE / Code-complete candidate + Fake-tested / Colab-ready: NO / Complete: NO`. لا ادعاءات نقل حقيقي أو لقطات Colab. مطابق لتقرير M24 الأصلي مع إضافة خطوة الدمج.
+- **المتبقي بيد المالك:** 12-step Colab smoke، مصادقة Telegram/Drive حقيقية، تحديد مجلد/تحليل/اختيار/قائمة انتظار/نقل/تحقق Drive/recovery/shutdown، ولقطات 1280×768/768×768/390×844.
+
 ## [M24-T01..T05] — 2026-08-12 — React Bridge رسمي داخل Gradio وإصلاح PR #40
 
 - **Baseline:** `origin/main=16797ca9b540d8a22885fffb38012643713ef851`; PR #40 كان OPEN على `03c70d0` وM23 بقي fake prototype. تصنيف الاستئناف `RESUME_PARTIAL`. ادعاء DOC أن route يحوي `return;` كان متقادمًا؛ الفحص وSSR أثبتا `<TeleDriveSandbox />`.
