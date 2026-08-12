@@ -2,6 +2,8 @@
 
 ## [M20] — 2026-08-12 — واجهة نهارية إجبارية + تتابع منطقي 1→5 + سقف تزامن 100 (ADR-0001)
 
+> **مدموج:** PR [#35](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/35) → `main` = `2bd99b729255f1136b1667678b0255004d1101e3` (merge commit، بلا squash وبلا force-push حفاظًا على تاريخ Lovable). CI أخضر على رأس الـPR (`acfd473`) **وعلى `main` بعد الدمج**: `Python package (tests + Colab contract)` success · `Frontend build` success. الحالة تبقى **Code-complete candidate + Fake-tested** — الدمج ليس إثباتًا حيًا (#43).
+
 ### Verified (venv حقيقي، مخرجات فعلية — لا سجلات منسوخة)
 - Base SHA = `77e97b789583b07b375f188894a5aca796b03b68` (= رأس `origin/main`، آخر مدموج PR #34). ملف المهمة كان يتوقع `ad3a454`، وهو **ليس** الرأس الحالي؛ النسخة المحلية shallow (`depth=1`) فلا يمكن إثبات علاقة النسب محليًا، و`gh` يرد `401 Bad credentials` فتعذّر الفحص عبر الـAPI. بُني العمل من آخر `main` الفعلي (`77e97b7`) وسُجِّل الانحراف بدل الادّعاء.
 - `python -m compileall -q teledrive` → exit 0
