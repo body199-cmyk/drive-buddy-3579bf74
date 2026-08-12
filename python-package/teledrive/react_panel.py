@@ -68,3 +68,13 @@ else:
     class ReactPanel:  # pragma: no cover - only instantiated by ui.build
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise RuntimeError("gradio is not installed")
+
+
+# Gradio's custom-component metaclass emits a development-only .pyi beside the
+# source on every fresh interpreter import. It is not a runtime asset and grows
+# when many verification processes touch the same checkout, so never package or
+# track it. Failure to remove it on a read-only install is harmless.
+try:
+    Path(__file__).with_suffix(".pyi").unlink(missing_ok=True)
+except OSError:  # pragma: no cover - read-only package install
+    pass
