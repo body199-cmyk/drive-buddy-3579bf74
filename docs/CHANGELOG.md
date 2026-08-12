@@ -1,6 +1,32 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
-## [M18-T03] — 2026-08-12 — التصنيف العميق لأخطاء تسجيل دخول Telegram (لا «خطأ غير معروف» عند «إرسال الكود» — cid fd41da8b)
+## [M19-T01] — 2026-08-12 — إعادة تصميم واجهة Gradio: خمس مناطق + ثيم oklch نهاري/ليلي + استجابة (طبقة عرض فقط)
+
+### Verified (from venv `python-package/.venv`, real output — no copied logs)
+- فحص §0 قبل أي تعديل: HEAD=`6281a66` = رأس `origin/main` (آخر مدموج = PR #33). الـSHA «النتيجة المعروفة» `98d4a21` غير موجود في شجرة `main` (PR سابق غير مدموج على فرع منفصل) → البناء الصحيح من آخر `main` الفعلي.
+- البوابات قبل التعديل (baseline): `compileall` OK · `pytest -q tests` → **589 passed** · `launcher --check` → **45/45**.
+- البوابات بعد التعديل: `compileall` OK · `pytest -q tests` → **596 passed** (كان 589؛ +7 اختبارات حفاظ) · `launcher --check` → **45/45** · `notebook_cells --check` في المزامنة · `cmp` النوت‌بوكان متطابقان · `package_service --build --output teledrive_v3.1.zip` → tests passed · archive OK (414036 بايت).
+- `bun run lint`/`bun run build`: **NOT ATTEMPTED** — `bun` غير منصب و`node_modules` غائبة في الساندبوكس؛ والتعديل لا يمس أي ملف React/frontend (انظر Protected)، فتغطيهما CI على الـPR.
+
+### Changed (عرض فقط — صفر منطق/نقل/قاعدة/نوت‌بوك)
+- `teledrive/ui_theme.py`: لوحتا oklch نهاري/ليلي مستقلتان (الليلي ليس قلبًا آليًا للنهاري)؛ `--td-primary` للأفعال الرئيسية فقط، `--td-success`/`--td-danger` للنجاح/الفشل الحقيقي، `--td-accent` للعلامة فقط؛ `BASE_CSS` استجابي (عرض أقصى ~1280، سلم مسافات 4/8/12/16/24/32، لمس ≥44px، شريط تنقل واحد يتحول لشريط سفلي ثابت ≤900px، جداول تتمرر أفقيًا بدل الانضغاط). نفس مفاتيح الـtokens + `--td-lime` للتوافق الخلفي.
+- `teledrive/ui.py`: إعادة تنظيم إلى **خمس مناطق خلف شريط تنقل واحد** (تبويبات Gradio الأصلية، أُزيل الشريط الجانبي المكرر): ① مركز الاتصال (دمج لوحة التحكم + تيليجرام + درايف) ② التحليل والاختيار ③ التحويلات ④ السجلات ⑤ الإعدادات والتصدير. **كل `action_id` ومعالج وترتيب مدخلات/مخرجات وعدد المخرجات محفوظ حرفيًا** (45 إجراءً جاهزًا، 55 ربط تحكّم = baseline). زر الثيم يستخدم الربط الحالي `settings.set_theme` (بلا منطق جديد).
+- `locale/ar.json`+`en.json`: 3 مفاتيح نصوص جديدة فقط (`zone.connection.hint`/`zone.settings_export.hint`/`settings.appearance`).
+- اختبارات الواجهة: `test_ui_layout_contract.py` و`test_ui_colab_render_contract.py` حُدِّثت بأمانة لتعكس البنية الجديدة (5 مناطق بدل 7؛ لوحة oklch الداكنة بدل literal الـhex). + ملف جديد `tests/test_m19_t01_ui_preservation.py` (7 اختبارات: العدّاد لا ينخفض، كل زر تيليجرام مربوط بنفس `action_id`/المعالج، الثيم يستخدم الربط الحالي، إعادة العرض تحفظ الاتجاه).
+- ذاكرة: `docs/CHANGELOG.md` + `AI_HANDOFF.md` + `ACTIVE_TASK.md` + `TODO.md` + `KNOWN_ISSUES.md` + `docs/PHASE_REPORTS/PHASE_M19_T01.md`.
+
+### Protected (لم تُلمس)
+`telegram_auth.py` · `telegram_client.py` · `drive_auth.py` · `drive_client.py` · `services.py` · `queue_manager.py` · `transfer_manager.py` · `database.py` · `migrations.py` · `handlers.py` · `action_registry.py` · `ui_binder.py` · النوت‌بوكات · `notebook_cells.py` · `colab_cells.json` · `requirements.*` · `bun.lock` · `package.json` · `.github/` · React/frontend.
+
+### انحرافات (أمانة)
+- **النهاري كافتراضي**: يتطلب تغيير الافتراضي في `PreferencesService` (`services.py` — ملف محمي) وفي `shell_seed` (`handlers.py` — محمي). Lauحتُ الواجهة تشحن اللوحتين كاملتين وتبديل الثيم يعمل في الاتجاهين، لكن الافتراضي المُستمر يبقى «ليلي». تغييره يحتاج تفويضًا منفصلًا للمس `services.py`.
+- الواجهة تحتاج اختبار المالك داخل Colab (لا متصفح/Colab حي في الساندبوكس) — KNOWN_ISSUES #41.
+
+### للمالك
+دمج PR ← إعادة نشر التاج يدويًا من main الجديد (KNOWN_ISSUES #27) ← Restart runtime ← Cell 1 ← الخلايا 2–4 ← فحص بصري للمناطق الخمس والثيمَين وRTL/LTR.
+
+
+## [M18-T03] — 2026-08-12 — التصنيف العميق لأخطاء دخول Telegram (لا «خطأ غير معروف» عند «إرسال الكود» — cid fd41da8b)
 
 ### Verified
 - فحص §9 قبل أي تعديل: HEAD=`1d72ba1` (PR #31=M18-T02 مدموج) · التاج `pkg-2026.08.09-m15t07` مُعاد نشره من الكوميت نفسه · الشجرة مطابقة لـAI_HANDOFF/ACTIVE_TASK.

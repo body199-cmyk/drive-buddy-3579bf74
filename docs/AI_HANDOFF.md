@@ -1,106 +1,66 @@
 # AI_HANDOFF — Live handoff
 
-> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/` and `python-package/docs/PHASE_REPORTS/PHASE_M18_T03.md`.
+> This file records the latest execution session only. Historical evidence is in `docs/PHASE_REPORTS/` and `python-package/docs/PHASE_REPORTS/`.
 
 ## Session card
 
 | Field | Value |
 |---|---|
 | UTC date | 2026-08-12 |
-| Session type | New session — owner report + §9 resume, then M18-T03 (owner-authorized protected-file classification) |
-| TASK ID | `M18-T03` |
+| Session type | New session — M19-T01 Gradio UI redesign (presentation layer only) |
+| TASK ID | `M19-T01` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch (Arena, platform-pinned) | `arena/019ff2cd-drive-buddy-3579bf74` |
-| Base SHA | `1d72ba12e93bb929f9392a1c67bae50fb998007b` (`main` = merged PR #31 = M18-T02) |
-| Result SHA | see PR (single PR from `arena/019ff2cd-…`) |
-| Status | **COMPLETE** — code + all gates green (589 passed, launcher 45/45); merge + tag re-publish + live-Colab proof are owner-side |
+| Branch (Arena, platform-pinned) | `arena/019ff35c-drive-buddy-3579bf74` |
+| Base SHA | `6281a66133b6018a10501d21c116a582dbbcb114` (`main` = merged PR #33 — verified `git rev-parse HEAD` == `origin/main`) |
+| Result SHA | see PR (single PR from `arena/019ff35c-…`) |
+| Status | **Code-complete candidate** — Python gates all green (596 passed, launcher 45/45, notebooks identical, package build OK); `bun lint`/`build` NOT ATTEMPTED (no bun in sandbox — #37); live Colab visual proof is owner-side (#38/#41) |
 | Launcher | `binding check ok: 45/45 ready actions resolve` |
 
-## §9 resume verification of the previous milestone (M18-T02)
+## §0 base verification
 
-- `git status --short` clean · branch as above · HEAD `1d72ba1` = "Merge pull request #31" — **PR #31 merged** ✅ (the stale handoff said "غير مدموج"; reality wins, handoff corrected).
-- `gh release view pkg-2026.08.09-m15t07`: re-published 2026-08-10T23:13Z, built from `1d72ba1`, run `31441568038`, zip 403931 bytes — **the M18-T02 fix actually ships to Colab** ✅.
-- Baseline gates re-run before edits: `582 passed` · launcher 45/45 — matches the old handoff ✅ → `RESUME_VERIFIED`.
+- `git rev-parse HEAD` = `6281a66…` and `git log -1 origin/main` = the same commit → **base IS the latest `main`** ✅.
+- The task's "last known result" SHA `98d4a21…` is **not** in `main`'s tree (`git cat-file` failed) — it is an earlier unmerged PR on a separate branch, so building from the latest `main` is correct.
 
-## Owner report driving this session
+## What was done (M19-T01 — presentation only)
 
-> «الاتصال بالتليجرام بيفشل… أملأ البيانات المطلوبة وأضغط إرسال الكود لكن الكود لا يصل إلى تيليجرام ويظهر الخطأ عند طلب إرسال الكود» — then the literal UI text: `خطأ غير معروف. جرّب مرة أخرى. [fd41da8b]` — on the NEW package (owner restarted runtime + re-ran Cell 1–4).
+- **Scope**: reorganize the Gradio shell into 5 zones behind one nav bar + ship a real oklch day/night theme + responsive layout, while preserving every `action_id`/handler/input-order/output-arity. Zero business logic, transport, DB, or notebook changes.
+- `teledrive/ui_theme.py`: independent light/dark oklch palettes (dark is NOT an auto-inverse of light); `--td-primary` for main actions only, `--td-success`/`--td-danger` for real success/failure, `--td-accent` for brand; responsive `BASE_CSS` (max ~1280px, 4/8/12/16/24/32 spacing, ≥44px touch, single nav bar → fixed bottom bar ≤900px, tables scroll horizontally). Token keys + `--td-lime` kept for backwards-compat.
+- `teledrive/ui.py`: **5 zones** (Connection Center [dashboard folded in] · Analyze · Transfers · Logs · Settings & Export [export folded in]) behind native Gradio tabs; the redundant right rail was removed (one nav bar). **Every `binder.wire()` preserves inputs and output arity verbatim** — 45 ready actions, 55 wired controls (= baseline). Theme control still uses the existing `settings.set_theme` binding (no new logic).
+- `locale/ar.json` + `en.json`: 3 new text keys only.
+- UI tests: `test_ui_layout_contract.py` + `test_ui_colab_render_contract.py` updated honestly for the new structure (5 zones; oklch dark palette). New `tests/test_m19_t01_ui_preservation.py` (7 tests: counts never decrease, every Telegram button keeps its action_id/handler, theme uses existing binding, direction survives re-render).
 
-## Root cause (proven from source before editing)
-
-- The M18-T02 fix covered `telegram.set_credentials` only. The «send code» button runs
-  `TelegramAuth.send_code → _do_send_code → client.start_login (Telethon send_code_request)`,
-  whose failures land in `TelegramAuth._handle_send_error` (protected file) — it knew only
-  `FloodWaitError`; **every other failure became `TeleDriveError` with the default
-  `message_key = "err.unknown"`** and the wrapper renders `t('err.unknown') + [cid]` — exactly
-  the owner's `fd41da8b`.
-- `auth.sendCode` is the FIRST call carrying the `api_id`/`api_hash` pair, so the most likely
-  real-world causes (bad API pair → `ApiIdInvalidError`, number rejected → `PhoneNumberInvalidError`,
-  number rate-limited → `PhoneNumberFloodError`, transport → `ConnectionError`/`TimeoutError`/
-  `IncompleteReadError`) were all being masked. `ctx.aio.run(coro)` has NO artificial timeout —
-  the failure is genuinely returned by Telethon.
-
-## What was done (M18-T03 — owner explicitly authorized touching `telegram_auth.py`, classification ONLY)
-
-- `telegram_auth.py`: new module constants `_TRANSPORT_EXC` (isinstance: ConnectionError/
-  TimeoutError/OSError/EOFError ⊃ asyncio.IncompleteReadError) and `_SEND_CODE_RPC_KEYS`
-  (name-based, like the existing FloodWaitError branch): `ApiIdInvalidError→err.bad_api_pair`
-  (state ERROR — fix credentials via Connect, which is allowed from any state),
-  `PhoneNumberInvalidError→err.tg_phone_invalid`, `PhoneNumberFloodError→err.tg_phone_flood`
-  (both → READY_FOR_PHONE). Transport in `_handle_send_error` → `err.tg_connect_failed` +
-  READY_FOR_PHONE. `_handle_code_error` transport branch → `err.tg_connect_failed` + stays
-  CODE_REQUESTED (phone_code_hash preserved — same code retries). `verify_password` transport →
-  `err.tg_connect_failed` and FloodWait → `err.floodwait`, both staying PASSWORD_REQUIRED —
-  no more false «كلمة المرور غير صحيحة». **Login logic, secrets, lock, finally-zeroing untouched.**
-- `locale/ar.json` + `en.json`: `err.bad_api_pair` · `err.tg_phone_invalid` · `err.tg_phone_flood`.
-- `tests/test_telegram_flow_contract.py`: **+7 proof tests** (each class named + recovery paths
-  + happy path untouched). New name-based doubles (`ApiIdInvalidError`, `PhoneNumberInvalidError`,
-  `PhoneNumberFloodError`) mirror the existing `FloodWaitError` double technique.
-- Docs/memory: `PHASE_M18_T03.md` · `CHANGELOG.md` · `KNOWN_ISSUES.md` (#40 closed fully, #41 added) ·
-  `TODO.md` (M18-T02 → VERIFIED COMPLETE; M18-T03 row) · `ACTIVE_TASK.md` · this file.
-
-## Verification (raw)
+## Verification (raw, from `python-package/.venv`)
 
 ```plain
 $ python -m compileall -q teledrive          → exit 0
-$ python -m pytest -q tests                  → 589 passed in 22.57s   (was 582; +7)
+$ python -m pytest -q tests                  → 596 passed in 23.29s   (was 589; +7)
 $ python teledrive_launcher.py --check       → binding check ok: 45/45 ready actions resolve
 $ python -m teledrive.notebook_cells --check → notebooks are in sync
 $ cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb → identical
-$ python -m teledrive.package_service --build → tests passed · archive OK
-$ git diff --stat                            → 4 files changed, 193 insertions(+), 0 deletions(-)
+$ python -m teledrive.package_service --build --output teledrive_v3.1.zip → tests passed · archive OK (414036 bytes)
+$ bun run lint / bun run build               → NOT ATTEMPTED (bun not installed; no node_modules; #37). Diff touches no React/frontend file.
+$ git diff --stat                            → 7 files (6 modified + 1 new test), +439/−390
 ```
 
 ## Protected files
 
-Only `telegram_auth.py` was touched — with the owner's explicit session authorization, and for
-classification branches only (additive, no deletion, no logic change). Untouched per-path:
-`notebook/TeleDrive.ipynb`, `public/TeleDrive.ipynb`, `notebook_cells.py`, `colab_cells.json`,
-`database.py`, `migrations.py`, `queue_manager.py`, `transfer_manager.py`, `telegram_client.py`,
-`drive_auth.py`, `requirements.*`, `bun.lock`, `package.json`, `.github/workflows/*`, all
-React/frontend files.
+Untouched (confirmed by `git diff --stat`): `telegram_auth.py`, `telegram_client.py`, `drive_auth.py`, `drive_client.py`, `services.py`, `queue_manager.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `handlers.py`, `action_registry.py`, `ui_binder.py`, both notebooks, `notebook_cells.py`, `colab_cells.json`, `requirements.*`, `bun.lock`, `package.json`, `.github/`, all React/frontend files.
 
-## Known limitations (honest)
+## Deviations (honest)
 
-- The EXACT exception class behind the owner's `fd41da8b` was not captured (owner pasted the UI
-  message, not the `failed:` log line). After this fix the UI itself names the cause; the Logs
-  tab line remains the confirmation record.
-- Rare `send_code` RPC classes (e.g. `ApiIdPublishedFloodError`) intentionally still fall back to
-  `err.unknown` until seen in a live log.
-- No browser/Colab in the sandbox → live proof stays owner-side (KNOWN_ISSUES #41, M15-T01).
+- **Light-as-default not applied**: the `"dark"` default is hardcoded in protected `services.py` (`PreferencesService`) and `handlers.py` (`shell_seed`). Both palettes ship and the toggle works both ways (tested), but the persisted default stays dark. Flipping to light-default needs a one-line change in `services.py` + a test update → separate owner authorization (KNOWN_ISSUES #42).
+- Mobile bottom-nav is pure CSS on native Gradio tabs; fine visual tuning needs a live Colab check (owner-side).
+- No browser/Colab in the sandbox → live visual proof stays owner-side (#38/#41). No `Complete`/`Live-ready` claim.
 
 ## Next action
 
-**STOP — await the owner's merge of the M18-T03 PR.** After merge:
-1. Owner re-publishes tag `pkg-2026.08.09-m15t07` from the new main (manual `release-current.yml`
-   dispatch — Arena token lacks `actions:write`, KNOWN_ISSUES #27).
+**STOP — await the owner's merge of the M19-T01 PR.** After merge:
+1. Owner re-publishes tag `pkg-2026.08.09-m15t07` from the new main (manual dispatch — Arena token lacks `actions:write`, #27).
 2. Owner in Colab: Runtime → Restart runtime → Cell 1 → Cells 2–4.
-3. Owner presses «إرسال الكود» again — the message MUST name the reason
-   (`err.bad_api_pair` / `err.tg_phone_invalid` / `err.tg_phone_flood` / `err.tg_connect_failed`)
-   instead of `err.unknown`; the redacted `failed:` line in the Logs tab confirms the class.
+3. Visual check of the 5 zones, both themes, and RTL/LTR.
 
 ## GitHub handoff (this session)
 
-- Branch: `arena/019ff2cd-drive-buddy-3579bf74`
-- PR: one fix PR from this branch (M18-T03) — see PR URL in the report
-- Commit: code+tests+docs, single commit prefixed `M18-T03`
+- Branch: `arena/019ff35c-drive-buddy-3579bf74`
+- PR: one PR from this branch (M19-T01) — see PR URL in the report
+- Commit: code+tests+docs, single commit prefixed `M19-T01`

@@ -43,12 +43,16 @@ def test_arabic_rtl_is_the_default_render(ctx):
     assert t("nav.queue") == "Transfers"
 
 
-def test_dark_graphite_theme_is_the_default(ctx):
+def test_dark_theme_is_the_default(ctx):
+    """M19-T01: the persisted default stays dark. Flipping to light-default
+    lives in PreferencesService (services.py — a protected file), so both
+    oklch palettes are shipped and the toggle works, but dark remains the
+    persisted default. The dark oklch block rides the first render."""
     assert ctx.preferences.current_theme() == "dark"
     block = theme_style_block("dark")
     assert 'data-td-theme="dark"' in block
     assert f"--td-bg: {PALETTES['dark']['bg']};" in block
-    assert f"--td-accent: {PALETTES['dark']['accent']};" in block
+    assert f"--td-primary: {PALETTES['dark']['primary']};" in block
 
     # the style host actually rides the first render (dark, not white)
     demo, refs = _render(ctx, "ar")
@@ -59,7 +63,8 @@ def test_dark_graphite_theme_is_the_default(ctx):
     assert host is not None
     value = host.value if hasattr(host, "value") else ""
     assert "data-td-theme=\"dark\"" in str(value)
-    assert "0d0f10" in str(value)  # graphite bg, not white
+    # the dark oklch background, never a white background
+    assert PALETTES["dark"]["bg"] in str(value)
 
 
 def test_folder_picker_is_visible_in_transfers_and_dashboard(ctx):
@@ -102,10 +107,11 @@ def test_no_blank_first_render_and_no_orphan_layout_markers(ctx):
     # every ready action is wired, zero orphans (dead controls fail the build)
     assert ctx.binder.missing() == []
     assert ctx.binder.orphans() == []
-    # all seven sections exist in the required order
+    # M19-T01 §5.1: five zones behind one nav bar (dashboard folded into
+    # Connection, export folded into Settings).
     assert [k for k, _v in ui.NAV_SECTIONS] == [
-        "nav.dashboard", "nav.queue", "nav.analyze", "nav.connection",
-        "nav.logs", "nav.settings", "nav.export",
+        "nav.connection", "nav.analyze", "nav.queue",
+        "nav.logs", "nav.settings",
     ]
     # the candidates table carries the DOC-39 §5.2 headers (Arabic)
     assert refs["candidates_table"].headers == [t(k) for k in ui.CANDIDATE_HEADERS]

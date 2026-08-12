@@ -108,12 +108,15 @@ def test_language_render_runs_on_initial_page_load_and_language_change():
     assert len(inputs.elts) == 1
 
 
-def test_seven_nav_sections_present_in_required_order():
+def test_five_nav_sections_present_in_required_order():
+    """M19-T01 §5.1: five zones behind ONE nav bar, in workflow order
+    (connect → analyze → transfer → logs → settings/export). The dashboard and
+    export sections folded into Connection and Settings respectively."""
     names = [label_key for (label_key, _section) in NAV_SECTIONS]
-    assert len(names) == 7
+    assert len(names) == 5
     assert names == [
-        "nav.dashboard", "nav.queue", "nav.analyze", "nav.connection",
-        "nav.logs", "nav.settings", "nav.export",
+        "nav.connection", "nav.analyze", "nav.queue",
+        "nav.logs", "nav.settings",
     ]
 
 

@@ -2,22 +2,21 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | M18-T03 |
-| العنوان | **التصنيف العميق لأخطاء تسجيل دخول Telegram — «خطأ غير معروف. [fd41da8b]» عند «إرسال الكود» والكود لا يصل** — السبب الجذري: `_handle_send_error` في `telegram_auth.py` (ملف محمي، بتفويض المالك) لم يكن يصنّف سوى `FloodWaitError`؛ و`auth.sendCode` أول استدعاء يحمل زوج api_id/api_hash فكل رفض (`ApiIdInvalidError`/`PhoneNumberInvalidError`/`PhoneNumberFloodError`/نقل) كان ينتهي `err.unknown` |
-| الحالة | COMPLETE — الكود والبوابات خضراء (589 passed · launcher 45/45 · notebooks identical · cmp ok · package build ok)؛ الدمج وإعادة نشر التاج والإثبات الحي في Colab بيد المالك |
+| TASK ID | M19-T01 |
+| العنوان | **إعادة تصميم واجهة Gradio: خمس مناطق + ثيم oklch نهاري/ليلي + استجابة (طبقة عرض فقط)** — أُعيد تنظيم `ui.py` إلى 5 مناطق خلف شريط تنقل واحد (تبويبات Gradio الأصلية؛ حُذف الشريط الجانبي المكرر)، وأُعيد بناء `ui_theme.py` بلوحتَي oklch مستقلتين وCSS استجابي، مع الحفاظ الحرفي على كل `action_id`/المعالج/ترتيب المدخلات-المخرجات/الـarity (45 جاهزًا، 55 ربطًا = baseline) |
+| الحالة | CODE-COMPLETE CANDIDATE — بوابات Python خضراء (`596 passed` · launcher `45/45` · النوت‌بوكان متطابقان · `cmp` OK · `package_service --build` OK)؛ `bun lint`/`build` NOT ATTEMPTED (#37 — لا bun في الساندبوكس والتعديل لا يمس frontend)؛ الدمج وإعادة نشر التاج والإثبات الحي في Colab بيد المالك |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس | Brain (§10) |
-| Base SHA | `1d72ba12e93bb929f9392a1c67bae50fb998007b` (= رأس `main`، PR #31 = M18-T02 — مُتحقق بفحص §9 كاملًا) |
-| Result SHA | انظر PR من الفرع `arena/019ff2cd-drive-buddy-3579bf74` (غير مدموج — الدمج بيد المالك) |
-| النطاق | تصنيف فقط داخل الملف المحمي `telegram_auth.py` (بتفويض صريح): `_TRANSPORT_EXC` + `_SEND_CODE_RPC_KEYS` + 3 فروع تصنيف (`_handle_send_error`/`_handle_code_error`/`verify_password`) · 3 مفاتيح locale × لغتين · 7 اختبارات إثبات · تحديثات الذاكرة |
-| خارج النطاق | منطق تسجيل الدخول نفسه (لم يُمس) · `set_credentials` (مغطى بـM18-T02 في handlers.py) · كل الملفات المحمية الأخرى · النوت‌بوكات · locks · frontend · أسرار المالك |
-| الدليل الرئيسي | compileall ok · pytest: **589 passed** (كان 582) · launcher `--check`: **45/45** · notebook_cells `--check` in sync · cmp identical · `package_service --build` ok · `git diff --stat`: 4 ملفات **+193/−0** |
-| الخطوة السابقة (مُغلَقة) | M18-T02 — PR #31 مدموج في `1d72ba1`، والتاج أُعيد نشره منه (run `31441568038`) — كلاهما مُتحقق عبر git/gh هذه الجلسة |
-| الخطوة التالية | **STOP — بانتظار دمج المالك لـPR**؛ ثم: إعادة نشر التاج `pkg-2026.08.09-m15t07` يدويًا من main الجديد (KNOWN_ISSUES #27) ← في Colab: Restart runtime ← Cell 1 ← الخلايا 2–4 ← محاولة «إرسال كود» حقيقية: الرسالة يجب أن تسمّي السبب (`err.bad_api_pair`/`err.tg_phone_invalid`/`err.tg_phone_flood`/`err.tg_connect_failed`) بدل `err.unknown` — سطر `failed:` المنقّح في تبويب Logs هو سجل التأكيد |
+| Base SHA | `6281a66133b6018a10501d21c116a582dbbcb114` (= رأس `origin/main`، آخر مدموج = PR #33 — مُتحقق بفحص §0) |
+| Result SHA | انظر PR من الفرع `arena/019ff35c-drive-buddy-3579bf74` (غير مدموج — الدمج بيد المالك) |
+| النطاق | عرض فقط: `teledrive/ui.py` + `teledrive/ui_theme.py` + `locale/ar.json`+`en.json` (3 مفاتيح) + اختبارات الواجهة (`test_ui_layout_contract.py`, `test_ui_colab_render_contract.py`) + اختبار حفاظ جديد (`test_m19_t01_ui_preservation.py`) + ملفات الذاكرة |
+| خارج النطاق | كل المنطق/النقل/قاعدة البيانات · `handlers.py`/`action_registry.py`/`ui_binder.py` · النوت‌بوكات · `notebook_cells.py`/`colab_cells.json` · `.github/` · الاعتماديات · React/frontend |
+| الدليل الرئيسي | `compileall` OK · `pytest`: **596 passed** (كان 589؛ +7) · launcher `--check`: **45/45** · `notebook_cells --check` متزامنة · `cmp` متطابقان · `package_service --build` OK (+414036 بايت) · `git diff --stat`: 7 ملفات (6 معدَّلة + 1 جديد)، +439/−390 · PHASE_M19_T01 |
+| الخطوة السابقة (مُغلَقة) | M18-T03 — PR من `arena/019ff2cd-…` (غير مدموج بعد حسب آخر مراجعة). تاريخ شجرة `main` حتى `6281a66` لا يحوي `98d4a21` (نتيجة M18-T03 على فرع منفصل). |
+| الخطوة التالية | **STOP — بانتظار دمج المالك لـPR M19-T01**؛ ثم: إعادة نشر التاج `pkg-2026.08.09-m15t07` يدويًا من main الجديد (KNOWN_ISSUES #27) ← في Colab: Restart runtime ← Cell 1 ← الخلايا 2–4 ← فحص بصري للمناطق الخمس والثيمَين وRTL/LTR. أما «النهاري كافتراضي» فيحتاج تفويضًا منفصلًا للمس `services.py` (KNOWN_ISSUES #42). |
 
 ## انحرافات عن §10 / نقاط صدق
 
-- السبب الدقيق في جلسة المالك (أي صنف من الجدول) لم يُثبت بسطر سجل — المالك أرسل رسالة الواجهة فقط؛ الإصلاح مصمم ليجعل المحاولة القادمة تسمّي السبب بنفسها (لا ادعاء بمعرفة الصنف قبل ظهوره — §17/§20).
-- أصناف RPC نادرة أخرى في `send_code` (مثل `ApiIdPublishedFloodError`) تبقى في fallback `err.unknown` عمدًا.
-- لا متصفح/Colab حي في الساندبوكس → الإثبات الحي بيد المالك (KNOWN_ISSUES #41، M15-T01).
-- توكن Arena بلا `actions:write` → إعادة نشر التاج يدويًا بيد المالك كما في M15-T16/M18-T02.
+- **النهاري ليس الافتراضي**: يتطلب تغيير الافتراضي في `PreferencesService` (`services.py`) و`shell_seed` (`handlers.py`) — كلاهما محمي. Lauحتُ الواجهة تشحن اللوحتين كاملتين وتبديل الثيم يعمل في الاتجاهين واختُبر، لكن الافتراضي المُستمر يبقى ليليًا (KNOWN_ISSUES #42).
+- `bun run lint`/`build` غير قابلين للتشغيل في الساندبوكس (لا `bun`/`node_modules`، #37)؛ والتعديل لا يمس React/frontend إطلاقًا فتغطيهما CI على الـPR.
+- لا متصفح/Colab حي في الساندبوكس → الإثبات الحي بيد المالك (KNOWN_ISSUES #38/#41، M15-T01). لا ادّعاء `Complete` أو `Live-ready`.
