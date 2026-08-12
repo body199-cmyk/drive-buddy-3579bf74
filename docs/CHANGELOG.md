@@ -1,5 +1,16 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M25-T01] — 2026-08-12 — جلسات الطابور + بدء كل المعلّق + مسح غير المكتمل
+
+- **المشكلة:** بعد Restart في Colab تبقى صفوف SQLite بينما التحديد في الذاكرة فارغ، فيرفض `queue.start_selected` البدء. Pause يُبقي الصفوف عمدًا وStop كان يوقف العمال فقط.
+- **Start:** `start_selected()` بلا وسائط يلتقط كل Pending/NeedsRetry/Downloaded إن لم يطابق التحديد صفوف الطابور. `start_selected([])` ما زال لا يبدأ شيئًا (عقد Phase C). هذا نقر صريح وليس auto-resume.
+- **مسح غير المكتمل:** فعل جديد `queue.clear_incomplete` يحذف صفوف SQLite غير المكتملة فقط. Uploaded/Skipped تبقى لـ`clear_completed`. **لا حذف لملفات Drive.**
+- **إيقاف:** React يعرض نافذة: إيقاف فقط أو إيقاف + مسح غير المكتمل. Gradio يضيف زر «مسح غير المكتمل» بجانب مسح المكتملة.
+- **تجميع الجلسات:** اللقطة تحمل `chatTitle`/`createdAt` والواجهة تجمّع حسب اسم القناة + تاريخ الإضافة.
+- **بوابات محلية:** `652 passed` · launcher `48/48` · contracts `22/22` · `tsc` PASS · eslint 0 errors · notebooks identical · bundle gzip أُعيد بناؤه.
+- **محمي لم يُمس:** notebooks · telegram_auth · transfer_manager · database/migrations · requirements.* · bun.lock · package.json · workflows.
+- **الحالة الصادقة:** Code-complete candidate + Fake-tested. ليس Colab-ready / Complete.
+
 ## [M24-POST-MERGE-P1 MERGED] — 2026-08-12 — PR #42 مدموج + فجوة نشر Colab
 
 - **دمج:** PR [#42](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/42) → main = `71d092822d9022aa9daebd869616cde6ce4c028d` في 2026-08-12T22:21:27Z. CI على الـPR: Frontend PASS + Python PASS.

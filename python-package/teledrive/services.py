@@ -511,6 +511,8 @@ class LiveUiStateService:
                 "sizeBytes": int(item.size_bytes) if item.size_bytes else None,
                 "speedBytes": None,
                 "remainingSeconds": None,
+                "chatTitle": self._safe_label(item.chat_title),
+                "createdAt": self._safe_label(item.created_at),
             }
             for item in queue_rows
         ]

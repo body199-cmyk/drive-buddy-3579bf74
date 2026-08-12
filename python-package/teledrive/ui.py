@@ -732,6 +732,7 @@ def _step_monitor(ctx, binder, seed) -> dict[str, Any]:
     with gr.Row():
         retry_btn = binder.button(gr, "queue.retry_failed")
         clear_btn = binder.button(gr, "queue.clear_completed")
+        clear_incomplete_btn = binder.button(gr, "queue.clear_incomplete", variant="stop")
         refresh_q_btn = binder.button(gr, "queue.refresh", variant="secondary")
     with gr.Group(elem_classes=["td-card"]):
         gr.Markdown(f"### {t('transfer.item')}", elem_classes=["td-section-title"])
@@ -750,6 +751,7 @@ def _step_monitor(ctx, binder, seed) -> dict[str, Any]:
     return {
         "queue": {
             "retry_btn": retry_btn, "clear_btn": clear_btn,
+            "clear_incomplete_btn": clear_incomplete_btn,
             "refresh_q_btn": refresh_q_btn, "item_id": item_id,
             "pause_item_btn": pause_item_btn, "resume_item_btn": resume_item_btn,
             "stop_item_btn": stop_item_btn, "retry_item_btn": retry_item_btn,
@@ -961,6 +963,7 @@ def _bind_actions(
     binder.wire(queue["stop_btn"], "queue.stop", [], q_out)
     binder.wire(queue["retry_btn"], "queue.retry_failed", [], q_out)
     binder.wire(queue["clear_btn"], "queue.clear_completed", [], q_out)
+    binder.wire(queue["clear_incomplete_btn"], "queue.clear_incomplete", [], q_out)
     binder.wire(queue["refresh_q_btn"], "queue.refresh", [], q_out)
     binder.wire(queue["pause_item_btn"], "queue.pause_item", [queue["item_id"]], q_out)
     binder.wire(queue["resume_item_btn"], "queue.resume_item", [queue["item_id"]], q_out)

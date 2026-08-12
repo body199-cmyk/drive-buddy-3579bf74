@@ -119,6 +119,17 @@ def test_empty_selection_starts_nothing(ctx):
     assert result["status"] == "idle"
 
 
+def test_start_without_ids_falls_back_to_all_pending_after_empty_selection(ctx):
+    """Colab Restart wipes in-memory selection; leftover SQLite rows must start."""
+    first = _item(ctx.queue_manager, 80)
+    second = _item(ctx.queue_manager, 81)
+    assert ctx.selection.selected_ids == set()
+    picked = ctx.queue_manager.selected_pending()
+    assert {item.id for item in picked} == {first.id, second.id}
+    explicit = ctx.queue_manager.selected_pending([])
+    assert explicit == []
+
+
 def test_transfer_manager_scope_excludes_unselected_items():
     queue = QueueManager()
     chosen = _item(queue, 6)

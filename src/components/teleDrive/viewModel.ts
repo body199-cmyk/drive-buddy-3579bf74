@@ -90,6 +90,38 @@ export type QueueMetrics = {
   transferredBytes: number;
 };
 
+export type QueueSession = {
+  key: string;
+  title: string;
+  dateLabel: string;
+  rows: QueueRow[];
+  uploaded: number;
+  pending: number;
+};
+
+export function groupQueueSessions(queue: QueueRow[]): QueueSession[] {
+  const groups = new Map<string, QueueSession>();
+  for (const row of queue) {
+    const title = (row.chatTitle ?? "").trim() || "—";
+    const dateLabel = (row.createdAt ?? "").slice(0, 10) || "—";
+    const key = `${title} · ${dateLabel}`;
+    const current = groups.get(key) ?? {
+      key,
+      title,
+      dateLabel,
+      rows: [],
+      uploaded: 0,
+      pending: 0,
+    };
+    const status = (row.status ?? "").toLowerCase();
+    current.rows.push(row);
+    current.uploaded += status === "uploaded" ? 1 : 0;
+    current.pending += ["pending", "needsretry", "downloaded"].includes(status) ? 1 : 0;
+    groups.set(key, current);
+  }
+  return [...groups.values()];
+}
+
 export function queueMetrics(queue: QueueRow[]): QueueMetrics {
   return queue.reduce<QueueMetrics>(
     (metrics, row) => {
