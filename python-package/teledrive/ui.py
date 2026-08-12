@@ -43,6 +43,7 @@ from .config import (
 from .handlers import shell_seed
 from .i18n import set_language, t
 from .media_scanner import MAX_SCAN_MESSAGES
+from .react_panel import ReactPanel
 from .theme import FORCE_LIGHT_HTML, FORCE_LIGHT_JS, TELEDRIVE_CSS, build_theme
 from .ui_flow_view import texts as flow_texts, visibility as flow_visibility
 from .ui_theme import BASE_CSS, theme_style_block
@@ -125,6 +126,21 @@ def _graphite_theme() -> Any:
     return build_theme()
 
 
+def _mount_react_panel(ctx, binder, *, visible: bool = True):
+    """Render and wire the one official Gradio transport component."""
+    react_panel = ReactPanel(
+        value=ctx.handlers.bridge_initial_response(),
+        key="td-react-panel",
+        visible=visible,
+    )
+    binder.register(react_panel, "react.bridge.request")
+    binder.wire(
+        react_panel, "react.bridge.request",
+        [react_panel], [react_panel], event="submit",
+    )
+    return react_panel
+
+
 def build(ctx: ApplicationContext | None = None) -> Any:
     if ctx is None:
         ctx = get_context()
@@ -150,6 +166,10 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         )
         lang_state = gr.State(language)
         active_tab = gr.State("connection")
+
+        # M24: React is present on the first Gradio render, outside the dynamic
+        # legacy language shell, and uses only this component's submit event.
+        react_panel = _mount_react_panel(ctx, binder)
 
         # Do not restrict this render to State.change: Gradio's default render
         # trigger performs the initial page-load render as well as re-rendering
@@ -178,6 +198,7 @@ def build(ctx: ApplicationContext | None = None) -> Any:
     # Gradio build accepts.
     demo.td_head = FORCE_LIGHT_HTML
     demo.td_js = FORCE_LIGHT_JS
+    demo.td_react_panel = react_panel
     return demo
 
 
@@ -238,148 +259,160 @@ def _render_shell(
         return _status_chip(val or t("status.disconnected"), state)
 
     with gr.Column(elem_classes=["td-root", direction]):
-        # ===== Top status bar (real chips from ctx, styled HTML) =====
-        with gr.Row(elem_classes=["td-topbar"]):
-            gr.HTML(
-                f'<div class="td-brand"><strong>TeleDrive</strong> '
-                f'<code>v{ctx.config.version}</code></div>',
-            )
-            telegram_chip = gr.HTML(
-                value=seed["telegram_chip"], show_label=False,
-                elem_classes=["td-chip-host"],
-            )
-            drive_chip = gr.HTML(
-                value=seed["drive_chip"], show_label=False,
-                elem_classes=["td-chip-host"],
-            )
-            folder_chip = gr.HTML(
-                value=seed["folder_chip"], show_label=False,
-                elem_classes=["td-chip-host"],
-            )
-            engine_chip = gr.HTML(
-                value=chip(t("dash.engine_colab"), "ok"), show_label=False,
-                elem_classes=["td-chip-host"],
-            )
-            # DOC-39 quick-access: a second build-zip control mirrors the
-            # in-section button (same action_id, intentionally duplicated and
-            # wired) so the package is reachable from anywhere.
-            top_zip_btn = binder.button(gr, "export.build_zip", variant="secondary")
+        # Direct _render_shell contract tests do not pass through build(); add
+        # one hidden transport there so the registry completeness gate remains
+        # exact without rendering a second live panel in normal operation.
+        if "react.bridge.request" not in binder.wired:
+            refs["react_panel"] = _mount_react_panel(ctx, binder, visible=False)
 
-        # ===== Flow header: live chips + the numbered stepper =====
-        with gr.Row(elem_classes=["td-toolbar"]):
-            flow_sync_btn = binder.button(gr, "flow.sync", size="sm")
-            chips_md = gr.Markdown(value=flow_text["chips"], elem_classes=["td-chips"])
-        flow_banner = gr.Markdown(value=flow_text["stepper"], elem_classes=["td-flow"])
-
-        # ===== The five steps, revealed by the LIVE context only =====
-        with gr.Column(elem_id="td-shell"):
-            with gr.Column(elem_id="td-content"):
-                with gr.Group(elem_classes=["td-card"], visible=show["step1"]) as step1_group:
-                    _conn_refs = _step_connection(ctx, binder, seed, lang)
-                with gr.Group(elem_classes=["td-card"], visible=show["step2"]) as step2_group:
-                    _scan_refs = _step_analyze(ctx, binder, seed)
-                with gr.Group(elem_classes=["td-card"], visible=show["step3"]) as step3_group:
-                    _select_refs = _step_select(ctx, binder, seed, flow_text)
-                with gr.Group(elem_classes=["td-card"], visible=show["step4"]) as step4_group:
-                    _queue_refs = _step_queue(ctx, binder, seed, lang, show, flow_text)
-                with gr.Group(elem_classes=["td-card"], visible=show["step5"]) as step5_group:
-                    _monitor_refs = _step_monitor(ctx, binder, seed)
-                _logs_refs = _monitor_refs["logs"]
-                _set_refs = _advanced(ctx, binder, seed, lang)
-
-        _analyze_refs = dict(_scan_refs)
-        _analyze_refs.update(_select_refs)
-        _analyze_refs["enqueue_btn"] = _queue_refs["enqueue_btn"]
-        _queue_refs.update(_monitor_refs["queue"])
-
-        # Gather well-known refs required by contract tests.
-        refs.update(
-            theme_host=theme_host,
-            telegram_chip=telegram_chip,
-            drive_chip=drive_chip,
-            folder_chip=folder_chip,
-            engine_chip=engine_chip,
-            flow_banner=flow_banner,
-            chips_md=chips_md,
-            flow_sync_btn=flow_sync_btn,
-            step1_group=step1_group,
-            step2_group=step2_group,
-            step3_group=step3_group,
-            step4_group=step4_group,
-            step5_group=step5_group,
-            selection_summary=_select_refs["selection_summary"],
-            queue_hint=_queue_refs["queue_hint"],
-            logs_box=_logs_refs["logs_box"],
-            logs_file=_logs_refs["logs_file"],
-            logs_status=_logs_refs["logs_status"],
-            logs_query=_logs_refs["logs_query"],
-            logs_level=_logs_refs["logs_level"],
-            logs_refresh_btn=_logs_refs["logs_refresh_btn"],
-            logs_search_btn=_logs_refs["logs_search_btn"],
-            logs_download_btn=_logs_refs["logs_download_btn"],
-            dashboard_json=_monitor_refs["dashboard_json"],
-            dashboard_btn=_monitor_refs["dash_btn"],
-            queue_status=_queue_refs["queue_status"],
-            queue_table=_queue_refs["queue_table"],
-            concurrency_slider=_set_refs["concurrency"],
-            concurrency_box=_set_refs["concurrency_box"],
-            theme_radio=_set_refs["theme_radio"],
-            theme_status=_set_refs["theme_status"],
-            recovery_btn=_set_refs["recover_btn"],
-            checkpoint_btn=_set_refs["checkpoint_btn"],
-            maintenance_box=_set_refs["maintenance_box"],
-            candidates_table=_analyze_refs["candidates_table"],
-            analyze_message=_analyze_refs["analyze_message"],
-            analyze_btn=_analyze_refs["analyze_btn"],
-            code_panel=_conn_refs["code_panel"],
-            password_panel=_conn_refs["password_panel"],
-            telegram_detail=_conn_refs["telegram_detail"],
-            drive_detail=_conn_refs["drive_detail"],
-            telegram_card=_conn_refs["telegram_card"],
-            drive_card=_conn_refs["drive_card"],
-            queue_card=_conn_refs["queue_card"],
-            zip_message=_set_refs["zip_message"],
-            zip_file=_set_refs["zip_file"],
-            colab_cells_box=_set_refs["colab_cells_box"],
-            build_zip_btn=_set_refs["build_zip_btn"],
-            colab_cells_btn=_set_refs["colab_cells_btn"],
-            colab_status=_set_refs["colab_status"],
-            folder_dash=_conn_refs["folder_picker"],
-            folder_transfer=_queue_refs["folder_picker"],
-            folder_settings=_set_refs["folder_picker"],
-            folder_conn=_conn_refs["drive_folder_picker"],
-            selection_preview=_analyze_refs["selection_preview"],
-            range_start=_analyze_refs["range_start"],
-            range_end=_analyze_refs["range_end"],
-            group_choice=_analyze_refs["group_choice"],
-            enqueue_btn=_analyze_refs["enqueue_btn"],
+        fallback_label = (
+            "مصادقة Telegram الآمنة والواجهة الاحتياطية"
+            if lang == "ar"
+            else "Secure Telegram authentication and fallback controls"
         )
+        with gr.Accordion(fallback_label, open=False):
+            # ===== Top status bar (real chips from ctx, styled HTML) =====
+            with gr.Row(elem_classes=["td-topbar"]):
+                gr.HTML(
+                    f'<div class="td-brand"><strong>TeleDrive</strong> '
+                    f'<code>v{ctx.config.version}</code></div>',
+                )
+                telegram_chip = gr.HTML(
+                    value=seed["telegram_chip"], show_label=False,
+                    elem_classes=["td-chip-host"],
+                )
+                drive_chip = gr.HTML(
+                    value=seed["drive_chip"], show_label=False,
+                    elem_classes=["td-chip-host"],
+                )
+                folder_chip = gr.HTML(
+                    value=seed["folder_chip"], show_label=False,
+                    elem_classes=["td-chip-host"],
+                )
+                engine_chip = gr.HTML(
+                    value=chip(t("dash.engine_colab"), "ok"), show_label=False,
+                    elem_classes=["td-chip-host"],
+                )
+                # DOC-39 quick-access: a second build-zip control mirrors the
+                # in-section button (same action_id, intentionally duplicated and
+                # wired) so the package is reachable from anywhere.
+                top_zip_btn = binder.button(gr, "export.build_zip", variant="secondary")
 
-        # ===== Bindings (every action preserved verbatim) =====
-        _bind_actions(
-            ctx, binder,
-            conn=_conn_refs, analyze=_analyze_refs, queue=_queue_refs,
-            logs=_logs_refs, sets=_set_refs, monitor=_monitor_refs,
-            lang=lang_state, theme=theme_host, active_tab=active_tab,
-            telegram_chip=telegram_chip, drive_chip=drive_chip,
-            folder_chip=folder_chip, top_zip_btn=top_zip_btn,
-            flow_sync_btn=flow_sync_btn,
-            flow_outputs=[
-                flow_banner,                        # 1
-                chips_md,                           # 2
-                step1_group,                        # 3
-                step2_group,                        # 4
-                step3_group,                        # 5
-                step4_group,                        # 6
-                step5_group,                        # 7
-                _select_refs["selection_summary"],  # 8
-                _queue_refs["queue_hint"],          # 9
-                _analyze_refs["analyze_btn"],       # 10
-                _analyze_refs["enqueue_btn"],       # 11
-                _queue_refs["start_btn"],           # 12
-            ],
-        )
-        binder.assert_complete()
+            # ===== Flow header: live chips + the numbered stepper =====
+            with gr.Row(elem_classes=["td-toolbar"]):
+                flow_sync_btn = binder.button(gr, "flow.sync", size="sm")
+                chips_md = gr.Markdown(value=flow_text["chips"], elem_classes=["td-chips"])
+            flow_banner = gr.Markdown(value=flow_text["stepper"], elem_classes=["td-flow"])
+
+            # ===== The five steps, revealed by the LIVE context only =====
+            with gr.Column(elem_id="td-shell"):
+                with gr.Column(elem_id="td-content"):
+                    with gr.Group(elem_classes=["td-card"], visible=show["step1"]) as step1_group:
+                        _conn_refs = _step_connection(ctx, binder, seed, lang)
+                    with gr.Group(elem_classes=["td-card"], visible=show["step2"]) as step2_group:
+                        _scan_refs = _step_analyze(ctx, binder, seed)
+                    with gr.Group(elem_classes=["td-card"], visible=show["step3"]) as step3_group:
+                        _select_refs = _step_select(ctx, binder, seed, flow_text)
+                    with gr.Group(elem_classes=["td-card"], visible=show["step4"]) as step4_group:
+                        _queue_refs = _step_queue(ctx, binder, seed, lang, show, flow_text)
+                    with gr.Group(elem_classes=["td-card"], visible=show["step5"]) as step5_group:
+                        _monitor_refs = _step_monitor(ctx, binder, seed)
+                    _logs_refs = _monitor_refs["logs"]
+                    _set_refs = _advanced(ctx, binder, seed, lang)
+
+            _analyze_refs = dict(_scan_refs)
+            _analyze_refs.update(_select_refs)
+            _analyze_refs["enqueue_btn"] = _queue_refs["enqueue_btn"]
+            _queue_refs.update(_monitor_refs["queue"])
+
+            # Gather well-known refs required by contract tests.
+            refs.update(
+                theme_host=theme_host,
+                telegram_chip=telegram_chip,
+                drive_chip=drive_chip,
+                folder_chip=folder_chip,
+                engine_chip=engine_chip,
+                flow_banner=flow_banner,
+                chips_md=chips_md,
+                flow_sync_btn=flow_sync_btn,
+                step1_group=step1_group,
+                step2_group=step2_group,
+                step3_group=step3_group,
+                step4_group=step4_group,
+                step5_group=step5_group,
+                selection_summary=_select_refs["selection_summary"],
+                queue_hint=_queue_refs["queue_hint"],
+                logs_box=_logs_refs["logs_box"],
+                logs_file=_logs_refs["logs_file"],
+                logs_status=_logs_refs["logs_status"],
+                logs_query=_logs_refs["logs_query"],
+                logs_level=_logs_refs["logs_level"],
+                logs_refresh_btn=_logs_refs["logs_refresh_btn"],
+                logs_search_btn=_logs_refs["logs_search_btn"],
+                logs_download_btn=_logs_refs["logs_download_btn"],
+                dashboard_json=_monitor_refs["dashboard_json"],
+                dashboard_btn=_monitor_refs["dash_btn"],
+                queue_status=_queue_refs["queue_status"],
+                queue_table=_queue_refs["queue_table"],
+                concurrency_slider=_set_refs["concurrency"],
+                concurrency_box=_set_refs["concurrency_box"],
+                theme_radio=_set_refs["theme_radio"],
+                theme_status=_set_refs["theme_status"],
+                recovery_btn=_set_refs["recover_btn"],
+                checkpoint_btn=_set_refs["checkpoint_btn"],
+                maintenance_box=_set_refs["maintenance_box"],
+                candidates_table=_analyze_refs["candidates_table"],
+                analyze_message=_analyze_refs["analyze_message"],
+                analyze_btn=_analyze_refs["analyze_btn"],
+                code_panel=_conn_refs["code_panel"],
+                password_panel=_conn_refs["password_panel"],
+                telegram_detail=_conn_refs["telegram_detail"],
+                drive_detail=_conn_refs["drive_detail"],
+                telegram_card=_conn_refs["telegram_card"],
+                drive_card=_conn_refs["drive_card"],
+                queue_card=_conn_refs["queue_card"],
+                zip_message=_set_refs["zip_message"],
+                zip_file=_set_refs["zip_file"],
+                colab_cells_box=_set_refs["colab_cells_box"],
+                build_zip_btn=_set_refs["build_zip_btn"],
+                colab_cells_btn=_set_refs["colab_cells_btn"],
+                colab_status=_set_refs["colab_status"],
+                folder_dash=_conn_refs["folder_picker"],
+                folder_transfer=_queue_refs["folder_picker"],
+                folder_settings=_set_refs["folder_picker"],
+                folder_conn=_conn_refs["drive_folder_picker"],
+                selection_preview=_analyze_refs["selection_preview"],
+                range_start=_analyze_refs["range_start"],
+                range_end=_analyze_refs["range_end"],
+                group_choice=_analyze_refs["group_choice"],
+                enqueue_btn=_analyze_refs["enqueue_btn"],
+            )
+
+            # ===== Bindings (every action preserved verbatim) =====
+            _bind_actions(
+                ctx, binder,
+                conn=_conn_refs, analyze=_analyze_refs, queue=_queue_refs,
+                logs=_logs_refs, sets=_set_refs, monitor=_monitor_refs,
+                lang=lang_state, theme=theme_host, active_tab=active_tab,
+                telegram_chip=telegram_chip, drive_chip=drive_chip,
+                folder_chip=folder_chip, top_zip_btn=top_zip_btn,
+                flow_sync_btn=flow_sync_btn,
+                flow_outputs=[
+                    flow_banner,                        # 1
+                    chips_md,                           # 2
+                    step1_group,                        # 3
+                    step2_group,                        # 4
+                    step3_group,                        # 5
+                    step4_group,                        # 6
+                    step5_group,                        # 7
+                    _select_refs["selection_summary"],  # 8
+                    _queue_refs["queue_hint"],          # 9
+                    _analyze_refs["analyze_btn"],       # 10
+                    _analyze_refs["enqueue_btn"],       # 11
+                    _queue_refs["start_btn"],           # 12
+                ],
+            )
+            binder.assert_complete()
 
     return refs
 
