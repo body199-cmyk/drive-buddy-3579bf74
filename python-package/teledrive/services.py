@@ -140,9 +140,18 @@ class SelectionService:
         return apply_filterset(self.candidates, self.filters)
 
     # -- selection --
+    @staticmethod
+    def _selectable(item: MediaItem) -> bool:
+        """Quarantined/final rows stay visible for review but cannot transfer."""
+        return str(item.state or "").lower() not in {
+            "quarantined", "deleted", "stopped"
+        }
+
     def select_all_visible(self) -> list[str]:
         with self._lock:
-            self.selected_ids = {i.id for i in self.visible()}
+            self.selected_ids = {
+                i.id for i in self.visible() if self._selectable(i)
+            }
             return sorted(self.selected_ids)
 
     def clear(self) -> list[str]:
@@ -152,6 +161,11 @@ class SelectionService:
 
     def toggle(self, item_id: str) -> bool:
         with self._lock:
+            visible = {item.id: item for item in self.visible()}
+            item = visible.get(item_id)
+            if item is None or not self._selectable(item):
+                self.selected_ids.discard(item_id)
+                return False
             if item_id in self.selected_ids:
                 self.selected_ids.discard(item_id)
                 return False
@@ -193,7 +207,7 @@ class SelectionService:
         with self._lock:
             picked = {
                 i.id for i in self.visible()
-                if start <= int(i.message_id or 0) <= end
+                if self._selectable(i) and start <= int(i.message_id or 0) <= end
             }
             self.selected_ids = picked
             return sorted(picked)
@@ -214,7 +228,8 @@ class SelectionService:
         with self._lock:
             picked = {
                 i.id for i in self.visible()
-                if int(getattr(i, "chat_id", 0) or 0) == chat
+                if self._selectable(i)
+                and int(getattr(i, "chat_id", 0) or 0) == chat
             }
             self.selected_ids = picked
             return sorted(picked)
@@ -236,7 +251,9 @@ class SelectionService:
         }
 
     def selected_items(self) -> list[MediaItem]:
-        chosen = {i.id: i for i in self.visible()}
+        chosen = {
+            i.id: i for i in self.visible() if self._selectable(i)
+        }
         return [chosen[i] for i in self.selected_ids if i in chosen]
 
     def enqueue_selected(self) -> list[MediaItem]:
@@ -454,6 +471,90 @@ class DriveQuotaService:
         return drive_quota.evaluate(
             {"limit": quota["limit"], "usage": quota["usage"]}, int(required_bytes)
         )
+
+
+# --------------------------------------------------------------------------
+# React/Gradio live-state presentation (M24)
+# --------------------------------------------------------------------------
+
+class LiveUiStateService:
+    """Build the browser-safe UI snapshot from the one live context.
+
+    This is a read-only application service. The React bridge delegates here
+    instead of reading SQLite or constructing Telegram/Drive clients itself.
+    Empty runtime state stays genuinely empty; no rows, quota, or progress are
+    synthesized for presentation.
+    """
+
+    def __init__(self, ctx) -> None:
+        self.ctx = ctx
+
+    @staticmethod
+    def _safe_label(value: Any) -> str | None:
+        cleaned = redact(str(value or "")).strip()
+        return cleaned or None
+
+    def snapshot(self) -> dict[str, Any]:
+        ctx = self.ctx
+        telegram = ctx.telegram_auth.status()
+        drive = ctx.drive_auth.status()
+        folder = ctx.drive_folders.selected()
+        queue_rows = db.list_items(limit=500)
+        selected_ids = set(ctx.selection.selected_ids)
+
+        queue = [
+            {
+                "id": str(item.id),
+                "name": self._safe_label(item.safe_name) or "",
+                "status": str(item.state),
+                "progress": float(max(item.download_pct, item.upload_pct)),
+                "sizeBytes": int(item.size_bytes) if item.size_bytes else None,
+                "speedBytes": None,
+                "remainingSeconds": None,
+            }
+            for item in queue_rows
+        ]
+        candidates = [
+            {
+                "sourceId": str(item.id),
+                "name": self._safe_label(item.safe_name) or "",
+                "mediaType": str(item.media_type),
+                "sizeBytes": int(item.size_bytes) if item.size_bytes else None,
+                "groupLabel": self._safe_label(item.chat_title),
+                "dateLabel": self._safe_label(item.message_date),
+                "selected": item.id in selected_ids,
+                "status": str(item.state),
+            }
+            for item in ctx.selection.visible()
+        ]
+        quota = dict(drive.quota or {})
+        return {
+            "language": (
+                ctx.ui_state.language
+                if ctx.ui_state.language in SUPPORTED_LANGUAGES
+                else "ar"
+            ),
+            # M20 is light-only even if an old database still contains "dark".
+            "theme": DEFAULT_THEME,
+            "telegram": {
+                "status": str(telegram.state),
+                "accountLabel": self._safe_label(telegram.account_label),
+            },
+            "drive": {
+                "status": str(drive.state),
+                "accountLabel": self._safe_label(drive.account_label),
+                "quotaUsed": int(quota["usage"]) if quota.get("usage") else None,
+                "quotaLimit": int(quota["limit"]) if quota.get("limit") else None,
+            },
+            "folder": {
+                "id": str(folder.id) if folder else None,
+                "name": self._safe_label(folder.name) if folder else None,
+            },
+            "engine": str(ctx.queue_manager.status_label()),
+            "concurrency": int(ctx.settings.current()),
+            "queue": queue,
+            "candidates": candidates,
+        }
 
 
 # --------------------------------------------------------------------------

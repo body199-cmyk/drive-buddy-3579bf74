@@ -42,6 +42,12 @@ ARGS = {
     "queue.resume_item": ("id",),
     "queue.stop_item": ("id",),
     "queue.retry_item": ("id",),
+    "react.bridge.request": ({
+        "requestId": "contract-request",
+        "actionId": "queue.refresh",
+        "payload": {},
+        "language": "ar",
+    },),
 }
 
 
