@@ -23,7 +23,7 @@ from .logging_config import get_logger
 
 _log = get_logger("teledrive.binder")
 
-_EVENTS = ("click", "change", "submit", "select", "input")
+_EVENTS = ("click", "change", "submit", "select", "input", "release")
 
 
 def component_update(**props: Any) -> dict[str, Any]:
@@ -62,6 +62,11 @@ class UIBinder:
         self.rendered: dict[str, list[Any]] = {}
         # action_ids rendered as hidden+disabled because the spec is not ready
         self.disabled: list[str] = []
+        # Flow sync (M20-T03): one read-only action chained after every other
+        # wired action, so the visible step always matches the live context.
+        self._sync_action_id: str = ""
+        self._sync_handler = None
+        self._sync_outputs: list = []
 
     # ---- validation ----
 
@@ -155,7 +160,15 @@ class UIBinder:
         emitter = getattr(component, event, None)
         if emitter is None:
             raise DeadControlError(f"component has no {event!r} event for {action_id!r}")
-        emitter(handler, list(inputs or []), list(outputs or []))
+        dependency = emitter(handler, list(inputs or []), list(outputs or []))
+        if (
+            self._sync_handler is not None
+            and action_id != self._sync_action_id
+            and hasattr(dependency, "then")
+        ):
+            # Fake components in the contract tests return None from click(),
+            # and hasattr(None, "then") is False, so no existing test changes.
+            dependency.then(self._sync_handler, [], list(self._sync_outputs))
         rec = WireRecord(
             action_id=action_id,
             handler_name=spec.handler_name,
@@ -186,6 +199,31 @@ class UIBinder:
         if not spec.ready:
             return None
         return self.wire(component, action_id, inputs, outputs, event)
+
+    # ---- flow sync (M20-T03) ----
+
+    def register_sync(self, action_id: str, outputs: Sequence[Any]):
+        """Declare the read-only action re-run after every other wired action.
+
+        Must be called before the other wire() calls; anything wired earlier is
+        not chained.
+        """
+        spec, handler = self.validate(action_id)
+        self._sync_action_id = action_id
+        self._sync_handler = handler
+        self._sync_outputs = list(outputs)
+        _log.info("sync action registered: %s -> %d outputs",
+                  action_id, len(self._sync_outputs))
+        return handler
+
+    def load_sync(self, block: Any) -> None:
+        """Run the sync action once on page load so step 1 is never guessed."""
+        if self._sync_handler is None:
+            return
+        loader = getattr(block, "load", None)
+        if loader is None:  # pragma: no cover - defensive
+            return
+        loader(self._sync_handler, [], list(self._sync_outputs))
 
     # ---- completeness ----
 

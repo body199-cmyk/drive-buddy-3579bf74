@@ -15,7 +15,7 @@ from .i18n import t
 from .logging_config import get_logger
 from .media_scanner import DEFAULT_SCAN_MODE
 from .redaction import redact, safe_exception
-from .services import candidate_rows_for, rows_for
+from .services import DEFAULT_THEME, candidate_rows_for, rows_for
 from .telegram_auth import CODE_REQUESTED, PASSWORD_REQUIRED
 from .ui_binder import component_update
 from .ui_theme import theme_style_block
@@ -124,6 +124,8 @@ ERROR_ARITY: dict[str, int] = {
     "export.colab_cells": 2,        # (text, status)
     "recovery.restore": 1,
     "maintenance.checkpoint": 1,
+    # M20-T03: the whole derived step layout, in ui.py's flow_outputs order.
+    "flow.sync": 12,
 }
 DEFAULT_QUEUE_ARITY = 2
 
@@ -545,28 +547,36 @@ class Handlers:
 
     @action("settings.set_concurrency")
     def h_settings_set_concurrency(self, value):
-        # Per the constitution: default 2, cap 4. Accept integer 1..4 or a
-        # named level (safe/balanced/fast) from the service. Invalid values
-        # return the slider to its previous value with a localized error.
-        from .config import CONCURRENCY_LEVELS
+        # ADR-0001: default 2, hard cap 100. Accept an integer 1..100 or a
+        # named level (safe/balanced/fast/turbo/max). Out-of-range values are
+        # rejected — the slider returns to its previous value with a localized
+        # error — so the number on screen is always the number the engine uses.
+        # Above CONCURRENCY_WARN_ABOVE the value is accepted with a risk note.
+        from .config import CONCURRENCY_LEVELS, CONCURRENCY_MIN, HARD_CONCURRENCY_CAP
+
         current = self.ctx.settings.current()
         n = None
-        try:
-            n = int(value)
-        except (TypeError, ValueError):
-            key = str(value or "").strip().lower()
-            if key in CONCURRENCY_LEVELS:
-                n = CONCURRENCY_LEVELS[key]
-        if n is None or n < 1 or n > 4:
+        if not isinstance(value, bool):
+            try:
+                n = int(value)
+            except (TypeError, ValueError):
+                key = str(value or "").strip().lower()
+                if key in CONCURRENCY_LEVELS:
+                    n = CONCURRENCY_LEVELS[key]
+        if n is None or n < CONCURRENCY_MIN or n > HARD_CONCURRENCY_CAP:
             return (
                 component_update(value=current),
                 status_error(t("settings.concurrency.invalid")),
             )
         result = self.call("settings.set_concurrency", n)
-        return (
-            component_update(value=result.get("workers", n)),
-            status_ok(t("settings.concurrency.saved")),
-        )
+        workers = result.get("workers", n)
+        line = f"{t('settings.concurrency.saved')} · {workers}/{result.get('cap', HARD_CONCURRENCY_CAP)}"
+        if result.get("warn"):
+            return (
+                component_update(value=workers),
+                status_ok(f"{line} · {t('warn.concurrency_high')}"),
+            )
+        return (component_update(value=workers), status_ok(line))
 
     @action("settings.toggle_language")
     def h_settings_toggle_language(self):
@@ -608,6 +618,19 @@ class Handlers:
     def h_maintenance_checkpoint(self):
         result = self.call("maintenance.checkpoint")
         return status_ok(f"{t('msg.checkpoint_saved')} · {result['at']}")
+
+    # ---- Flow ----
+
+    @action("flow.sync")
+    def h_flow_sync(self):
+        """Recompute the whole step layout from the live context.
+
+        Returns exactly the 12 updates declared by ``flow_outputs`` in ui.py.
+        The gradio coupling stays inside the view module, not here.
+        """
+        from .ui_flow_view import render
+
+        return render(self.call("flow.sync"))
 
 
 def _quota_view(quota: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -653,7 +676,8 @@ def shell_seed(ctx) -> dict[str, Any]:
     folder_ref = ctx.drive_folders.selected()
     return {
         "language": ctx.ui_state.language,
-        "theme": ctx.ui_state.extra.get("theme", "dark"),
+        # M20-T02: light-only shell -> light default (see services.DEFAULT_THEME).
+        "theme": ctx.ui_state.extra.get("theme", DEFAULT_THEME),
         "telegram_detail": telegram_detail,
         "telegram_chip": telegram_chip,
         "telegram_connected": ctx.telegram_auth.authorized,

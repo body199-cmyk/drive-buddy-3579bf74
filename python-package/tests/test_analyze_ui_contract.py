@@ -28,6 +28,21 @@ def _ui_text() -> str:
     return UI_SOURCE.read_text(encoding="utf-8")
 
 
+def _analyze_source(text: str) -> str:
+    """The analyze zone's source, wherever the shell currently puts it.
+
+    M20-T03 replaced the six sibling ``gr.Tab``s with the five numbered step
+    cards, so the analyze zone is now ``_step_analyze`` (scan) plus
+    ``_step_select`` (filter + select) instead of ``gr.Tab(t("nav.analyze"))``.
+    The contract these tests enforce is unchanged; only the anchor moved.
+    """
+    start = text.find("def _step_analyze(")
+    assert start != -1, "the analyze step builder must exist in ui.py"
+    end = text.find("def _step_queue(", start)
+    assert end != -1, "the analyze zone must end before the queue step"
+    return text[start:end]
+
+
 def _render(ctx, lang: str = "ar"):
     with gr.Blocks() as demo:
         refs = ui._render_shell(ctx, ctx.binder, gr.State(lang), lang)
@@ -90,9 +105,7 @@ def test_analyze_run_wiring_has_seven_inputs(ctx):
 def test_no_direct_gradio_handlers_in_analyze_block():
     text = _ui_text()
     # Extract the analyze Tab block (M17-T03 nav.analyze label).
-    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
-    assert analyze_start != -1
-    analyze_block = text[analyze_start: analyze_start + 8000]
+    analyze_block = _analyze_source(text)
     assert ".click(" not in analyze_block
     assert ".change(" not in analyze_block
     assert ".submit(" not in analyze_block

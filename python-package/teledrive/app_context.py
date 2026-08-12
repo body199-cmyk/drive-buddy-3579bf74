@@ -21,6 +21,7 @@ from .logging_config import get_logger
 from .progress_tracker import ProgressTracker
 from .drive_auth import DriveAuth
 from .drive_folders import DriveFolders
+from .flow import FlowService
 from .handlers import Handlers
 from .progress_tracker import ProgressTracker  # noqa: F401 (re-export order)
 from .queue_manager import QueueManager
@@ -88,6 +89,11 @@ class ApplicationContext:
         self.checkpoints = CheckpointService(self)
         self.colab_export = ColabExportService(self)
         self.package_service = PackageService(self)
+
+        # Derived UI flow state (M20-T03). Read-only over the live context.
+        # Must exist BEFORE Handlers/UIBinder so ctx.resolve("flow.state")
+        # succeeds while the binder validates every spec at build time.
+        self.flow = FlowService(self)
 
         # Binding layer (Phase 2).
         self.handlers = Handlers(self)

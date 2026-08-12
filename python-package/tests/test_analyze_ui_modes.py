@@ -78,6 +78,21 @@ def _ui_text() -> str:
     return UI_SOURCE.read_text(encoding="utf-8")
 
 
+def _analyze_source(text: str) -> str:
+    """The analyze zone's source, wherever the shell currently puts it.
+
+    M20-T03 replaced the six sibling ``gr.Tab``s with the five numbered step
+    cards, so the analyze zone is now ``_step_analyze`` (scan) plus
+    ``_step_select`` (filter + select) instead of ``gr.Tab(t("nav.analyze"))``.
+    The contract these tests enforce is unchanged; only the anchor moved.
+    """
+    start = text.find("def _step_analyze(")
+    assert start != -1, "the analyze step builder must exist in ui.py"
+    end = text.find("def _step_queue(", start)
+    assert end != -1, "the analyze zone must end before the queue step"
+    return text[start:end]
+
+
 # ---------------------------------------------------------------------------
 # Default mode + fields_for_mode (pure)
 # ---------------------------------------------------------------------------
@@ -211,17 +226,14 @@ def test_shell_seed_derives_mode_and_fields_from_the_service():
 def test_scan_numbers_have_no_client_side_bounds():
     """A frontend minimum= on an empty Number posts 0 and kills the event."""
     text = _ui_text()
-    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
-    assert analyze_start != -1
-    analyze_block = text[analyze_start : analyze_start + 8000]
+    analyze_block = _analyze_source(text)
     assert "minimum=" not in analyze_block
     assert "maximum=" not in analyze_block
 
 
 def test_analyze_choices_are_localized_not_raw_english():
     text = _ui_text()
-    analyze_start = text.find('with gr.Tab(t("nav.analyze"))')
-    analyze_block = text[analyze_start : analyze_start + 15000]
+    analyze_block = _analyze_source(text)
     for scan_mode in ("message", "range", "latest", "chat"):
         assert f't("scan.mode.{scan_mode}")' in analyze_block, scan_mode
     for media in ("all", "video", "audio", "document", "photo", "voice", "animation", "sticker"):
