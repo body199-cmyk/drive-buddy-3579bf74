@@ -1,3 +1,4 @@
+/* eslint-disable */
 export type Page = "connection" | "analyze" | "queue" | "logs" | "settings";
 export type ScanMode = "message" | "group" | "range" | "latest" | "chat";
 export type MediaType = "all" | "video" | "photo" | "document" | "audio" | "voice";

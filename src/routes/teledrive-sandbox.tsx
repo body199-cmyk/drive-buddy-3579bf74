@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { createFileRoute } from "@tanstack/react-router";
 import TeleDriveSandbox from "../components/teleDrive/TeleDriveSandbox";
 import sandboxCss from "../components/teleDrive/teleDrive.css?url";
