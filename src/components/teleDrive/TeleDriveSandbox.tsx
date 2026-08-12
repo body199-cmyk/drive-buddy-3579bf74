@@ -602,7 +602,11 @@ function AnalyzeSection({
             live={live}
             disabled={blockReason !== null}
             className="td-button td-button-primary"
-            onClick={() => void run("analyze.enqueue_selected").then(() => onNavigate("queue"))}
+            onClick={() =>
+              void run("analyze.enqueue_selected").then((response) => {
+                if (response?.status === "ok") onNavigate("queue");
+              })
+            }
           >
             <UploadCloud size={15} aria-hidden="true" />
             {localize(language, "إضافة للطابور", "Enqueue")}
