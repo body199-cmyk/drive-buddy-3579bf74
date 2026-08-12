@@ -5,7 +5,9 @@
 - Repository: `body199-cmyk/drive-buddy-3579bf74`
 - Branch: `arena/019ff3b0-drive-buddy-3579bf74` (platform-pinned)
 - Base SHA: `77e97b789583b07b375f188894a5aca796b03b68` (`main`, merged PR #34)
-- Honest status: **Code-complete candidate + Fake-tested** — not Colab-ready, not Complete.
+- Result SHA: `2bd99b729255f1136b1667678b0255004d1101e3` — PR #35 **MERGED** into `main` (2026-08-12T09:28:41Z)
+- CI: green on the PR head `acfd473` **and** re-run green on the merged `main` `2bd99b7` (both jobs)
+- Honest status: **Code-complete candidate + Fake-tested** — not Colab-ready, not Complete. Merging is not live proof.
 
 ---
 
@@ -192,6 +194,11 @@ The diff touches no frontend file; CI runs the bun versions on the PR.
 
 ## 8. What is still owed (do not claim otherwise)
 
+0. **Re-publishing the pinned tag `pkg-2026.08.09-m15t07` from the new `main`
+   (`2bd99b7`).** This is a hard blocker for seeing M20 in Colab at all: Cell 1
+   installs from that release, so until the tag is re-cut it keeps pulling the
+   PREVIOUS package and the merge changes nothing on the user's screen. The
+   Arena token lacks `actions:write` (#27), so the owner must dispatch it.
 1. A real Colab run with a screenshot from the owner: light page on a dark
    browser, stepper at 🔵 1, steps 2–5 hidden (#43).
 2. A real high-concurrency run — 100 workers is proven only mathematically, by

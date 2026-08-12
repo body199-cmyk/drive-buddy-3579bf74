@@ -12,8 +12,8 @@
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
 | Branch (Arena, platform-pinned) | `arena/019ff3b0-drive-buddy-3579bf74` |
 | Base SHA | `77e97b789583b07b375f188894a5aca796b03b68` (`main` = merged PR #34, verified `git rev-parse HEAD` == `origin/main`) |
-| Result SHA | see PR (single PR from `arena/019ff3b0-…`) |
-| Status | **Code-complete candidate + Fake-tested** — all Python gates green (629 passed, launcher 46/46, notebooks identical, package build OK) and lint/build green via npm; live Colab visual proof is owner-side (#43) |
+| Result SHA | `2bd99b729255f1136b1667678b0255004d1101e3` (**PR #35 MERGED into `main`** 2026-08-12T09:28:41Z) |
+| Status | **Code-complete candidate + Fake-tested — MERGED into `main`** (all Python gates green: 629 passed, launcher 46/46, notebooks identical, package build OK; CI green on the PR head AND on the merged `main`). Live Colab visual proof is still owed (#43) |
 | Launcher | `binding check ok: 46/46 ready actions resolve` |
 
 ## §0 base verification
@@ -88,15 +88,20 @@ Untouched (confirmed by `git diff --stat`): `transfer_manager.py`, `queue_manage
 - `export.build_zip` stays ready (it already was); the `unready_specs()` tests never break because they inject a synthetic unready spec instead of calling `next()` on the live registry — so the doc's suggested `pytest.skip` guard was unnecessary and no skip was added.
 - **No `Colab-ready` and no `Complete` claim.** Light mode and the flow are proven by build + tests + a live Gradio server in this sandbox, not by a Colab browser screenshot (#43).
 
-## Next action
+## Merge result (done in-session, at the owner's instruction)
 
-**STOP — await the owner's merge of the M20 PR.** After merge:
-1. Owner re-publishes tag `pkg-2026.08.09-m15t07` from the new main (manual dispatch — Arena token lacks `actions:write`, #27).
-2. Owner in Colab: Runtime → Restart runtime → Cell 1 → Cells 2–4.
+- **PR #35 is MERGED.** `main` = `2bd99b729255f1136b1667678b0255004d1101e3` (merge commit, history preserved — no squash, no force-push, per the Lovable rule in `AGENTS.md`).
+- CI on the PR head `acfd473` — both jobs green.
+- **CI re-run on the merged `main` `2bd99b7` — both jobs green:** `Python package (tests + Colab contract)` = success, `Frontend build` = success.
+
+## Next action (owner-side only)
+
+1. Re-publish tag `pkg-2026.08.09-m15t07` from the new `main` `2bd99b7` (manual dispatch — the Arena token lacks `actions:write`, #27). Until this is done, Colab Cell 1 still pulls the PREVIOUS package and none of M20 will be visible in Colab.
+2. In Colab: Runtime → Restart runtime → Cell 1 → Cells 2–4.
 3. Visual check: the page must be light on a dark-mode browser too, the stepper must show 🔵 1 with steps 2–5 hidden, and the concurrency slider must read 1..100 with the warning above 8.
 
 ## GitHub handoff (this session)
 
 - Branch: `arena/019ff3b0-drive-buddy-3579bf74`
-- PR: one PR from this branch (M20)
+- PR: [#35](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/35) — **MERGED** (merge commit `2bd99b7`, 31 files, +1984/−487)
 - Commits: five logical commits, each prefixed with its TASK ID
