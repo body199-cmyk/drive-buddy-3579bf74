@@ -528,6 +528,17 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         tested=True,
         proof_test="tests/test_recovery_maintenance.py::test_checkpoint_writes_local_file",
     ),
+    # ---- Flow (M20-T03): derived step state, re-run after every action ----
+    ActionSpec(
+        action_id="flow.sync",
+        handler_name="h_flow_sync",
+        service_path="flow.state",
+        label_key="btn.flow_sync",
+        section="flow",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_flow.py::test_flow_sync_reads_live_context_state",
+    ),
 )
 
 

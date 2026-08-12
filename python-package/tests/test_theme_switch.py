@@ -38,6 +38,16 @@ def test_set_theme_handler_returns_style_block(ctx):
     assert ctx.preferences.current_theme() == "light"
 
 
-def test_invalid_theme_falls_back_to_dark(ctx):
+def test_invalid_theme_falls_back_to_the_default(ctx):
+    """M20-T02 flipped the fallback from dark to light.
+
+    The shell is light-only now (theme.py neutralises Gradio's dark palette at
+    the CSS-variable level), so falling back to "dark" would persist a state
+    the UI can never actually paint.
+    """
+    from teledrive.services import DEFAULT_THEME
+
+    assert DEFAULT_THEME == "light"
     html_update, _status = ctx.handlers.h_settings_set_theme("garbage")
-    assert "data-td-theme=\"dark\"" in html_update["value"]
+    assert f'data-td-theme="{DEFAULT_THEME}"' in html_update["value"]
+    assert ctx.preferences.current_theme() == DEFAULT_THEME

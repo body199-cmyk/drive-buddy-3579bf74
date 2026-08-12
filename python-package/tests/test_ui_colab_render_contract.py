@@ -43,18 +43,28 @@ def test_arabic_rtl_is_the_default_render(ctx):
     assert t("nav.queue") == "Transfers"
 
 
-def test_dark_theme_is_the_default(ctx):
-    """M19-T01: the persisted default stays dark. Flipping to light-default
-    lives in PreferencesService (services.py — a protected file), so both
-    oklch palettes are shipped and the toggle works, but dark remains the
-    persisted default. The dark oklch block rides the first render."""
-    assert ctx.preferences.current_theme() == "dark"
-    block = theme_style_block("dark")
-    assert 'data-td-theme="dark"' in block
-    assert f"--td-bg: {PALETTES['dark']['bg']};" in block
-    assert f"--td-primary: {PALETTES['dark']['primary']};" in block
+def test_light_theme_is_the_default_and_dark_can_no_longer_win(ctx):
+    """M20-T02 reverses M19-T01: LIGHT is the persisted default.
 
-    # the style host actually rides the first render (dark, not white)
+    The shell is light-only now. `theme.py` redefines every Gradio CSS variable
+    under `:root` AND under `.dark`/`body.dark`/`.gradio-container.dark` with
+    `!important` + `color-scheme: light`, and strips the `dark` class through a
+    MutationObserver — so neither a dark browser, nor `?__theme=dark`, nor a
+    dark Colab iframe can paint this app black. Both oklch palettes still ship
+    and the toggle still works (that binding was not touched), but the default
+    now matches what the screen can actually render.
+    """
+    from teledrive.services import DEFAULT_THEME
+    from teledrive.theme import FORCE_LIGHT_JS, TELEDRIVE_CSS
+
+    assert DEFAULT_THEME == "light"
+    assert ctx.preferences.current_theme() == "light"
+    block = theme_style_block("light")
+    assert 'data-td-theme="light"' in block
+    assert f"--td-bg: {PALETTES['light']['bg']};" in block
+    assert f"--td-primary: {PALETTES['light']['primary']};" in block
+
+    # the style host actually rides the first render (light, not black)
     demo, refs = _render(ctx, "ar")
     host = refs.get("theme_host") or next(
         (c for c in demo.blocks.values() if getattr(c, "elem_id", None) == "td-theme-vars-host"),
@@ -62,9 +72,21 @@ def test_dark_theme_is_the_default(ctx):
     )
     assert host is not None
     value = host.value if hasattr(host, "value") else ""
-    assert "data-td-theme=\"dark\"" in str(value)
-    # the dark oklch background, never a white background
-    assert PALETTES["dark"]["bg"] in str(value)
+    assert 'data-td-theme="light"' in str(value)
+    assert PALETTES["light"]["bg"] in str(value)
+
+    # guard 1: the dark selectors resolve to the LIGHT tokens, with !important
+    for selector in ("body.dark", ".gradio-container.dark", ".dark"):
+        assert selector in TELEDRIVE_CSS
+    assert "color-scheme: light !important;" in TELEDRIVE_CSS
+    assert "--td-bg:#F4F0F5 !important;" in TELEDRIVE_CSS
+    # guard 2: the class stripper keeps stripping
+    assert "classList.remove('dark')" in FORCE_LIGHT_JS
+    assert "MutationObserver" in FORCE_LIGHT_JS
+    # and it is actually handed to Gradio the only way that executes
+    built = ui.build(ctx)
+    assert getattr(built, "td_js", "") == FORCE_LIGHT_JS
+    assert TELEDRIVE_CSS in getattr(built, "td_css", "")
 
 
 def test_folder_picker_is_visible_in_transfers_and_dashboard(ctx):

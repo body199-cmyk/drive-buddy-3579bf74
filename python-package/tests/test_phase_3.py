@@ -81,12 +81,13 @@ def test_transfer_manager_state_is_instance_scoped():
     assert a.queue is not b.queue
 
 
-# ------------------------------------------------------ concurrency <= 4
+# --------------------------------------- concurrency <= HARD_CONCURRENCY_CAP
 
 
-def test_worker_count_is_clamped_between_one_and_four():
+def test_worker_count_is_clamped_between_one_and_the_cap():
+    """The semaphore bound still holds; ADR-0001 only moved its ceiling."""
     mgr = TransferManager(_telegram(1), FakeDrive(), "fld", queue=QueueManager())
-    assert mgr.set_workers(99) == HARD_CONCURRENCY_CAP
+    assert mgr.set_workers(HARD_CONCURRENCY_CAP + 50) == HARD_CONCURRENCY_CAP
     assert mgr.worker_count() == HARD_CONCURRENCY_CAP
     assert mgr.set_workers(0) == 1
     assert mgr.set_workers(3) == 3
@@ -95,7 +96,8 @@ def test_worker_count_is_clamped_between_one_and_four():
 def test_apply_concurrency_forwards_the_clamped_value_to_the_manager(ctx):
     ctx.drive_client = FakeDrive()
     manager = ctx.ensure_transfer_manager("fld")
-    assert ctx.queue_manager.apply_concurrency(10) == HARD_CONCURRENCY_CAP
+    over_cap = HARD_CONCURRENCY_CAP + 10
+    assert ctx.queue_manager.apply_concurrency(over_cap) == HARD_CONCURRENCY_CAP
     assert manager.worker_count() == HARD_CONCURRENCY_CAP
 
 

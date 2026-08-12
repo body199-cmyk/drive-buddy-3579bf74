@@ -56,7 +56,7 @@ TeleDrive مدير نقل وسائط من حساب Telegram مستخدم إلى 
 
 *   نقل disk-first: `.part` محليًا، تحقق الحجم، ثم resumable upload والتحقق من Drive.
 
-*   concurrency افتراضي 2، سقف صلب 4.
+*   concurrency افتراضي 2، والسقف 100 بموجب [ADR-0001](../python-package/docs/decisions/ADR-0001-concurrency-cap-100.md) (تجاوز صريح من المالك للسقف 4 في §12.8)، مع تحذير واجهة إجباري فوق 8. القيم خارج 1–100 تُرفض برسالة مترجمة ولا تُقصّ صامتة.
 
 *   لا whole-channel أو whole-chat crawl افتراضيًا.
 
@@ -409,7 +409,7 @@ Recovery recommendation:
 
 # 11\. قواعد الأمان المطلقة
 
-ممنوع: تطبيق ثانٍ أو `app_v2.py`، Python داخل TypeScript strings، fake data، زر بلا handler/service/test، lambda في layout، SQLite على FUSE، تخزين أو طباعة الأسرار، Bot API أو `file_unique_id` للدedupe، concurrency فوق 4، streaming v1 بدل disk-first، حذف Drive عند cancel/stop، blind cleanup، auto-resume بعد restart، dependency upgrade بلا دليل، نقل docs/modules بلا search، أو اعتبار الصور/static scans/fake tests تكاملًا حقيقيًا.
+ممنوع: تطبيق ثانٍ أو `app_v2.py`، Python داخل TypeScript strings، fake data، زر بلا handler/service/test، lambda في layout، SQLite على FUSE، تخزين أو طباعة الأسرار، Bot API أو `file_unique_id` للدedupe، concurrency فوق 100 (السقف بعد ADR-0001؛ كان 4)، streaming v1 بدل disk-first، حذف Drive عند cancel/stop، blind cleanup، auto-resume بعد restart، dependency upgrade بلا دليل، نقل docs/modules بلا search، أو اعتبار الصور/static scans/fake tests تكاملًا حقيقيًا.
 
 لا تستخدم أي توكن أو سر يظهر في المحادثة. لا تضع credentials أو phone أو codes أو password أو session string أو OAuth token في DOC أو GitHub أو logs أو ZIP أو handoff.
 
@@ -457,7 +457,7 @@ about = service.about().get(fields="user(displayName,emailAddress),storageQuota(
 
 كل action ظاهر يعلن مرة واحدة بـID وhandler وservice path وlabel وsection وimplemented وtested وproof_test عند الحاجة. Action Registry هو مصدر عدد الإجراءات، والأرقام في النص snapshots فقط. `UIBinder.wire` `assert_complete` يمنعان dead controls. كل handler مسمى ومزخرف. ممنوع lambda وdirect click/change/submit في layout. كل action يحتاج UI→service→persistence/event→live UI→redacted log.
 
-UI يجب أن يكون Arabic RTL، English LTR، graphite dark/light وlime، status chips حقيقية، navigation rail، Transfers رئيسية، Dashboard/Analyze/Connections/Logs/Settings/Colab export، advanced settings collapsed، concurrency slider 1–4 default 2، بلا fake data.
+UI يجب أن يكون Arabic RTL، English LTR، graphite dark/light وlime، status chips حقيقية، navigation rail، Transfers رئيسية، Dashboard/Analyze/Connections/Logs/Settings/Colab export، advanced settings collapsed، concurrency slider 1–100 default 2 (ADR-0001) مع تحذير فوق 8، بلا fake data. بعد M20-T02/T03: الوضع النهاري إجباري (لا مسار يجعل الخلفية سوداء) والواجهة تتابع مرقّم 1→5 مشتق من حالة السياق الحية بدل التبويبات المتجاورة.
 
 # 15\. Analyze وQueue وTransfer
 

@@ -25,6 +25,7 @@ instead:
 """
 from __future__ import annotations
 
+import inspect
 import os
 from typing import Any, Optional
 
@@ -218,6 +219,16 @@ def launch(
             root_path=proxy_url,
         )
     launch_kwargs.update(theme=getattr(demo, "td_theme", None), css=getattr(demo, "td_css", None))
+    # M20-T02: the light-only guards ride the launch call, because Gradio only
+    # executes scripts delivered through head=/js= (a <script> inside a
+    # component is inserted with innerHTML and never runs). Both are optional:
+    # a Gradio build without them still gets the CSS, which is the guard that
+    # actually decides the colours.
+    _launch_params = inspect.signature(type(demo).launch).parameters
+    for name, value in (("head", getattr(demo, "td_head", None)),
+                        ("js", getattr(demo, "td_js", None))):
+        if value and name in _launch_params:
+            launch_kwargs[name] = value
     demo.launch(**launch_kwargs)
     _log.info(
         "ui launched share=%s blocking=%s port=%s colab=%s proxy=%s",

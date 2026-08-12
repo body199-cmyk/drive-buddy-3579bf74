@@ -120,12 +120,27 @@ def test_five_nav_sections_present_in_required_order():
     ]
 
 
-def test_concurrency_slider_capped_at_four():
-    """Concurrency slider 1..4, default 2 — never 50 or 19."""
+def test_concurrency_slider_capped_at_the_adr_0001_value():
+    """Concurrency slider 1..100 (ADR-0001), default still 2 — never a lie.
+
+    The v4.5 cap of 4 was raised to 100 by explicit owner decision; the slider
+    bounds, the service bounds and the engine's clamp all read the SAME
+    constant, so the number on screen is the number the engine uses.
+    """
+    from teledrive.config import (
+        CONCURRENCY_WARN_ABOVE,
+        DEFAULT_CONCURRENCY,
+        HARD_CONCURRENCY_CAP,
+    )
     from teledrive.services import SettingsService
+
+    assert HARD_CONCURRENCY_CAP == 100
     assert SettingsService.MIN == 1
-    assert SettingsService.MAX == 4
-    assert SettingsService.DEFAULT == 2
+    assert SettingsService.MAX == HARD_CONCURRENCY_CAP
+    assert SettingsService.DEFAULT == DEFAULT_CONCURRENCY == 2
+    assert SettingsService.WARN_ABOVE == CONCURRENCY_WARN_ABOVE == 8
+    # the slider in ui.py must be built from the constants, not from literals
+    assert "minimum=CONCURRENCY_MIN, maximum=HARD_CONCURRENCY_CAP" in UI_SRC
 
 
 def test_ui_module_has_no_sql_calls():
