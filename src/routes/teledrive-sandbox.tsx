@@ -5,11 +5,10 @@ import sandboxCss from "../components/teleDrive/teleDrive.css?url";
 export const Route = createFileRoute("/teledrive-sandbox")({
   head: () => ({
     meta: [
-      { title: "TeleDrive Sandbox — UI prototype only" },
+      { title: "TeleDrive" },
       {
         name: "description",
-        content:
-          "Local React prototype of the M19 TeleDrive shell. No live Telegram or Drive connection.",
+        content: "TeleDrive operational UI running inside the official Gradio bridge.",
       },
     ],
     links: [{ rel: "stylesheet", href: sandboxCss }],
