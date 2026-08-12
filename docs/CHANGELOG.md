@@ -1,5 +1,22 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-POST-MERGE-P1] — 2026-08-12 — إصلاحات null safety + ترتيب الطلبات بعد دمج PR #40/#41
+
+- **الأساس:** `origin/main = 504ec5e` (بعد دمج PR #40 `bbea9bf` + PR #41 docs). الفرع `arena/019ff805-drive-buddy-3579bf74`.
+- **P1 null safety:** كل قراءة متداخلة لـ `LiveUiState` صارت optional chaining كامل:
+  - `state?.telegram?.status` / `state?.drive?.status` / `state?.folder?.id|name`
+  - `state?.drive?.quotaUsed|quotaLimit` / `state?.drive?.status?.toLowerCase?.()`
+  - حماية `candidate.status` و`row.status` و`row.progress` من القيم الناقصة.
+- **P1 request ordering:** `latestRequest = useRef(new Map<actionId, requestId>)` داخل `run()`:
+  - يسجّل `requestId` لكل `actionId` قبل `bridge.request`
+  - يرد قديم (`latestRequest.get(actionId) !== requestId`) يُهمَل — لا يكتب state ولا success notice ولا يصفّر busy لطلب أحدث.
+- **Concurrency:** الإبقاء على 1..100 افتراضي 2 + تحذير فوق 8 (CONSTITUTION v5.0 + ADR-0001) — لا رجوع إلى 1..4 بلا ADR جديد.
+- **Bundle:** أُعيد بناء `panel.bundle.gz` + `panel.css.gz` من المصدر المحدَّث (esbuild IIFE `TeleDriveGradioPanel.mount`؛ gzip mtime=0).
+- **عقود:** +test 19 (null safety) + test 20 (latestRequest) → **20/20 PASS**.
+- **بوابات محلية:** `node --test` 20/20 · `tsc --noEmit` PASS · `eslint` 0 errors / 7 warnings pre-existing · `npm run build` PASS · launcher `47/47 ready`.
+- **محمي لم يُمس:** notebooks · telegram_auth · queue/transfer · database/migrations · requirements.* · bun.lock · package.json · workflows.
+- **الحالة الصادقة:** Code-complete candidate + Fake-tested. **ليس** Colab-ready / Complete. Live Colab smoke + نقل حقيقي ما زالا بيد المالك.
+
 ## [M24-MERGED] — 2026-08-12 — دمج PR #40 بعد تجديد الجلسة
 
 - **السابق:** PR #40 كان OPEN على الكود `a7d1c6c` (short `56a285b`) مع CI أخضر (push 31641715230 + PR 31641718211 — Frontend PASS + Python PASS). الكومِت المحلي `70b4e2d` doc-only فشل دفعه بسبب انتهاء `GH_TOKEN` في Arena.

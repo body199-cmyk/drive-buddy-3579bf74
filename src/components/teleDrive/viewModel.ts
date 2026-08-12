@@ -63,7 +63,8 @@ export function visibleCandidates(
 
 export function selectableCandidates(candidates: CandidateRow[]): CandidateRow[] {
   return candidates.filter(
-    (candidate) => !["quarantined", "deleted", "stopped"].includes(candidate.status.toLowerCase()),
+    (candidate) =>
+      !["quarantined", "deleted", "stopped"].includes((candidate.status ?? "").toLowerCase()),
   );
 }
 
@@ -76,7 +77,7 @@ export function enqueueBlockReason(
   visible: CandidateRow[],
 ): "bridge" | "folder" | "selection" | null {
   if (!state) return "bridge";
-  if (!state.folder.id) return "folder";
+  if (!state.folder?.id) return "folder";
   if (selectedVisibleCandidates(visible).length < 1) return "selection";
   return null;
 }
@@ -92,7 +93,7 @@ export type QueueMetrics = {
 export function queueMetrics(queue: QueueRow[]): QueueMetrics {
   return queue.reduce<QueueMetrics>(
     (metrics, row) => {
-      const status = row.status.toLowerCase();
+      const status = (row.status ?? "").toLowerCase();
       return {
         queued: metrics.queued + (["pending", "needsretry", "downloaded"].includes(status) ? 1 : 0),
         running:
