@@ -1,4 +1,4 @@
-/* eslint-disable */
+/* eslint-disable prettier/prettier -- bun CI prettier wraps Arabic JSX differently than local npm prettier */
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   AlertCircle,

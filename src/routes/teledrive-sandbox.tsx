@@ -1,4 +1,4 @@
-/* eslint-disable */
+/* eslint-disable prettier/prettier -- bun CI prettier wraps this route file differently than local npm prettier */
 import { createFileRoute } from "@tanstack/react-router";
 import TeleDriveSandbox from "../components/teleDrive/TeleDriveSandbox";
 import sandboxCss from "../components/teleDrive/teleDrive.css?url";
