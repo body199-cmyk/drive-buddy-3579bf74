@@ -75,7 +75,8 @@ _NO_ARGS = {
     "drive.connect", "drive.reconnect", "drive.status", "drive.refresh_quota",
     "analyze.select_all", "analyze.clear_selection", "analyze.enqueue_selected",
     "queue.start_selected", "queue.pause", "queue.resume", "queue.stop",
-    "queue.retry_failed", "queue.clear_completed", "queue.refresh",
+    "queue.retry_failed", "queue.clear_completed", "queue.clear_incomplete",
+    "queue.refresh",
     "dashboard.refresh", "settings.toggle_language", "export.build_zip",
     "export.colab_cells", "recovery.restore", "maintenance.checkpoint",
 }

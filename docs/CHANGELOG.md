@@ -1,6 +1,6 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
-## [M25-T01] — 2026-08-13 — استئناف Colab: أسرار + خزنة جلسة تليجرام + keep-alive
+## [M25-T01 vault] — 2026-08-13 — استئناف Colab: أسرار + خزنة جلسة تليجرام + keep-alive
 
 - **المشكلة:** موت جلسة Colab يمسح `/content`. المستخدم كان يعيد كتابة API ويعيد OTP ويربط Drive من الصفر. خلية الواجهة وحدها لا تكفي على VM فارغ.
 - **الحل (موافقة المالك، ADR-004):**
@@ -9,7 +9,24 @@
   - Drive يبقى native Colab (كلك واحدة عادةً). لا `drive_token.json`.
   - keep-alive في الخلية 4: نبض دقيقتين + نقرة Connect. لا يخلّد الجلسة.
 - **سبع خلايا كما هي.** ترتيب 4: Drive → vault → Telegram → launch → keepalive.
+- **تعارض الدمج:** main كان فيه شق الطابور (PR #44) بنفس TASK ID. فُضّ التعارض في التوثيق فقط؛ الكود غير متعارض.
 - **الحالة الصادقة:** Code-complete candidate + Fake-tested. الإثبات الحي بيد المالك. التاج المنشور لن يتحدث حتى يعيد المالك تشغيل Publish (#27).
+
+## [M25-T01 MERGED] — 2026-08-12 — PR #44 مدموج في main `ce28004`
+
+- **دمج:** PR [#44](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/44) → main = `ce28004fda34943c7224877c5bd3eb5338ed4656` في 2026-08-12T23:30:45Z. CI على الـPR: Frontend PASS + Python PASS.
+- **فجوة Colab:** التاج `pkg-2026.08.09-m15t07` ما زال قديمًا حتى يعيد المالك تشغيل **Publish current TeleDrive package** على `main` (الوكيل محظور 403 — KNOWN_ISSUES #27).
+
+## [M25-T01] — 2026-08-12 — جلسات الطابور + بدء كل المعلّق + مسح غير المكتمل
+
+- **المشكلة:** بعد Restart في Colab تبقى صفوف SQLite بينما التحديد في الذاكرة فارغ، فيرفض `queue.start_selected` البدء. Pause يُبقي الصفوف عمدًا وStop كان يوقف العمال فقط.
+- **Start:** `start_selected()` بلا وسائط يلتقط كل Pending/NeedsRetry/Downloaded إن لم يطابق التحديد صفوف الطابور. `start_selected([])` ما زال لا يبدأ شيئًا (عقد Phase C). هذا نقر صريح وليس auto-resume.
+- **مسح غير المكتمل:** فعل جديد `queue.clear_incomplete` يحذف صفوف SQLite غير المكتملة فقط. Uploaded/Skipped تبقى لـ`clear_completed`. **لا حذف لملفات Drive.**
+- **إيقاف:** React يعرض نافذة: إيقاف فقط أو إيقاف + مسح غير المكتمل. Gradio يضيف زر «مسح غير المكتمل» بجانب مسح المكتملة.
+- **تجميع الجلسات:** اللقطة تحمل `chatTitle`/`createdAt` والواجهة تجمّع حسب اسم القناة + تاريخ الإضافة.
+- **بوابات محلية:** `652 passed` · launcher `48/48` · contracts `22/22` · `tsc` PASS · eslint 0 errors · notebooks identical · bundle gzip أُعيد بناؤه.
+- **محمي لم يُمس:** notebooks · telegram_auth · transfer_manager · database/migrations · requirements.* · bun.lock · package.json · workflows.
+- **الحالة الصادقة:** Code-complete candidate + Fake-tested. ليس Colab-ready / Complete.
 
 ## [M24-POST-MERGE-P1 MERGED] — 2026-08-12 — PR #42 مدموج + فجوة نشر Colab
 

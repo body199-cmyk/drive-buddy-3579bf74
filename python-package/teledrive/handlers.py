@@ -514,6 +514,10 @@ class Handlers:
     def h_queue_clear_completed(self):
         return self._queue_view(self.call("queue.clear_completed"))
 
+    @action("queue.clear_incomplete")
+    def h_queue_clear_incomplete(self):
+        return self._queue_view(self.call("queue.clear_incomplete"))
+
     @action("queue.refresh")
     def h_queue_refresh(self):
         return self._queue_view(self.call("queue.refresh"))

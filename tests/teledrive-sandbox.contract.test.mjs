@@ -7,6 +7,7 @@ import { GradioTeleDriveBridge } from "../src/components/teleDrive/gradioBridge.
 import {
   enqueueBlockReason,
   formatBytes,
+  groupQueueSessions,
   queueMetrics,
   selectableCandidates,
   validateAnalyzeInput,
@@ -296,6 +297,36 @@ test("19 — nested LiveUiState fields use optional chaining (null safety)", asy
   assert.doesNotMatch(component, /state\?\.telegram\.[a-zA-Z]/);
   assert.doesNotMatch(component, /state\?\.drive\.[a-zA-Z]/);
   assert.doesNotMatch(component, /state\?\.folder\.[a-zA-Z]/);
+});
+
+test("21 — queue sessions group by channel title and created date", () => {
+  const base = {
+    name: "file",
+    progress: 0,
+    sizeBytes: 10,
+    speedBytes: null,
+    remainingSeconds: null,
+  };
+  const sessions = groupQueueSessions([
+    { ...base, id: "a", status: "Pending", chatTitle: "Alpha", createdAt: "2026-08-12T01:00:00" },
+    { ...base, id: "b", status: "Uploaded", chatTitle: "Alpha", createdAt: "2026-08-12T02:00:00" },
+    { ...base, id: "c", status: "Pending", chatTitle: "Beta", createdAt: "2026-08-11T09:00:00" },
+  ]);
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[0].title, "Alpha");
+  assert.equal(sessions[0].dateLabel, "2026-08-12");
+  assert.equal(sessions[0].rows.length, 2);
+  assert.equal(sessions[0].uploaded, 1);
+  assert.equal(sessions[0].pending, 1);
+  assert.equal(sessions[1].title, "Beta");
+});
+
+test("22 — stop offers clear-incomplete and queue rows render in sessions", async () => {
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /queue\.clear_incomplete/);
+  assert.match(component, /setStopConfirm\(true\)/);
+  assert.match(component, /groupQueueSessions/);
+  assert.match(component, /td-session/);
 });
 
 test("20 — run() drops stale responses via latestRequest Map", async () => {

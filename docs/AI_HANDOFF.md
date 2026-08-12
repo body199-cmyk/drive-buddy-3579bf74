@@ -2,7 +2,7 @@
 
 > Latest session only. Historical evidence is under `docs/PHASE_REPORTS/`.
 
-## Session card — M25-T01 session vault
+## Session card — M25-T01 session vault (merge)
 
 | Field | Value |
 |---|---|
@@ -10,30 +10,30 @@
 | TASK ID | `M25-T01` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
 | Branch | `arena/019ff850-drive-buddy-3579bf74` |
-| Status | **ACTIVE · Code-complete candidate + Fake-tested** |
-| Honest | Not Colab-ready. Not Complete. Live restore on a new VM is the owner's proof. |
+| Status | **MERGE IN PROGRESS · Code-complete candidate + Fake-tested** |
+| PR #46 | vault + keepalive — merging after resolving docs conflicts with main |
+| Already on main | PR #44 queue sessions → `ce28004` |
+| Honest | Not Colab-ready. Not Complete. |
 
-## What the owner asked
+## What the owner asked this session
 
-بعد انتهاء جلسة التحميل: هل لازم تشغيل الخلايا من 1؟ هل لازم تسجيل تليجرام وربط Drive كل مرة؟ هل ينفع تشغيل خلية الواجهة وحدها؟ هل نطوّل جلسة Colab؟
+بعد انتهاء جلسة التحميل: هل لازم تشغيل الخلايا من 1؟ هل لازم تسجيل تليجرام وربط Drive كل مرة؟ هل ينفع تشغيل خلية الواجهة وحدها؟ هل نطوّل جلسة Colab؟ ثم: ادمج.
 
-## Answers encoded in the product
+## Encoded answers
 
-1. **VM مات:** لازم 1–4. القرص فاضي. الخلية الأخيرة وحدها مستحيلة.
-2. **نفس الـruntime حي:** لا تعيدي من 1. الواجهة شغالة.
+1. **VM مات:** لازم 1–4. الخلية الأخيرة وحدها مستحيلة.
+2. **نفس الـruntime حي:** لا تعيدي من 1.
 3. **أسرار Colab:** API ID/Hash مرة واحدة في أيقونة المفتاح.
-4. **خزنة الجلسة:** أول OTP فقط. بعدها الملف المعمّى على Drive يكفي مع نفس الـapi_hash.
-5. **Drive:** native `authenticate_user` — غالبًا كلك، مش OAuth من الصفر.
+4. **خزنة الجلسة:** أول OTP فقط. بعدها الملف المعمّى على Drive يكفي.
+5. **Drive:** native `authenticate_user` — غالبًا كلك.
 6. **Keep-alive:** يؤخر الخمول. لا يهزم 12 ساعة ولا التاب المقفل.
 
-## Files
+## Already on main (other M25-T01)
 
-- Created: `python-package/teledrive/session_vault.py`, `tests/test_session_vault.py`, `docs/decisions/ADR-004-session-vault.md`, `docs/PHASE_REPORTS/PHASE_M25_T01.md`
-- Modified: `telegram_auth.py`, `drive_client.py`, `config.py`, `notebook_cells.py` (+ generated notebooks/json), `tests/test_notebook.py`, `tests/mocks/fake_drive.py`, memory docs
+PR #44: Start يلتقط كل المعلّق بعد Restart، مسح غير المكتمل، تجميع الطابور بالقناة+التاريخ.
 
 ## Next for owner
 
-1. Merge the PR on this branch.
-2. Actions → Publish current TeleDrive package on `main` (agent is 403).
-3. Colab Secrets: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`.
-4. Restart runtime → Cells 1–4. First time: finish Telegram in the UI. Next dead-VM: same 1–4, expect no OTP.
+1. After merge: Actions → Publish current TeleDrive package on `main` (agent is 403).
+2. Colab Secrets: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`.
+3. Restart → Cells 1–4. First time: Telegram in the UI. Next dead-VM: expect no OTP.
