@@ -80,8 +80,20 @@ TELEGRAM_SESSION = SESSION_DIR / "telegram.session"
 
 DRIVE_APPDATA_FOLDER = "TeleDrive_AppData"
 
-CONCURRENCY_LEVELS = {"safe": 1, "balanced": 2, "fast": 3}
-HARD_CONCURRENCY_CAP = 4
+# ---------------------------------------------------------------------------
+# Concurrency (ADR-0001, owner override of the v4.5 cap of 4).
+#
+# The owner explicitly raised the hard cap to 100. This is a deliberate,
+# recorded deviation from Constitution 12.8 and it is NOT a safety claim:
+# Colab RAM, local disk and Telegram/Drive rate limits are the real ceiling.
+# Anything above CONCURRENCY_WARN_ABOVE is surfaced to the user as a warning
+# in the UI instead of being silently clamped.
+# ---------------------------------------------------------------------------
+CONCURRENCY_LEVELS = {"safe": 1, "balanced": 2, "fast": 3, "turbo": 16, "max": 100}
+CONCURRENCY_MIN = 1
+HARD_CONCURRENCY_CAP = 100
+DEFAULT_CONCURRENCY = 2
+CONCURRENCY_WARN_ABOVE = 8
 
 RETRY_MAX_ATTEMPTS = 5
 RETRY_BASE_SECONDS = 2.0
@@ -124,8 +136,8 @@ class RuntimeConfig:
 
     def concurrency_value(self) -> int:
         if self.manual_concurrency is not None:
-            return max(1, min(self.manual_concurrency, HARD_CONCURRENCY_CAP))
-        return CONCURRENCY_LEVELS.get(self.concurrency, 2)
+            return max(CONCURRENCY_MIN, min(self.manual_concurrency, HARD_CONCURRENCY_CAP))
+        return CONCURRENCY_LEVELS.get(self.concurrency, DEFAULT_CONCURRENCY)
 
 
 CONFIG = RuntimeConfig()

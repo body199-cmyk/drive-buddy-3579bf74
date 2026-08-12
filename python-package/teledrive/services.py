@@ -12,6 +12,9 @@ from typing import Any, Iterable
 from . import checkpoint_manager, database as db, drive_quota
 from .config import (
     CONCURRENCY_LEVELS,
+    CONCURRENCY_MIN,
+    CONCURRENCY_WARN_ABOVE,
+    DEFAULT_CONCURRENCY,
     HARD_CONCURRENCY_CAP,
     LOG_PATH,
     LOGS_DIR,
@@ -38,6 +41,9 @@ from .models import MediaItem
 from .redaction import redact
 from .telegram_links import InvalidLink, parse as parse_link
 from .utils import human_bytes, human_duration, now_iso, safe_disk_free
+
+#: M20-T02 — the shell is light-only, so the persisted default is light too.
+DEFAULT_THEME = "light"
 
 _log = get_logger("teledrive.services")
 
@@ -561,11 +567,18 @@ class LogService:
 # --------------------------------------------------------------------------
 
 class SettingsService:
-    """Concurrency 1..4 (default 2) per the constitution — never 19 or 50."""
+    """Concurrency 1..100 (default 2) per ADR-0001 — never a silent clamp.
 
-    MIN = 1
-    MAX = HARD_CONCURRENCY_CAP  # 4
-    DEFAULT = 2
+    ADR-0001 raised the v4.5 hard cap of 4 to 100 on explicit owner
+    instruction. The default is unchanged (2) and anything above
+    ``CONCURRENCY_WARN_ABOVE`` is accepted but reported back to the UI with a
+    risk warning instead of being silently reduced.
+    """
+
+    MIN = CONCURRENCY_MIN
+    MAX = HARD_CONCURRENCY_CAP  # 100 (ADR-0001)
+    DEFAULT = DEFAULT_CONCURRENCY
+    WARN_ABOVE = CONCURRENCY_WARN_ABOVE
 
     def __init__(self, ctx) -> None:
         self.ctx = ctx
@@ -590,8 +603,19 @@ class SettingsService:
         self.ctx.queue_manager.apply_concurrency(value)
         return value
 
-    def set_concurrency(self, level: str | int) -> dict[str, Any]:
-        # Accept numeric slider values (1..4) or named levels mapped into range.
+    def set_concurrency(self, level: "str | int | float") -> dict[str, Any]:
+        """Accept a preset name or a raw worker count.
+
+        ADR-0001 raised the hard cap to 100. Out-of-range numbers are rejected
+        with a localized error instead of being silently clamped, so the UI can
+        never show a number that the engine is not actually going to use.
+        Values above ``WARN_ABOVE`` are accepted but flagged (``warn``) so the
+        shell can display the Colab RAM / FloodWait risk warning.
+        """
+        if isinstance(level, bool):
+            raise TeleDriveError(
+                "invalid concurrency value", "settings.concurrency.invalid"
+            )
         try:
             n = int(level)
         except (TypeError, ValueError):
@@ -604,7 +628,12 @@ class SettingsService:
                 )
         value = self._apply(n)
         db.set_setting("concurrency", str(n))
-        return {"level": n, "workers": value, "cap": self.MAX}
+        return {
+            "level": n,
+            "workers": value,
+            "cap": self.MAX,
+            "warn": value > self.WARN_ABOVE,
+        }
 
     def current(self) -> int:
         return self.ctx.config.concurrency_value()
@@ -614,9 +643,13 @@ class PreferencesService:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
         # Restore persisted theme/language on boot (best-effort).
-        saved_theme = db.get_setting("theme") or "dark"
+        # M20-T02: the default is LIGHT. The shell is light-only (theme.py
+        # neutralises Gradio's dark palette at the CSS-variable level), so a
+        # persisted "dark" default would make this preference claim a state the
+        # UI can never actually paint.
+        saved_theme = db.get_setting("theme") or DEFAULT_THEME
         self.ctx.ui_state.extra["theme"] = (
-            saved_theme if saved_theme in ("dark", "light") else "dark"
+            saved_theme if saved_theme in ("dark", "light") else DEFAULT_THEME
         )
         saved_lang = db.get_setting("language")
         if saved_lang in SUPPORTED_LANGUAGES:
@@ -638,13 +671,13 @@ class PreferencesService:
         return language
 
     def set_theme(self, theme: str) -> str:
-        theme = theme if str(theme).lower() in ("dark", "light") else "dark"
+        theme = theme if str(theme).lower() in ("dark", "light") else DEFAULT_THEME
         self.ctx.ui_state.extra["theme"] = theme
         db.set_setting("theme", theme)
         return theme
 
     def current_theme(self) -> str:
-        return self.ctx.ui_state.extra.get("theme", "dark")
+        return self.ctx.ui_state.extra.get("theme", DEFAULT_THEME)
 
 
 # --------------------------------------------------------------------------
