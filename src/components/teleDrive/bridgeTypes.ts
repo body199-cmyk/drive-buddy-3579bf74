@@ -17,6 +17,8 @@ export type QueueRow = {
   sizeBytes: number | null;
   speedBytes: number | null;
   remainingSeconds: number | null;
+  chatTitle?: string | null;
+  createdAt?: string | null;
 };
 
 export type CandidateRow = {

@@ -33,6 +33,7 @@ import {
 import {
   enqueueBlockReason,
   formatBytes,
+  groupQueueSessions,
   localize,
   mediaChoices,
   pageLabels,
@@ -721,8 +722,19 @@ function QueueSection({
   busyAction: string | null;
   run: RunAction;
 }) {
+  const [stopConfirm, setStopConfirm] = useState(false);
   const rows = state?.queue ?? [];
   const metrics = queueMetrics(rows);
+  const sessions = groupQueueSessions(rows);
+  const stopOnly = () => {
+    setStopConfirm(false);
+    void run("queue.stop");
+  };
+  const stopAndClear = async () => {
+    setStopConfirm(false);
+    await run("queue.stop");
+    await run("queue.clear_incomplete");
+  };
   return (
     <section className="td-page" aria-labelledby="queue-title">
       <SectionTitle
@@ -794,10 +806,36 @@ function QueueSection({
           busyAction={busyAction}
           live={live}
           className="td-button td-button-danger"
-          onClick={() => void run("queue.stop")}
+          onClick={() => setStopConfirm(true)}
         >
           <Square size={15} aria-hidden="true" />
           {localize(language, "إيقاف", "Stop")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.retry_failed"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void run("queue.retry_failed")}
+        >
+          <RotateCcw size={15} aria-hidden="true" />
+          {localize(language, "إعادة الفاشلة", "Retry failed")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.clear_completed"
+          busyAction={busyAction}
+          live={live}
+          onClick={() => void run("queue.clear_completed")}
+        >
+          {localize(language, "مسح المكتملة", "Clear completed")}
+        </ActionButton>
+        <ActionButton
+          actionId="queue.clear_incomplete"
+          busyAction={busyAction}
+          live={live}
+          className="td-button td-button-danger"
+          onClick={() => void run("queue.clear_incomplete")}
+        >
+          {localize(language, "مسح غير المكتمل", "Clear incomplete")}
         </ActionButton>
         <ActionButton
           actionId="queue.refresh"
@@ -809,6 +847,43 @@ function QueueSection({
           {localize(language, "تحديث", "Refresh")}
         </ActionButton>
       </div>
+      {stopConfirm ? (
+        <div className="td-confirm" role="dialog" aria-labelledby="td-stop-title">
+          <p id="td-stop-title">
+            {localize(
+              language,
+              "إيقاف العمال فقط، أم إيقاف ومسح الصفوف غير المكتملة من الطابور؟ ملفات Drive المرفوعة لا تُحذف أبدًا.",
+              "Stop the workers only, or also clear unfinished queue rows? Uploaded Drive files are never deleted.",
+            )}
+          </p>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="queue.stop"
+              busyAction={busyAction}
+              live={live}
+              onClick={stopOnly}
+            >
+              {localize(language, "إيقاف فقط", "Stop only")}
+            </ActionButton>
+            <ActionButton
+              actionId="queue.clear_incomplete"
+              busyAction={busyAction}
+              live={live}
+              className="td-button td-button-danger"
+              onClick={() => void stopAndClear()}
+            >
+              {localize(language, "إيقاف ومسح غير المكتمل", "Stop and clear incomplete")}
+            </ActionButton>
+            <button
+              type="button"
+              className="td-button td-button-secondary"
+              onClick={() => setStopConfirm(false)}
+            >
+              {localize(language, "إلغاء", "Cancel")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="td-destination-banner">
         <Folder size={15} aria-hidden="true" />
         {localize(language, "مجلد الوجهة", "Destination")}:{" "}
@@ -819,75 +894,94 @@ function QueueSection({
           {localize(language, "الطابور الحي فارغ.", "The live queue is empty.")}
         </div>
       ) : (
-        <div className="td-table-wrap">
-          <table className="td-table">
-            <thead>
-              <tr>
-                <th>{localize(language, "الملف", "File")}</th>
-                <th>{localize(language, "الحالة", "Status")}</th>
-                <th>{localize(language, "التقدم", "Progress")}</th>
-                <th>{localize(language, "الحجم", "Size")}</th>
-                <th>{localize(language, "تحكم", "Controls")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td data-label="File">
-                    <strong>{row.name}</strong>
-                    <small>{row.id}</small>
-                  </td>
-                  <td data-label="Status">
-                    <span className={`td-status td-status-${(row.status ?? "").toLowerCase()}`}>
-                      {row.status ?? "—"}
-                    </span>
-                  </td>
-                  <td data-label="Progress">
-                    <div className="td-progress">
-                      <span
-                        style={{
-                          width: `${Math.max(0, Math.min(100, Number(row.progress) || 0))}%`,
-                        }}
-                      />
-                    </div>
-                    <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
-                  </td>
-                  <td data-label="Size">{formatBytes(row.sizeBytes)}</td>
-                  <td data-label="Controls">
-                    <div className="td-button-row">
-                      <ActionButton
-                        actionId="queue.pause_item"
-                        busyAction={busyAction}
-                        live={live}
-                        className="td-link-button"
-                        onClick={() => void run("queue.pause_item", { itemId: row.id })}
-                      >
-                        {localize(language, "إيقاف", "Pause")}
-                      </ActionButton>
-                      <ActionButton
-                        actionId="queue.resume_item"
-                        busyAction={busyAction}
-                        live={live}
-                        className="td-link-button"
-                        onClick={() => void run("queue.resume_item", { itemId: row.id })}
-                      >
-                        {localize(language, "استئناف", "Resume")}
-                      </ActionButton>
-                      <ActionButton
-                        actionId="queue.retry_item"
-                        busyAction={busyAction}
-                        live={live}
-                        className="td-link-button"
-                        onClick={() => void run("queue.retry_item", { itemId: row.id })}
-                      >
-                        {localize(language, "إعادة", "Retry")}
-                      </ActionButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="td-session-list">
+          {sessions.map((session) => (
+            <details key={session.key} className="td-session" open>
+              <summary className="td-session-head">
+                <Folder size={16} aria-hidden="true" />
+                <strong>
+                  {session.title} · {session.dateLabel}
+                </strong>
+                <small>
+                  {session.rows.length} {localize(language, "ملف", "files")} ·{" "}
+                  {localize(language, "مكتمل", "uploaded")} {session.uploaded} ·{" "}
+                  {localize(language, "انتظار", "pending")} {session.pending}
+                </small>
+              </summary>
+              <div className="td-table-wrap">
+                <table className="td-table">
+                  <thead>
+                    <tr>
+                      <th>{localize(language, "الملف", "File")}</th>
+                      <th>{localize(language, "الحالة", "Status")}</th>
+                      <th>{localize(language, "التقدم", "Progress")}</th>
+                      <th>{localize(language, "الحجم", "Size")}</th>
+                      <th>{localize(language, "تحكم", "Controls")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {session.rows.map((row) => (
+                      <tr key={row.id}>
+                        <td data-label="File">
+                          <strong>{row.name}</strong>
+                          <small>{row.id}</small>
+                        </td>
+                        <td data-label="Status">
+                          <span
+                            className={`td-status td-status-${(row.status ?? "").toLowerCase()}`}
+                          >
+                            {row.status ?? "—"}
+                          </span>
+                        </td>
+                        <td data-label="Progress">
+                          <div className="td-progress">
+                            <span
+                              style={{
+                                width: `${Math.max(0, Math.min(100, Number(row.progress) || 0))}%`,
+                              }}
+                            />
+                          </div>
+                          <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
+                        </td>
+                        <td data-label="Size">{formatBytes(row.sizeBytes)}</td>
+                        <td data-label="Controls">
+                          <div className="td-button-row">
+                            <ActionButton
+                              actionId="queue.pause_item"
+                              busyAction={busyAction}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.pause_item", { itemId: row.id })}
+                            >
+                              {localize(language, "إيقاف", "Pause")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.resume_item"
+                              busyAction={busyAction}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.resume_item", { itemId: row.id })}
+                            >
+                              {localize(language, "استئناف", "Resume")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.retry_item"
+                              busyAction={busyAction}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.retry_item", { itemId: row.id })}
+                            >
+                              {localize(language, "إعادة", "Retry")}
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
         </div>
       )}
     </section>

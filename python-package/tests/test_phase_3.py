@@ -35,6 +35,7 @@ PROVES = (
     "queue.stop_item",
     "queue.retry_item",
     "queue.clear_completed",
+    "queue.clear_incomplete",
     "queue.refresh",
 )
 
@@ -248,6 +249,33 @@ def test_clear_completed_removes_finished_rows_only(ctx):
     assert result["removed"] >= 1
     assert db.get_item(done.id) is None
     assert db.get_item(pending.id) is not None, "pending work must survive"
+
+
+def test_clear_incomplete_removes_unfinished_rows_only(ctx):
+    pending = _item(ctx.queue_manager, 90)
+    failed = _item(ctx.queue_manager, 91)
+    stopped = _item(ctx.queue_manager, 92)
+    done = _item(ctx.queue_manager, 93)
+    ctx.queue_manager.try_transition(failed.id, "Downloading")
+    ctx.queue_manager.try_transition(failed.id, "Failed")
+    ctx.queue_manager.try_transition(stopped.id, "Stopped")
+    for state in ("Downloading", "Downloaded", "Uploading", "Verifying",
+                  "UploadedPendingCheckpoint", "Uploaded"):
+        ctx.queue_manager.try_transition(done.id, state)
+    done_row = db.get_item(done.id)
+    assert done_row is not None
+    done_row.drive_file_id = "drive-keep-me"
+    db.upsert_item(done_row)
+
+    result = ctx.queue_manager.clear_incomplete_metadata()
+    assert result["removed"] >= 3
+    assert db.get_item(pending.id) is None
+    assert db.get_item(failed.id) is None
+    assert db.get_item(stopped.id) is None
+    kept = db.get_item(done.id)
+    assert kept is not None, "uploaded rows must survive"
+    assert kept.drive_file_id == "drive-keep-me"
+    assert kept.state == "Uploaded"
 
 
 def test_refresh_snapshot_reports_live_counts(ctx):

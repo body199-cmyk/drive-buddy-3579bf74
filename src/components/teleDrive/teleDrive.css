@@ -698,6 +698,62 @@
   margin: 0;
 }
 
+.td-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.td-session {
+  border: 1px solid var(--td-line);
+  border-radius: var(--radius-lg);
+  background: var(--td-surface);
+  overflow: hidden;
+}
+
+.td-session-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: var(--td-touch);
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.td-session-head::-webkit-details-marker {
+  display: none;
+}
+
+.td-session-head small {
+  color: var(--td-muted);
+  font-weight: 500;
+}
+
+.td-session .td-table-wrap {
+  border: 0;
+  border-top: 1px solid var(--td-line);
+  border-radius: 0;
+}
+
+.td-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--td-warning);
+  border-radius: var(--radius-lg);
+  background: var(--td-warning-soft);
+}
+
+.td-confirm p {
+  margin: 0;
+  color: var(--td-text);
+  font-size: 0.92rem;
+}
+
 .td-progress {
   width: 150px;
   height: 6px;

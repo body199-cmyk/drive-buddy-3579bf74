@@ -140,14 +140,28 @@ class QueueManager:
         }
 
     def selected_pending(self, item_ids=None) -> list[MediaItem]:
-        """Only the explicitly selected items — never every Pending row."""
-        wanted = {str(i) for i in (item_ids or []) if str(i)}
-        if not wanted:
-            selection = getattr(self._require_ctx(), "selection", None)
-            wanted = {str(i) for i in getattr(selection, "selected_ids", set()) or set()}
-        if not wanted:
-            return []
-        return [i for i in self.pending() if i.id in wanted]
+        """Resolve which pending rows Start should process.
+
+        * An explicit id list is a hard filter — never every Pending row.
+        * An explicit empty list means start nothing (the Phase C contract).
+        * ``None`` (the Start button, no argument) uses the in-memory analyze
+          selection when it still matches queue rows. After a Colab Restart
+          that selection is gone while SQLite still holds leftover work, so
+          we fall back to every startable Pending/NeedsRetry/Downloaded row.
+          That is an explicit Start click, not auto-resume.
+        """
+        if item_ids is not None:
+            wanted = {str(i) for i in item_ids if str(i)}
+            if not wanted:
+                return []
+            return [i for i in self.pending() if i.id in wanted]
+        selection = getattr(self._require_ctx(), "selection", None)
+        wanted = {str(i) for i in getattr(selection, "selected_ids", set()) or set()}
+        if wanted:
+            matched = [i for i in self.pending() if i.id in wanted]
+            if matched:
+                return matched
+        return list(self.pending())
 
     def start_selected(self, item_ids=None) -> dict:
         from .drive_client import DriveService
@@ -266,6 +280,33 @@ class QueueManager:
         """Clears finished ROWS only. Never touches files already on Drive."""
         removed = 0
         for item in db.items_in_states(["Uploaded", "Skipped"]):
+            db.delete_item(item.id)
+            removed += 1
+        snapshot = self.snapshot()
+        snapshot["removed"] = removed
+        return snapshot
+
+    # Unfinished queue rows. Uploaded/Skipped stay (clear_completed owns them).
+    # Deleted is already gone. Drive files are never touched — delete_item
+    # removes the SQLite row and its events only.
+    INCOMPLETE_STATES: tuple[str, ...] = (
+        "Pending",
+        "Analyzing",
+        "Downloading",
+        "Downloaded",
+        "Uploading",
+        "Verifying",
+        "UploadedPendingCheckpoint",
+        "Paused",
+        "Failed",
+        "NeedsRetry",
+        "Stopped",
+    )
+
+    def clear_incomplete_metadata(self) -> dict:
+        """Clears unfinished ROWS only. Never deletes a file already on Drive."""
+        removed = 0
+        for item in db.items_in_states(self.INCOMPLETE_STATES):
             db.delete_item(item.id)
             removed += 1
         snapshot = self.snapshot()

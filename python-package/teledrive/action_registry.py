@@ -359,6 +359,16 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         proof_test="tests/test_phase_3.py::test_clear_completed_removes_finished_rows_only",
     ),
     ActionSpec(
+        action_id="queue.clear_incomplete",
+        handler_name="h_queue_clear_incomplete",
+        service_path="queue_manager.clear_incomplete_metadata",
+        label_key="btn.clear_incomplete",
+        section="transfers",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_phase_3.py::test_clear_incomplete_removes_unfinished_rows_only",
+    ),
+    ActionSpec(
         action_id="queue.refresh",
         handler_name="h_queue_refresh",
         service_path="queue_manager.snapshot",
