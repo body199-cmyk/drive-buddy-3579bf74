@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier -- bun CI prettier wraps Arabic JSX differently than local npm prettier */
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   AlertCircle,
@@ -39,7 +40,6 @@ import {
   type SandboxState,
   type ScanMode,
 } from "./mockState";
-import "./teleDrive.css";
 
 type SetSandbox = Dispatch<SetStateAction<SandboxState>>;
 
