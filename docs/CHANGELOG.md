@@ -1,5 +1,16 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M25-T01] — 2026-08-13 — استئناف Colab: أسرار + خزنة جلسة تليجرام + keep-alive
+
+- **المشكلة:** موت جلسة Colab يمسح `/content`. المستخدم كان يعيد كتابة API ويعيد OTP ويربط Drive من الصفر. خلية الواجهة وحدها لا تكفي على VM فارغ.
+- **الحل (موافقة المالك، ADR-004):**
+  - الخلية 3 تقرأ `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` من Colab Secrets وتسقط إلى getpass.
+  - بعد أول `AUTHORIZED` يُرفع `telegram.session` معمّى إلى `TeleDrive_AppData/td_telegram.session.vault`. الخلية 4 تستعيده قبل `set_credentials`. Logout يمسح البلوب.
+  - Drive يبقى native Colab (كلك واحدة عادةً). لا `drive_token.json`.
+  - keep-alive في الخلية 4: نبض دقيقتين + نقرة Connect. لا يخلّد الجلسة.
+- **سبع خلايا كما هي.** ترتيب 4: Drive → vault → Telegram → launch → keepalive.
+- **الحالة الصادقة:** Code-complete candidate + Fake-tested. الإثبات الحي بيد المالك. التاج المنشور لن يتحدث حتى يعيد المالك تشغيل Publish (#27).
+
 ## [M24-POST-MERGE-P1 MERGED] — 2026-08-12 — PR #42 مدموج + فجوة نشر Colab
 
 - **دمج:** PR [#42](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/42) → main = `71d092822d9022aa9daebd869616cde6ce4c028d` في 2026-08-12T22:21:27Z. CI على الـPR: Frontend PASS + Python PASS.

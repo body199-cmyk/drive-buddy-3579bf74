@@ -77,6 +77,10 @@ LOG_PATH = LOGS_DIR / "teledrive.log"
 TELEGRAM_SESSION = SESSION_DIR / "telegram.session"
 
 # No Drive token file: Colab-native auth only (Constitution Section 6).
+# Owner-authorized session resume (ADR-004): an obfuscated Telethon session
+# blob may be stored under Drive AppData. Never a raw api_hash / phone / OTP.
+SESSION_VAULT_NAME = "td_telegram.session.vault"
+SESSION_VAULT_MAX_BYTES = 8 * 1024 * 1024
 
 DRIVE_APPDATA_FOLDER = "TeleDrive_AppData"
 

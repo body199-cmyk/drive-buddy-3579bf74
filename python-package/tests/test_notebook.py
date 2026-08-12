@@ -108,6 +108,24 @@ def test_cell_4_is_non_blocking_so_cells_5_to_7_stay_runnable():
     assert "non-blocking" in cell4
 
 
+def test_cell_3_prefers_colab_secrets_then_hidden_prompt():
+    cell3 = notebook_cells.CELLS[2]["code"]
+    assert "from google.colab import userdata" in cell3
+    assert "TELEGRAM_API_ID" in cell3
+    assert "TELEGRAM_API_HASH" in cell3
+    assert "getpass.getpass" in cell3
+    assert "drive_token" not in cell3
+
+
+def test_cell_4_restores_session_vault_before_credentials_and_starts_keepalive():
+    cell4 = notebook_cells.CELLS[3]["code"]
+    adopt = cell4.index("ctx.drive_auth.adopt_service")
+    restore = cell4.index("session_vault.restore_from_context")
+    creds = cell4.index("ctx.telegram_auth.set_credentials")
+    keep = cell4.index("session_vault.start_keepalive")
+    assert adopt < restore < creds < keep
+
+
 def test_requirements_lock_is_the_only_dependency_source():
     assert notebook_cells.hardcoded_pins_in_cells() == [], (
         "notebook cells must not duplicate versions; edit requirements.lock instead"

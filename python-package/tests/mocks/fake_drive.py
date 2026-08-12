@@ -70,15 +70,25 @@ class FakeDrive:
         from teledrive.drive_client import verify_metadata
         return verify_metadata(self.get_file(file_id), expected_size, parent_id, source_key)
 
-    def upload_bytes(self, name, data, parent_id):
+    def upload_bytes(self, name, data, parent_id, mime_type="application/json"):
         if self.fail_checkpoint and name.startswith("teledrive_checkpoint_"):
             raise RuntimeError("simulated checkpoint upload failure")
         if name.startswith("teledrive_checkpoint_"):
             self.checkpoints.append(name)
         fid = f"json_{uuid.uuid4().hex[:8]}"
         self.files[fid] = {"name": name, "size": len(data), "parent": parent_id,
-                           "appProperties": {}, "_bytes": data}
+                           "appProperties": {}, "_bytes": data,
+                           "mime_type": mime_type}
         return fid
+
+    def delete_file(self, file_id):
+        self.files.pop(file_id, None)
+
+    def upsert_bytes(self, name, data, parent_id, mime_type="application/octet-stream"):
+        for fid, meta in list(self.files.items()):
+            if meta.get("name") == name and meta.get("parent") == parent_id:
+                self.delete_file(fid)
+        return self.upload_bytes(name, data, parent_id, mime_type=mime_type)
 
     def download_bytes(self, file_id):
         return self.files[file_id].get("_bytes", b"")

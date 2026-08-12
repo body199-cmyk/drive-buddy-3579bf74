@@ -1,7 +1,10 @@
-"""Telegram authentication state machine (Constitution Section 5).
+"""Telegram authentication state machine (Constitution Section 5 + ADR-004).
 
-Credentials live in protected memory only. Nothing here is persisted, logged, or
-checkpointed. Every coroutine runs on the one shared AsyncRuntime loop.
+api_id / api_hash / phone / OTP / 2FA stay in protected memory. They are never
+logged or checkpointed. After AUTHORIZED, the local Telethon session file may
+be copied (obfuscated) to Drive AppData so a new Colab VM can resume without
+OTP — owner-authorized by ADR-004. Logout deletes that blob.
+Every coroutine runs on the one shared AsyncRuntime loop.
 """
 from __future__ import annotations
 
@@ -128,7 +131,9 @@ class TelegramAuth:
             self._run(self.client.connect())
             if self._run(self.client.is_authorized()):
                 self.account_label = self._describe_account()
+                self.ctx.auth.set_telegram(self.client, self.account_label)
                 self._set_state(AUTHORIZED, "existing session")
+                self._persist_session()
             else:
                 self._set_state(READY_FOR_PHONE, "credentials accepted")
             return self.status()
@@ -286,10 +291,30 @@ class TelegramAuth:
         self.ctx.auth.set_telegram(self.client, self.account_label)
         self._set_state(AUTHORIZED, "sign_in ok")
         db.add_event("", "auth.telegram", "authorized", {"account": self.account_label})
+        self._persist_session()
         return self.status()
 
     def _describe_account(self) -> str:
-        return mask_phone(self._phone or "")
+        if self._phone:
+            return mask_phone(self._phone)
+        return "saved-session"
+
+    def _persist_session(self) -> None:
+        """Best-effort Drive vault write. Never raises into the auth flow."""
+        try:
+            from . import session_vault
+
+            session_vault.persist_from_context(self.ctx, secret=self._api_hash or "")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("session vault persist skipped: %s", type(exc).__name__)
+
+    def _wipe_session(self) -> None:
+        try:
+            from . import session_vault
+
+            session_vault.wipe_from_context(self.ctx)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("session vault wipe skipped: %s", type(exc).__name__)
 
     def logout(self) -> TelegramStatus:
         with self._lock:
@@ -304,6 +329,7 @@ class TelegramAuth:
             self._phone_code_hash = None
             self._last_code_sent_at = None
             self.account_label = ""
+            self._wipe_session()
             self._set_state(DISCONNECTED, "logout")
             return self.status()
 
