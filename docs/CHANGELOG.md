@@ -1,5 +1,11 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-POST-MERGE-P1 MERGED] — 2026-08-12 — PR #42 مدموج + فجوة نشر Colab
+
+- **دمج:** PR [#42](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/42) → main = `71d092822d9022aa9daebd869616cde6ce4c028d` في 2026-08-12T22:21:27Z. CI على الـPR: Frontend PASS + Python PASS.
+- **فجوة Colab الحرجة:** التاج `pkg-2026.08.09-m15t07` ما زال `target=33a7767` (قبل M24) — Cell 1 **لن** تحصل على React bridge ولا P1 حتى يعيد المالك تشغيل workflow `Publish current TeleDrive package` على `main` (الوكيل محظور 403 — KNOWN_ISSUES #27).
+- **الوقت المتوقع بعد النشر:** Cell 1 تحديث ~1–3 دقائق · Cells 2–4 إقلاع ~2–5 · مصادقة Telegram/Drive ~5–15 · analyze+enqueue+نقل ملف واحد ~5–20 · لقطات+shutdown ~5 · **الإجمالي العملي ~20–45 دقيقة** بيد المالك (بدون انتظار FloodWait).
+
 ## [M24-POST-MERGE-P1] — 2026-08-12 — إصلاحات null safety + ترتيب الطلبات بعد دمج PR #40/#41
 
 - **الأساس:** `origin/main = 504ec5e` (بعد دمج PR #40 `bbea9bf` + PR #41 docs). الفرع `arena/019ff805-drive-buddy-3579bf74`.
