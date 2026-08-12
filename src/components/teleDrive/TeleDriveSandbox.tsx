@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
@@ -84,7 +84,8 @@ function SectionTitle({
 }
 
 function StateChip({ label, status, icon }: { label: string; status: string; icon: ReactNode }) {
-  const connected = ["authorized", "connected", "running"].includes(status.toLowerCase());
+  const normalized = (status ?? "").toLowerCase();
+  const connected = ["authorized", "connected", "running"].includes(normalized);
   return (
     <span className={`td-chip ${connected ? "is-connected td-status-live" : ""}`}>
       <span className="td-chip-dot" aria-hidden="true" />
@@ -159,18 +160,18 @@ function TopBar({
       <div className="td-chips">
         <StateChip
           label={localize(language, "تيليجرام", "Telegram")}
-          status={state?.telegram.status ?? "—"}
+          status={state?.telegram?.status ?? "—"}
           icon={<UserRound size={13} aria-hidden="true" />}
         />
         <StateChip
           label={localize(language, "درايف", "Drive")}
-          status={state?.drive.status ?? "—"}
+          status={state?.drive?.status ?? "—"}
           icon={<Cloud size={13} aria-hidden="true" />}
         />
-        <span className={`td-chip ${state?.folder.id ? "is-connected" : ""}`}>
+        <span className={`td-chip ${state?.folder?.id ? "is-connected" : ""}`}>
           <span className="td-chip-dot" aria-hidden="true" />
           <Folder size={13} aria-hidden="true" />
-          {localize(language, "المجلد", "Folder")}: {state?.folder.name ?? "—"}
+          {localize(language, "المجلد", "Folder")}: {state?.folder?.name ?? "—"}
         </span>
         <StateChip
           label={localize(language, "المحرك", "Engine")}
@@ -223,8 +224,8 @@ function ConnectionSection({
             <UserRound size={18} aria-hidden="true" />
             <div>
               <h2>Telegram</h2>
-              <p>{state?.telegram.status ?? "—"}</p>
-              {state?.telegram.accountLabel ? <small>{state.telegram.accountLabel}</small> : null}
+              <p>{state?.telegram?.status ?? "—"}</p>
+              {state?.telegram?.accountLabel ? <small>{state.telegram.accountLabel}</small> : null}
             </div>
           </div>
           <div className="td-stack">
@@ -268,8 +269,8 @@ function ConnectionSection({
             <Cloud size={18} aria-hidden="true" />
             <div>
               <h2>Google Drive</h2>
-              <p>{state?.drive.status ?? "—"}</p>
-              {state?.drive.accountLabel ? <small>{state.drive.accountLabel}</small> : null}
+              <p>{state?.drive?.status ?? "—"}</p>
+              {state?.drive?.accountLabel ? <small>{state.drive.accountLabel}</small> : null}
             </div>
           </div>
           <div className="td-stack">
@@ -303,11 +304,11 @@ function ConnectionSection({
             <div className="td-quota-line">
               <span>
                 {localize(language, "الاستخدام", "Usage")}:{" "}
-                {formatBytes(state?.drive.quotaUsed ?? null)}
+                {formatBytes(state?.drive?.quotaUsed ?? null)}
               </span>
               <span>
                 {localize(language, "السعة", "Limit")}:{" "}
-                {formatBytes(state?.drive.quotaLimit ?? null)}
+                {formatBytes(state?.drive?.quotaLimit ?? null)}
               </span>
             </div>
             <label className="td-label" htmlFor="td-parent-id">
@@ -323,7 +324,7 @@ function ConnectionSection({
               actionId="drive.list_folders"
               busyAction={busyAction}
               live={live}
-              disabled={state?.drive.status.toLowerCase() !== "connected"}
+              disabled={(state?.drive?.status?.toLowerCase?.() ?? "") !== "connected"}
               onClick={() => void listFolders()}
             >
               <RefreshCw size={15} aria-hidden="true" />
@@ -690,8 +691,10 @@ function AnalyzeSection({
                     </td>
                     <td data-label="Group">{candidate.groupLabel ?? "—"}</td>
                     <td data-label="Status">
-                      <span className={`td-status td-status-${candidate.status.toLowerCase()}`}>
-                        {candidate.status}
+                      <span
+                        className={`td-status td-status-${(candidate.status ?? "").toLowerCase()}`}
+                      >
+                        {candidate.status ?? "—"}
                       </span>
                     </td>
                   </tr>
@@ -809,7 +812,7 @@ function QueueSection({
       <div className="td-destination-banner">
         <Folder size={15} aria-hidden="true" />
         {localize(language, "مجلد الوجهة", "Destination")}:{" "}
-        <strong>{state?.folder.name ?? "—"}</strong>
+        <strong>{state?.folder?.name ?? "—"}</strong>
       </div>
       {!rows.length ? (
         <div className="td-empty-state">
@@ -835,15 +838,19 @@ function QueueSection({
                     <small>{row.id}</small>
                   </td>
                   <td data-label="Status">
-                    <span className={`td-status td-status-${row.status.toLowerCase()}`}>
-                      {row.status}
+                    <span className={`td-status td-status-${(row.status ?? "").toLowerCase()}`}>
+                      {row.status ?? "—"}
                     </span>
                   </td>
                   <td data-label="Progress">
                     <div className="td-progress">
-                      <span style={{ width: `${Math.max(0, Math.min(100, row.progress))}%` }} />
+                      <span
+                        style={{
+                          width: `${Math.max(0, Math.min(100, Number(row.progress) || 0))}%`,
+                        }}
+                      />
                     </div>
-                    <small>{row.progress.toFixed(0)}%</small>
+                    <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
                   </td>
                   <td data-label="Size">{formatBytes(row.sizeBytes)}</td>
                   <td data-label="Controls">
@@ -993,7 +1000,7 @@ function SettingsSection({
 }) {
   const [concurrency, setConcurrency] = useState(state?.concurrency ?? 2);
   useEffect(() => {
-    if (state) setConcurrency(state.concurrency);
+    if (state?.concurrency != null) setConcurrency(state.concurrency);
   }, [state]);
   return (
     <section className="td-page" aria-labelledby="settings-title">
@@ -1151,6 +1158,8 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<Page>("connection");
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
+  const latestRequest = useRef(new Map<string, string>());
   const live = bridge.isLive();
   const language = liveState?.language ?? "ar";
 
@@ -1161,14 +1170,18 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       setNotice({ kind: "warning", text: "Backend bridge unavailable" });
       return null;
     }
+    const requestId = newRequestId();
+    latestRequest.current.set(actionId, requestId);
     setBusyAction(actionId);
     try {
       const response = await bridge.request<T>({
-        requestId: newRequestId(),
+        requestId,
         actionId,
         payload,
         language,
       });
+      // Stale response: a newer request for the same action already owns the UI.
+      if (latestRequest.current.get(actionId) !== requestId) return null;
       if (response.state) setLiveState(response.state);
       if (response.status !== "ok") {
         setNotice({
@@ -1188,6 +1201,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       });
       return response;
     } catch (error) {
+      if (latestRequest.current.get(actionId) !== requestId) return null;
       setNotice({
         kind: "error",
         text:
@@ -1197,7 +1211,9 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       });
       return null;
     } finally {
-      setBusyAction(null);
+      if (latestRequest.current.get(actionId) === requestId) {
+        setBusyAction(null);
+      }
     }
   };
 

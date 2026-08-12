@@ -282,3 +282,28 @@ test("18 — bundled React panel uses Gradio value/submit transport only", async
   assert.ok(asset.length > 10_000);
   assert.deepEqual([...asset.subarray(0, 2)], [0x1f, 0x8b]);
 });
+
+test("19 — nested LiveUiState fields use optional chaining (null safety)", async () => {
+  const component = await readFile(paths.component, "utf8");
+  // Nested optional access — never crash when telegram/drive/folder is missing.
+  assert.match(component, /state\?\.telegram\?\.status/);
+  assert.match(component, /state\?\.drive\?\.status/);
+  assert.match(component, /state\?\.folder\?\.name/);
+  assert.match(component, /state\?\.folder\?\.id/);
+  assert.match(component, /state\?\.drive\?\.quotaUsed/);
+  assert.match(component, /state\?\.drive\?\.status\?\.toLowerCase/);
+  // Forbidden: one-level optional then bare nested property (throws if parent is undefined).
+  assert.doesNotMatch(component, /state\?\.telegram\.[a-zA-Z]/);
+  assert.doesNotMatch(component, /state\?\.drive\.[a-zA-Z]/);
+  assert.doesNotMatch(component, /state\?\.folder\.[a-zA-Z]/);
+});
+
+test("20 — run() drops stale responses via latestRequest Map", async () => {
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /latestRequest\s*=\s*useRef\(new Map/);
+  assert.match(component, /latestRequest\.current\.set\(actionId,\s*requestId\)/);
+  assert.match(component, /latestRequest\.current\.get\(actionId\)\s*!==\s*requestId/);
+  // Success notice only after status === "ok" (still present) and after stale guard.
+  assert.match(component, /if \(response\.status !== "ok"\)/);
+  assert.match(component, /kind:\s*"success"/);
+});
