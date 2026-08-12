@@ -47,19 +47,24 @@ CELLS_JSON = Path(__file__).resolve().parent / "colab_cells.json"
 
 HEADER_MARKDOWN = f"""# {TITLE}
 
-Run the cells top to bottom, once, in a single Colab runtime.
+Run the cells top to bottom after every **new** Colab VM (cells 1–4).
+A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 
-* Google Drive auth is **native Colab** — no desktop OAuth JSON upload and
-  no pasted authorization code anywhere.
-* Telegram API ID / API Hash are typed into a hidden prompt and are never
-  printed, logged, snapshotted or packaged.
-* The interface runs **locally in this runtime** (`share=False`). No public
-  tunnel is created unless you deliberately opt in.
-* The database and temporary files live on local `/content`; only the finished
-  uploads go to Google Drive.
+* Store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` once in Colab Secrets
+  (left sidebar key icon). Cell 3 reads them; it only prompts if a secret
+  is missing. Secrets stay in your Google account, never in this notebook.
+* After the first successful Telegram login, an obfuscated session file is
+  saved to Drive `TeleDrive_AppData`. The next VM restores it so you skip
+  phone / OTP / 2FA. Logout deletes that file.
+* Google Drive auth is **native Colab** — usually one click on a new VM.
+  No desktop OAuth JSON and no pasted authorization code.
+* Cell 4 starts a keep-alive (2-min heartbeat + Connect click). It delays
+  idle disconnect; it does **not** beat the 12-hour free cap or a closed tab.
+* The interface runs **locally in this runtime** (`share=False`).
+* The database and temporary files live on local `/content`; only finished
+  uploads and the session vault go to Google Drive.
 * Cell 1 first runs an integrity-verified update check against the pinned
-  release manifest (digest-checked download, atomic swap, refused while the
-  runtime is loaded). The tested Drive ZIP remains the fallback.
+  release manifest. The tested Drive ZIP remains the fallback.
 """
 
 CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restore + pinned dependencies ====
@@ -554,13 +559,40 @@ print("free bytes on local disk:", ctx.bootstrap_info["free_bytes"])
 print("journal mode:", ctx.db.journal_mode())
 '''
 
-CELL_3 = '''# ==== Cell 3: credentials — hidden Telegram input + native Colab Drive auth ====
-import getpass
+CELL_3 = '''# ==== Cell 3: credentials — Colab Secrets (preferred) + native Drive auth ====
+# Add these once in the left-sidebar key icon (they survive every new VM):
+#   TELEGRAM_API_ID
+#   TELEGRAM_API_HASH
+# Missing secrets fall back to a hidden prompt for THIS runtime only.
+# Values are never printed, logged, snapshotted or packaged.
 
-# Telegram: hidden input, never echoed, never written to logs or snapshots.
-api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
-api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
+api_id = ""
+api_hash = ""
+cred_source = "hidden prompt"
+try:
+    from google.colab import userdata as _td_userdata
+    try:
+        api_id = str(_td_userdata.get("TELEGRAM_API_ID") or "").strip()
+    except Exception:
+        api_id = ""
+    try:
+        api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
+    except Exception:
+        api_hash = ""
+    if api_id.isdigit() and api_hash:
+        cred_source = "Colab Secrets"
+except Exception:
+    pass
+
+if not (api_id.isdigit() and api_hash):
+    import getpass
+    if not api_id.isdigit():
+        api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
+    if not api_hash:
+        api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
+
 assert api_id.isdigit() and api_hash, "API ID must be numeric and API Hash non-empty"
+print("telegram credentials: loaded from", cred_source)
 
 # Google Drive: native Colab credentials only. No desktop OAuth JSON upload,
 # no pasted authorization code, no persisted Drive token file.
@@ -581,13 +613,20 @@ print("drive verified for:", about["user"].get("emailAddress", "(hidden)"))
 CELL_4 = '''# ==== Cell 4: inject into the ONE context and launch the interface ====
 # No second context, no second event loop, no second Telegram client, no second
 # Drive service. Everything below reuses the objects created in cells 2 and 3.
+# Drive is adopted FIRST so the session vault can restore telegram.session
+# before set_credentials; an existing session skips phone / OTP / 2FA.
 from teledrive.app import launch
-
-ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
-del api_id, api_hash
+from teledrive import session_vault
 
 ctx.drive_auth.adopt_service(drive_service)           # already verified above
 print("drive status:", ctx.drive_auth.status().state)
+
+restored = session_vault.restore_from_context(ctx, secret=api_hash)
+print("telegram session vault:", "restored" if restored else "empty (first login or new account)")
+
+ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
+del api_id, api_hash
+print("telegram status:", ctx.telegram_auth.status().state)
 
 ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resume
 
@@ -603,6 +642,8 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 # maintenance) stay runnable while the interface keeps serving. The launch
 # handle lives on ctx.ui and is closed by ctx.shutdown() in cell 7.
 launch(ctx, share=False, inline=False, blocking=False)
+session_vault.start_keepalive()
+print("keep-alive started (2-min heartbeat + Connect click); a closed tab can still idle-out")
 print("ui running (non-blocking); cells 5-7 can be run while it serves")
 '''
 
@@ -648,7 +689,7 @@ print("runtime closed")
 CELLS: tuple[dict[str, str], ...] = (
     {"title": "Verify/update the package, restore and install pinned dependencies", "code": CELL_1},
     {"title": "Bootstrap directories, logging, SQLite migrations and WAL", "code": CELL_2},
-    {"title": "Telegram credentials (hidden) and native Colab Drive auth", "code": CELL_3},
+    {"title": "Telegram credentials (Colab Secrets or hidden) and native Drive auth", "code": CELL_3},
     {"title": "Inject into the one context and launch the UI (share=False)", "code": CELL_4},
     {"title": "Redacted handoff snapshot", "code": CELL_5},
     {"title": "Run the packaged test suite", "code": CELL_6},

@@ -2,44 +2,38 @@
 
 > Latest session only. Historical evidence is under `docs/PHASE_REPORTS/`.
 
-## Session card — M25-T01 queue sessions
+## Session card — M25-T01 session vault (merge)
 
 | Field | Value |
 |---|---|
-| UTC date | 2026-08-12 |
+| UTC date | 2026-08-13 |
 | TASK ID | `M25-T01` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch | `arena/019ff846-drive-buddy-3579bf74` |
-| Base SHA | `0c394a859770844a0526d54f4369923d05385138` |
-| Status | **MERGED INTO MAIN `ce28004` · Code-complete candidate + Fake-tested** — not Colab-ready, not Complete |
-| PR #44 | **MERGED** at 2026-08-12T23:30:45Z → `ce28004fda34943c7224877c5bd3eb5338ed4656` |
-| Launcher | `48/48 ready` |
+| Branch | `arena/019ff850-drive-buddy-3579bf74` |
+| Status | **MERGE IN PROGRESS · Code-complete candidate + Fake-tested** |
+| PR #46 | vault + keepalive — merging after resolving docs conflicts with main |
+| Already on main | PR #44 queue sessions → `ce28004` |
+| Honest | Not Colab-ready. Not Complete. |
 
-## What this session did
+## What the owner asked this session
 
-Owner request (Arabic): leftover old queue rows after Colab Restart block Start; group by session; offer clear-incomplete on Stop.
+بعد انتهاء جلسة التحميل: هل لازم تشغيل الخلايا من 1؟ هل لازم تسجيل تليجرام وربط Drive كل مرة؟ هل ينفع تشغيل خلية الواجهة وحدها؟ هل نطوّل جلسة Colab؟ ثم: ادمج.
 
-1. **Start after Restart:** `start_selected()` with no argument (the Start button) now falls back to every startable Pending/NeedsRetry/Downloaded SQLite row when the in-memory analyze selection is empty. Explicit `start_selected([])` still starts nothing (Phase C contract). This is an explicit click, not auto-resume.
-2. **Clear incomplete:** new ready action `queue.clear_incomplete` deletes unfinished queue ROWS only. Uploaded/Skipped stay. Drive files are never deleted.
-3. **Stop choice:** React Stop opens a confirm: stop only, or stop + clear incomplete. Gradio keeps Stop-only and adds a separate «مسح غير المكتمل» button.
-4. **Session grouping:** live snapshot now carries `chatTitle` + `createdAt`; React groups the queue by channel title + created date.
+## Encoded answers
 
-## Verification
+1. **VM مات:** لازم 1–4. الخلية الأخيرة وحدها مستحيلة.
+2. **نفس الـruntime حي:** لا تعيدي من 1.
+3. **أسرار Colab:** API ID/Hash مرة واحدة في أيقونة المفتاح.
+4. **خزنة الجلسة:** أول OTP فقط. بعدها الملف المعمّى على Drive يكفي.
+5. **Drive:** native `authenticate_user` — غالبًا كلك.
+6. **Keep-alive:** يؤخر الخمول. لا يهزم 12 ساعة ولا التاب المقفل.
 
-- Local: `652 passed` · launcher `48/48` · compileall PASS · notebooks in sync + identical · frontend contracts `22/22` · `tsc --noEmit` PASS · eslint 0 errors (1 pre-existing warning) · bundle rebuilt (`panel.bundle.gz` / `panel.css.gz`, `TeleDriveGradioPanel.mount` verified).
-- Live Colab / Telegram / Drive / transfer: **NOT RUN**.
+## Already on main (other M25-T01)
 
-## Protected files
-
-Zero diff on: notebooks, `notebook_cells.py`, `colab_cells.json`, `telegram_auth.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `requirements.*`, `bun.lock`, `package.json`, `.github/workflows/*`.
-
-`queue_manager.py` was modified on explicit owner instruction (Start/Stop/Clear behavior).
+PR #44: Start يلتقط كل المعلّق بعد Restart، مسح غير المكتمل، تجميع الطابور بالقناة+التاريخ.
 
 ## Next for owner
 
-1. Merge the PR from this branch.
-2. Actions → **Publish current TeleDrive package** on `main` (agent cannot dispatch — KNOWN_ISSUES #27).
-3. Colab: Restart → Cell 1 → 2–4.
-4. In Transfers: **Start** resumes leftover pending, or **Stop → clear incomplete** then enqueue a clean batch.
-
-**Honest status:** `Code-complete candidate / Fake-tested / Colab-ready: NO / Complete: NO`
+1. After merge: Actions → Publish current TeleDrive package on `main` (agent is 403).
+2. Colab Secrets: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`.
+3. Restart → Cells 1–4. First time: Telegram in the UI. Next dead-VM: expect no OTP.

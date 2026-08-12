@@ -8,7 +8,10 @@
 | `SessionPasswordNeededError` | 2FA مفعل | املأ حقل password قبل verify_password |
 | `FloodWaitError` بثوانٍ | حد معدل تيليجرام | TeleDrive يحترم `seconds` تلقائيًا — انتظر |
 | Drive "insufficient storage" | Drive ممتلئ | حرر مساحة أو غيّر حساب |
-| Colab session died mid-transfer | free runtime | أعد 1-4 ثم Recovery من Drive |
+| Colab session died mid-transfer | free runtime | أعد 1–4 (مش الخلية الأخيرة وحدها) ثم Recovery من Drive. إن وُجدت الأسرار + خزنة الجلسة: بلا OTP |
+| الخلية 3 تطلب API ID كل مرة | أسرار Colab غير مضافة أو الاسم غلط | أيقونة المفتاح ← `TELEGRAM_API_ID` و`TELEGRAM_API_HASH` حرفيًا ثم أعد الخلية 3 |
+| بعد VM جديد يطلب كود تليجرام | أول دخول، أو Logout مسح الخزنة، أو api_hash تغيّر | سجّلي مرة من الواجهة؛ بعدها تُحفظ الجلسة في `TeleDrive_AppData` |
+| كولاب فصل رغم keep-alive | تاب مقفول / حد 12 ساعة / سياسة Google | أبقي التاب ظاهرًا؛ Colab Pro أطول؛ لا يوجد تخليد مجاني |
 | OAuth "access blocked" (قديم) | هذا تدفق قديم محظور الآن — الدستور يمنعه | استخدم native Colab auth فقط، لا `client_secret.json` |
 | Upload size mismatch | خلل شبكة نادر | Item يبقى Failed، `.part` محفوظ، إعادة المحاولة آمنة |
 | Duplicate skipped | نفس `source_key` موجود | مقصود — احذف ملف Drive أولًا لإعادة الرفع |

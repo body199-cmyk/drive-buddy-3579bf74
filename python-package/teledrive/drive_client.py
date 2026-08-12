@@ -153,10 +153,50 @@ class DriveService:
             _, done = dl.next_chunk()
         return buf.getvalue()
 
-    def upload_bytes(self, name: str, data: bytes, parent_id: str) -> str:
+    def upload_bytes(
+        self,
+        name: str,
+        data: bytes,
+        parent_id: str,
+        mime_type: str = "application/json",
+    ) -> str:
         assert self.service
         from googleapiclient.http import MediaInMemoryUpload
-        media = MediaInMemoryUpload(data, mimetype="application/json", resumable=False)
+        media = MediaInMemoryUpload(data, mimetype=mime_type, resumable=False)
+        body = {"name": name, "parents": [parent_id]}
+        r = self.service.files().create(body=body, media_body=media, fields="id").execute()
+        return r["id"]
+
+    def delete_file(self, file_id: str) -> None:
+        assert self.service
+        if not file_id:
+            return
+        self.service.files().delete(fileId=file_id).execute()
+
+    def upsert_bytes(
+        self,
+        name: str,
+        data: bytes,
+        parent_id: str,
+        mime_type: str = "application/octet-stream",
+    ) -> str:
+        """Replace the single file of this name in the parent, or create it."""
+        assert self.service
+        from googleapiclient.http import MediaInMemoryUpload
+
+        media = MediaInMemoryUpload(data, mimetype=mime_type, resumable=False)
+        existing = [c for c in self.list_children(parent_id) if c.get("name") == name]
+        if existing:
+            keep = existing[0]["id"]
+            for extra in existing[1:]:
+                try:
+                    self.delete_file(extra["id"])
+                except Exception:
+                    pass
+            r = self.service.files().update(
+                fileId=keep, media_body=media, fields="id"
+            ).execute()
+            return r["id"]
         body = {"name": name, "parents": [parent_id]}
         r = self.service.files().create(body=body, media_body=media, fields="id").execute()
         return r["id"]

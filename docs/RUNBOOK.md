@@ -30,8 +30,9 @@ ctx = bootstrap.run()   # ONE context
 - ينشئ `data/ logs/ temp/ checkpoints/ session/ _quarantine` على local فقط
 - يطبق migrations، يتحقق من WAL، يطبع `schema_version` + `free_bytes` + `journal_mode`
 
-### Cell 3: Credentials (hidden + native Drive)
-- Telegram: `getpass.getpass("API ID")` + `API Hash` — ذاكرة فقط، لا طباعة
+### Cell 3: Credentials (Colab Secrets + native Drive)
+- مرة واحدة: أيقونة المفتاح في Colab ← أضيفي `TELEGRAM_API_ID` و`TELEGRAM_API_HASH`.
+- الخلية تقرأ الأسرار أولًا؛ إن نقص سر تستخدم `getpass` لهذه الجلسة فقط. لا طباعة للقيم.
 - Drive:
 ```python
 from google.colab import auth as colab_auth
@@ -47,13 +48,18 @@ about = drive_service.about().get(fields="user(displayName,emailAddress),storage
 ### Cell 4: Inject + launch UI
 ```python
 from teledrive.app import launch
-ctx.telegram_auth.set_credentials(api_id, api_hash); del api_id, api_hash
+from teledrive import session_vault
 ctx.drive_auth.adopt_service(drive_service)
+session_vault.restore_from_context(ctx, secret=api_hash)
+ctx.telegram_auth.set_credentials(api_id, api_hash); del api_id, api_hash
 ctx.checkpoints.restore_and_reconcile()
-launch(ctx, share=False, inline=True, blocking=False)
+launch(ctx, share=False, inline=False, blocking=False)
+session_vault.start_keepalive()
 ```
+- Drive أولًا ثم استعادة `telegram.session` من `TeleDrive_AppData` إن وُجدت → لا OTP
 - `share=False` لا رابط عام افتراضي
-- `blocking=False` → يمرر `prevent_thread_lock=True` إلى Gradio، الخلية ترجع فورًا، handle على `ctx.ui`
+- `blocking=False` → الخلية ترجع فورًا، handle على `ctx.ui`
+- keep-alive يأخّر فصل الخمول؛ لا يهزم حد 12 ساعة ولا التبويب المغلق
 - `ctx.shutdown()` في Cell 7 يغلق UI handle
 
 ### Cell 5: Handoff redacted
@@ -85,14 +91,15 @@ ctx.shutdown()
 
 ## Recovery بعد قطع Colab
 
-1. أعد الاتصال
-2. أعد تشغيل خلايا 1-4 — session Telegram و Drive service يعاد بناؤه من نفس السياق
-3. `recovery.restore` في UI أو `ctx.checkpoints.restore_and_reconcile()` — يستورد أحدث checkpoint من `TeleDrive_AppData` ويقارن مع Drive (لا auto-resume)
-4. Start من جديد
+1. أعد الاتصال (VM جديد = `/content` فاضي). **لازم** الخلايا 1–4. الخلية الأخيرة وحدها لا تكفي.
+2. إن كانت أسرار Colab محفوظة: الخلية 3 لن تطلب API ID/Hash.
+3. إن سبق وسجّلتِ تليجرام بنجاح: الخلية 4 تستعيد الجلسة من Drive وتتخطى OTP. Drive عادةً كلك واحدة.
+4. `recovery.restore` في UI أو `ctx.checkpoints.restore_and_reconcile()` — يستورد أحدث checkpoint من `TeleDrive_AppData` (لا auto-resume للنقل).
+5. Logout من الواجهة يحذف خزنة الجلسة — المرة التالية تحتاج OTP من جديد.
 
 ## قواعد لا تنثني
 
 - SQLite على local فقط (`config.assert_local_path`)
 - لا حذف أعمى لـ TEMP_DIR — فقط `cleanup_verified_temp()`
 - Cancel/stop لا يحذف ملف Drive أبدًا
-- كل أسرار تبقى في الذاكرة فقط
+- api_id/hash/phone/OTP/2FA لا تُكتب في النوتبوك ولا السجلات. جلسة تليجرام المعمّاة فقط تُحفظ في Drive AppData بموافقة المالك (ADR-004).

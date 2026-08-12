@@ -1,70 +1,53 @@
-# PHASE M25-T01 — queue sessions + start all pending + clear incomplete
+# PHASE M25-T01 — شقّان مستقلان بنفس المعرّف
+
+TASK ID `M25-T01` استُخدم في جلستين متوازيتين. هذا الملف يجمعهما ولا يمحو أيًّا منهما.
+
+---
+
+# أ) خزنة جلسة تليجرام + أسرار Colab + keep-alive
+
+- التاريخ: 2026-08-13
+- الفرع: `arena/019ff850-drive-buddy-3579bf74`
+- الحالة: Code-complete candidate + Fake-tested (ليس Colab-ready)
+
+## الهدف
+
+بعد موت جلسة Colab لا يمكن تشغيل الخلية الأخيرة وحدها. المطلوب تقليل الألم: عدم إعادة كتابة API ID/Hash، وعدم إعادة OTP بعد أول دخول ناجح، وتأخير فصل الخمول.
+
+## ما نُفِّذ
+
+- `teledrive/session_vault.py`: حفظ/استعادة/مسح بلوب معمى + `start_keepalive`.
+- `telegram_auth.py`: حفظ بعد AUTHORIZED، مسح عند logout.
+- `drive_client.py`: `upsert_bytes` / `delete_file` / `mime_type` على `upload_bytes`.
+- الخليتان 3 و4 في المولد (سبع خلايا كما هي).
+- ADR-004 يسجّل تجاوز المالك لقاعدة «الذاكرة فقط».
+
+## ما لم يُثبت
+
+مصادقة تليجرام/Drive حية داخل Colab، واستعادة الخزنة على VM جديد حقيقي.
+
+---
+
+# ب) جلسات الطابور + بدء كل المعلّق + مسح غير المكتمل (مدموج PR #44 → `ce28004`)
 
 ```plain
-TASK ID: M25-T01
 UTC: 2026-08-12
 Base SHA: 0c394a859770844a0526d54f4369923d05385138
 Branch: arena/019ff846-drive-buddy-3579bf74
-Status: Code-complete candidate + Fake-tested; NOT Colab-ready; NOT Complete
+Status: MERGED INTO MAIN ce28004 · Code-complete candidate + Fake-tested
 ```
 
 ## Problem
 
-After a Colab Restart, SQLite still holds leftover queue rows (owner report: 191 pending, 8 uploaded) while the in-memory analyze selection is empty. `queue.start_selected` resolved that empty selection to "start nothing". Pause keeps rows on purpose. Stop stopped workers only.
+After a Colab Restart, SQLite still holds leftover queue rows while the in-memory analyze selection is empty. `queue.start_selected` resolved that empty selection to "start nothing".
 
 ## Changes
 
-### Start
+- Start button (`None`) falls back to every startable Pending/NeedsRetry/Downloaded row. Explicit `[]` still starts nothing.
+- New ready action `queue.clear_incomplete` deletes unfinished SQLite rows only. Drive files are never deleted.
+- React Stop confirm: stop only, or stop + clear incomplete. Gradio keeps a separate button.
+- Live snapshot carries `chatTitle` + `createdAt`; React groups by channel + date.
 
-`QueueManager.selected_pending`:
+## Local gates (queue session)
 
-- explicit id list → hard filter (Phase C: never the whole table)
-- explicit `[]` → start nothing (`test_empty_selection_starts_nothing`)
-- `None` (Start button) → in-memory selection if it matches queue rows, else every startable Pending/NeedsRetry/Downloaded row
-
-This is an explicit Start click after Restart, not auto-resume (Constitution §15).
-
-### Clear incomplete
-
-New ready action `queue.clear_incomplete` → `clear_incomplete_metadata()`.
-
-Deletes unfinished SQLite rows only (`Pending`/`Failed`/`Paused`/`Stopped`/in-flight…). `Uploaded`/`Skipped` stay for `clear_completed`. `delete_item` never touches Drive.
-
-### Stop choice
-
-- React: Stop opens a confirm — stop only, or stop then `queue.clear_incomplete`.
-- Gradio: Stop stays stop-only; new visible button «مسح غير المكتمل».
-
-### Session grouping
-
-`LiveUiState` queue rows now include `chatTitle` and `createdAt`. React `groupQueueSessions` groups by channel title + created date (`YYYY-MM-DD`).
-
-## Proofs
-
-- `tests/test_phase_c.py::test_start_without_ids_falls_back_to_all_pending_after_empty_selection`
-- `tests/test_phase_3.py::test_clear_incomplete_removes_unfinished_rows_only`
-- Frontend contracts 21 (grouping) and 22 (stop confirm + action id)
-
-## Local gates
-
-```plain
-python -m compileall -q teledrive                         PASS
-python -m pytest -q tests                                 652 passed
-python teledrive_launcher.py --check                      48/48 ready
-python -m teledrive.notebook_cells --check                in sync
-cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb    IDENTICAL
-node --test tests/teledrive-sandbox.contract.test.mjs     22/22
-npx tsc --noEmit                                          PASS
-npx eslint (teleDrive + contracts)                        0 errors
-bundle TeleDriveGradioPanel.mount                         verified
-```
-
-## Protected
-
-Untouched: notebooks, `notebook_cells.py`, `colab_cells.json`, `telegram_auth.py`, `transfer_manager.py`, `database.py`, `migrations.py`, `requirements.*`, `bun.lock`, `package.json`, workflows.
-
-`queue_manager.py` changed on explicit owner instruction.
-
-## Honest status
-
-Not Colab-ready. Not Complete. Live Start of leftover pending rows and the Stop dialog must be checked by the owner after republish.
+`652 passed` · launcher `48/48` · notebooks identical · frontend contracts `22/22`.
