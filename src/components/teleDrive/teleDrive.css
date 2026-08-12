@@ -28,9 +28,36 @@
   min-height: 100vh;
   background: var(--td-bg);
   color: var(--td-text);
-  font-family: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
   line-height: 1.55;
+  color-scheme: light;
+}
+
+.td-app[data-theme="dark"] {
+  --td-bg: oklch(19% 0.015 320);
+  --td-surface: oklch(23% 0.018 320);
+  --td-surface-2: oklch(27% 0.02 320);
+  --td-surface-3: oklch(32% 0.022 320);
+  --td-text: oklch(94% 0.01 320);
+  --td-muted: oklch(75% 0.018 320);
+  --td-faint: oklch(63% 0.018 320);
+  --td-line: oklch(36% 0.022 320);
+  --td-line-strong: oklch(46% 0.025 320);
+  --td-primary: oklch(70% 0.13 322);
+  --td-primary-hover: oklch(76% 0.12 322);
+  --td-primary-soft: oklch(32% 0.07 322);
+  --td-primary-ink: oklch(91% 0.05 322);
+  --td-on-primary: oklch(18% 0.025 322);
+  --td-success: oklch(70% 0.12 158);
+  --td-success-soft: oklch(29% 0.045 158);
+  --td-warning: oklch(76% 0.12 72);
+  --td-warning-soft: oklch(31% 0.05 72);
+  --td-danger: oklch(72% 0.16 24);
+  --td-danger-soft: oklch(30% 0.06 24);
+  --shadow-sm: 0 1px 2px oklch(5% 0.01 320 / 0.3);
+  --shadow-md: 0 5px 20px oklch(5% 0.01 320 / 0.4);
+  color-scheme: dark;
 }
 
 .td-app *,
@@ -390,6 +417,11 @@
   color: var(--td-primary-ink);
 }
 
+.td-folder-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .td-notice {
   display: flex;
   align-items: flex-start;
@@ -420,6 +452,37 @@
 .td-notice-error {
   background: var(--td-danger-soft);
   border-color: oklch(86% 0.06 24);
+}
+
+.td-app[data-theme="dark"] .td-otp-panel,
+.td-app[data-theme="dark"] .td-notice-info,
+.td-app[data-theme="dark"] .td-status-new {
+  background: var(--td-surface-2);
+  border-color: var(--td-line-strong);
+  color: var(--td-text);
+}
+
+.td-control-reason {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0;
+  color: var(--td-warning);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.td-control-reason.is-ready {
+  color: var(--td-success);
+}
+
+.td-empty-state {
+  padding: 18px;
+  border: 1px dashed var(--td-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--td-surface-2);
+  color: var(--td-muted);
+  text-align: center;
 }
 
 .td-analysis-line {
@@ -780,6 +843,10 @@
 }
 
 .td-segment button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 36px;
   padding: 0 15px;
   border: 0;

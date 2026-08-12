@@ -11,6 +11,7 @@ import {
   Gauge,
   Info,
   LogOut,
+  Moon,
   Pause,
   Play,
   RefreshCw,
@@ -19,20 +20,35 @@ import {
   Settings,
   ShieldCheck,
   Square,
+  Sun,
   Terminal,
   UploadCloud,
   UserRound,
 } from "lucide-react";
 import {
   DEMO_FOLDERS,
+  MAX_CONCURRENCY,
+  MIN_CONCURRENCY,
+  enqueueBlockReason,
+  formatBytes,
   initialState,
+  isPositiveInteger,
+  isValidCode,
+  isValidPhone,
+  localize,
   mediaChoices,
   modeLabel,
   modes,
   pageLabels,
+  queueMetrics,
   scanHint,
+  setVisibleSelection,
+  startQueuedFiles,
   statusLabel,
+  transferableSelection,
   typeLabel,
+  visibleFiles,
+  type Language,
   type MediaType,
   type MockFile,
   type Notice,
@@ -89,27 +105,34 @@ function StatusChip({
   label,
   connected,
   icon,
+  language,
 }: {
   label: string;
   connected: boolean;
   icon: ReactNode;
+  language: Language;
 }) {
   return (
     <span className={`td-chip ${connected ? "is-connected" : ""}`}>
       <span className="td-chip-dot" aria-hidden="true" />
       {icon}
-      {label}: {connected ? "متصل" : "غير متصل"}
+      {label}: {connected ? localize(language, "متصل", "Connected") : localize(language, "غير متصل", "Disconnected")}
     </span>
   );
 }
 
 function TopBar({ state }: { state: SandboxState }) {
+  const engineLabel = {
+    stopped: localize(state.language, "متوقف", "Stopped"),
+    running: localize(state.language, "يعمل", "Running"),
+    paused: localize(state.language, "متوقف مؤقتًا", "Paused"),
+  }[state.engine];
+
   return (
     <header className="td-topbar">
       <div className="td-brand">
         <span className="td-mark">TD</span>
         <strong>TeleDrive</strong>
-        <small>v4.5.0</small>
       </div>
       <div className="td-prototype">
         <Terminal size={13} aria-hidden="true" />
@@ -117,44 +140,50 @@ function TopBar({ state }: { state: SandboxState }) {
       </div>
       <div className="td-chips">
         <StatusChip
-          label="تيليجرام"
+          label={localize(state.language, "تيليجرام", "Telegram")}
           connected={state.telegramConnected}
           icon={<UserRound size={13} aria-hidden="true" />}
+          language={state.language}
         />
         <StatusChip
-          label="درايف"
+          label={localize(state.language, "درايف", "Drive")}
           connected={state.driveConnected}
           icon={<Cloud size={13} aria-hidden="true" />}
+          language={state.language}
         />
         <span className={`td-chip ${state.folder ? "is-connected" : ""}`}>
           <span className="td-chip-dot" aria-hidden="true" />
           <Folder size={13} aria-hidden="true" />
-          المجلد: {state.folder ?? "غير محدد"}
+          {localize(state.language, "المجلد", "Folder")}: {state.folder ?? localize(state.language, "غير محدد", "Not selected")}
         </span>
         <span className="td-chip">
           <span className="td-chip-dot" aria-hidden="true" />
-          المحرك: محاكاة
+          {localize(state.language, "المحرك", "Engine")}: {engineLabel}
         </span>
       </div>
     </header>
   );
 }
 
-const navItems: Array<{ id: Page; label: string; icon: ReactNode }> = [
-  {
-    id: "connection",
-    label: pageLabels.connection,
-    icon: <UserRound size={15} aria-hidden="true" />,
-  },
-  { id: "analyze", label: pageLabels.analyze, icon: <Search size={15} aria-hidden="true" /> },
-  { id: "queue", label: pageLabels.queue, icon: <UploadCloud size={15} aria-hidden="true" /> },
-  { id: "logs", label: pageLabels.logs, icon: <Terminal size={15} aria-hidden="true" /> },
-  { id: "settings", label: pageLabels.settings, icon: <Settings size={15} aria-hidden="true" /> },
+const navItems: Array<{ id: Page; icon: ReactNode }> = [
+  { id: "connection", icon: <UserRound size={15} aria-hidden="true" /> },
+  { id: "analyze", icon: <Search size={15} aria-hidden="true" /> },
+  { id: "queue", icon: <UploadCloud size={15} aria-hidden="true" /> },
+  { id: "logs", icon: <Terminal size={15} aria-hidden="true" /> },
+  { id: "settings", icon: <Settings size={15} aria-hidden="true" /> },
 ];
 
-function SectionNav({ page, onNavigate }: { page: Page; onNavigate: (page: Page) => void }) {
+function SectionNav({
+  page,
+  language,
+  onNavigate,
+}: {
+  page: Page;
+  language: Language;
+  onNavigate: (page: Page) => void;
+}) {
   return (
-    <nav className="td-nav" aria-label="أقسام TeleDrive">
+    <nav className="td-nav" aria-label={localize(language, "أقسام TeleDrive", "TeleDrive sections")}>
       {navItems.map((item) => (
         <button
           type="button"
@@ -164,7 +193,7 @@ function SectionNav({ page, onNavigate }: { page: Page; onNavigate: (page: Page)
           onClick={() => onNavigate(item.id)}
         >
           {item.icon}
-          {item.label}
+          {pageLabels[item.id][language]}
         </button>
       ))}
     </nav>
@@ -177,20 +206,51 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
   const [codeVisible, setCodeVisible] = useState(false);
 
   const sendCode = () => {
+    if (!isValidPhone(phone)) {
+      setCodeVisible(false);
+      setNotice(setState, {
+        kind: "error",
+        text: localize(
+          state.language,
+          "أدخل رقم هاتف صالحًا من 8 إلى 15 رقمًا قبل إرسال الرمز.",
+          "Enter a valid phone number containing 8 to 15 digits before sending a code.",
+        ),
+      });
+      return;
+    }
     setCodeVisible(true);
     setNotice(setState, {
       kind: "info",
-      text: "محاكاة: تم إظهار خطوة الرمز. لم يُرسل أي رمز حقيقي.",
+      text: localize(
+        state.language,
+        "محاكاة: تم إظهار خطوة الرمز. لم يُرسل أي رمز حقيقي.",
+        "Simulation: the code step is now visible. No real code was sent.",
+      ),
     });
   };
 
   const verifyCode = () => {
+    if (!isValidCode(code)) {
+      setNotice(setState, {
+        kind: "error",
+        text: localize(
+          state.language,
+          "أدخل رمز تحقق صالحًا من 5 أو 6 أرقام.",
+          "Enter a valid 5- or 6-digit verification code.",
+        ),
+      });
+      return;
+    }
     setState((current) => ({
       ...current,
       telegramConnected: true,
       notice: {
         kind: "success",
-        text: "محاكاة: تغيّرت شريحة تيليجرام إلى متصل. لا يوجد جلسة حقيقية.",
+        text: localize(
+          current.language,
+          "محاكاة: تغيّرت شريحة تيليجرام إلى متصل. لا توجد جلسة حقيقية.",
+          "Simulation: Telegram is shown as connected. No real session exists.",
+        ),
       },
     }));
   };
@@ -201,7 +261,14 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
     setState((current) => ({
       ...current,
       telegramConnected: false,
-      notice: { kind: "info", text: "محاكاة: أُعيد تيليجرام إلى غير متصل." },
+      notice: {
+        kind: "info",
+        text: localize(
+          current.language,
+          "محاكاة: أُعيد تيليجرام إلى غير متصل.",
+          "Simulation: Telegram was reset to disconnected.",
+        ),
+      },
     }));
   };
 
@@ -209,19 +276,40 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
     setState((current) => ({
       ...current,
       driveConnected: true,
-      notice: { kind: "success", text: "محاكاة: تغيّرت شريحة درايف إلى متصل. لا يوجد OAuth." },
+      notice: {
+        kind: "success",
+        text: localize(
+          current.language,
+          "محاكاة: تغيّرت شريحة درايف إلى متصل. لا يوجد OAuth.",
+          "Simulation: Drive is shown as connected. No OAuth request was made.",
+        ),
+      },
     }));
   };
 
   const selectFolder = (folder: string) => {
     if (!state.driveConnected) {
-      setNotice(setState, { kind: "warning", text: "اربط Drive تجريبيًا قبل اختيار المجلد." });
+      setNotice(setState, {
+        kind: "warning",
+        text: localize(
+          state.language,
+          "اربط Drive تجريبيًا قبل اختيار المجلد.",
+          "Connect the Drive demo before choosing a folder.",
+        ),
+      });
       return;
     }
     setState((current) => ({
       ...current,
       folder,
-      notice: { kind: "success", text: `محاكاة: تم اختيار المجلد ${folder}.` },
+      notice: {
+        kind: "success",
+        text: localize(
+          current.language,
+          `محاكاة: تم اختيار المجلد ${folder}.`,
+          `Simulation: selected ${folder}.`,
+        ),
+      },
     }));
   };
 
@@ -230,23 +318,29 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
       <SectionTitle
         titleId="connection-title"
         eyebrow="CONNECTION CENTER"
-        title="مركز الاتصال"
-        description="تيليجرام على اليمين ودرايف على اليسار. كل زر هنا يغيّر الحالة المحلية فقط ولا يفتح أي اتصال."
+        title={pageLabels.connection[state.language]}
+        description={localize(
+          state.language,
+          "تيليجرام على اليمين ودرايف على اليسار. كل زر هنا يغيّر الحالة المحلية فقط ولا يفتح أي اتصال.",
+          "Telegram and Drive are local controls. Every action changes this demo only and opens no connection.",
+        )}
       />
       <div className="td-split">
         <article className="td-panel">
           <div className="td-conn-head">
             <UserRound size={18} aria-hidden="true" />
             <div>
-              <h2>تيليجرام</h2>
+              <h2>{localize(state.language, "تيليجرام", "Telegram")}</h2>
               <p>
-                {state.telegramConnected ? "حالة الشريحة: متصل (تجريبي)" : "حالة الشريحة: غير متصل"}
+                {state.telegramConnected
+                  ? localize(state.language, "حالة الشريحة: متصل (تجريبي)", "Status: connected (demo)")
+                  : localize(state.language, "حالة الشريحة: غير متصل", "Status: disconnected")}
               </p>
             </div>
           </div>
           <div className="td-stack">
             <label className="td-label" htmlFor="td-phone">
-              رقم الهاتف
+              {localize(state.language, "رقم الهاتف", "Phone number")}
               <input
                 id="td-phone"
                 className="td-input"
@@ -258,16 +352,16 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
             </label>
             <div className="td-button-row">
               <button type="button" className="td-button td-button-primary" onClick={sendCode}>
-                إرسال الرمز
+                {localize(state.language, "إرسال الرمز", "Send code")}
               </button>
               <button type="button" className="td-button td-button-secondary" onClick={sendCode}>
-                إعادة الإرسال
+                {localize(state.language, "إعادة الإرسال", "Resend")}
               </button>
             </div>
             {codeVisible ? (
               <div className="td-otp-panel">
                 <label className="td-label" htmlFor="td-code">
-                  رمز التحقق
+                  {localize(state.language, "رمز التحقق", "Verification code")}
                   <input
                     id="td-code"
                     className="td-input"
@@ -278,14 +372,14 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
                   />
                 </label>
                 <button type="button" className="td-button td-button-primary" onClick={verifyCode}>
-                  تأكيد الرمز
+                  {localize(state.language, "تأكيد الرمز", "Verify code")}
                 </button>
               </div>
             ) : null}
             <div className="td-button-row">
               <button type="button" className="td-button td-button-danger" onClick={logout}>
                 <LogOut size={15} aria-hidden="true" />
-                تسجيل الخروج
+                {localize(state.language, "تسجيل الخروج", "Log out")}
               </button>
             </div>
           </div>
@@ -296,25 +390,38 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
             <div>
               <h2>Google Drive</h2>
               <p>
-                {state.driveConnected ? "حالة الشريحة: متصل (تجريبي)" : "حالة الشريحة: غير متصل"}
+                {state.driveConnected
+                  ? localize(state.language, "حالة الشريحة: متصل (تجريبي)", "Status: connected (demo)")
+                  : localize(state.language, "حالة الشريحة: غير متصل", "Status: disconnected")}
               </p>
             </div>
           </div>
           <div className="td-stack">
             <div className="td-button-row">
               <button type="button" className="td-button td-button-primary" onClick={connectDrive}>
-                ربط Drive
+                {localize(state.language, "ربط Drive", "Connect Drive")}
               </button>
               <button
                 type="button"
                 className="td-button td-button-secondary"
                 onClick={connectDrive}
               >
-                إعادة الربط
+                {localize(state.language, "إعادة الربط", "Reconnect")}
               </button>
             </div>
             <div>
-              <span className="td-label-text">مجلد الوجهة التجريبي</span>
+              <span className="td-label-text">
+                {localize(state.language, "مجلد الوجهة التجريبي", "Demo destination folder")}
+              </span>
+              {!state.driveConnected ? (
+                <p id="td-folder-gate" className="td-control-reason">
+                  {localize(
+                    state.language,
+                    "اربط Drive التجريبي أولًا لتفعيل اختيار المجلد.",
+                    "Connect the Drive demo first to enable folder selection.",
+                  )}
+                </p>
+              ) : null}
               <div className="td-folder-list" role="list">
                 {DEMO_FOLDERS.map((folder) => (
                   <button
@@ -323,6 +430,7 @@ function ConnectionSection({ state, setState }: { state: SandboxState; setState:
                     className={`td-folder-option ${state.folder === folder ? "is-selected" : ""}`}
                     onClick={() => selectFolder(folder)}
                     disabled={!state.driveConnected}
+                    aria-describedby={!state.driveConnected ? "td-folder-gate" : undefined}
                   >
                     <span>
                       <Folder size={15} aria-hidden="true" /> {folder}
@@ -353,13 +461,28 @@ function AnalyzeSection({
   setState: SetSandbox;
   onNavigate: (page: Page) => void;
 }) {
-  const filteredFiles = state.files.filter(
-    (file) => state.mediaTypes.includes("all") || state.mediaTypes.includes(file.type),
-  );
-  const selectedCount = filteredFiles.filter(
-    (file) => file.selected && file.status !== "quarantined",
-  ).length;
-  const canEnqueue = selectedCount > 0 && Boolean(state.folder);
+  const filteredFiles = visibleFiles(state.files, state.mediaTypes);
+  const selectedCount = transferableSelection(filteredFiles).length;
+  const blockReason = enqueueBlockReason(state.folder, selectedCount);
+  const canEnqueue = blockReason === null;
+  const blockReasonText =
+    blockReason === "folder"
+      ? localize(
+          state.language,
+          "اختر مجلد Drive الوجهة قبل إضافة الملفات للطابور.",
+          "Choose a Drive destination folder before adding files to the queue.",
+        )
+      : blockReason === "selection"
+        ? localize(
+            state.language,
+            "حدد ملفًا ظاهرًا واحدًا على الأقل؛ الملفات المعزولة لا يمكن إضافتها.",
+            "Select at least one visible file; quarantined files cannot be queued.",
+          )
+        : localize(
+            state.language,
+            "جاهز لإضافة الملفات المحددة والظاهرة إلى الطابور.",
+            "Ready to add the selected visible files to the queue.",
+          );
 
   const setMode = (scanMode: ScanMode) => {
     setState((current) => ({ ...current, scanMode }));
@@ -378,7 +501,9 @@ function AnalyzeSection({
     setState((current) => ({
       ...current,
       files: current.files.map((file) =>
-        file.id === id ? { ...file, selected: !file.selected } : file,
+        file.id === id && file.status !== "quarantined"
+          ? { ...file, selected: !file.selected }
+          : file,
       ),
     }));
   };
@@ -386,83 +511,119 @@ function AnalyzeSection({
   const selectAll = () => {
     setState((current) => ({
       ...current,
-      files: current.files.map((file) =>
-        file.status === "quarantined" ? file : { ...file, selected: true },
-      ),
+      files: setVisibleSelection(current.files, current.mediaTypes, true),
     }));
   };
 
   const clearSelection = () => {
     setState((current) => ({
       ...current,
-      files: current.files.map((file) => ({ ...file, selected: false })),
+      files: setVisibleSelection(current.files, current.mediaTypes, false),
     }));
   };
 
   const analyze = () => {
-    if (!state.scanMode) {
-      setNotice(setState, { kind: "error", text: "اختر نوع فحص صريحًا قبل التحليل." });
+    if (!state.sourceLink.trim()) {
+      setNotice(setState, {
+        kind: "error",
+        text: localize(state.language, "أدخل رابط الرسالة أو القناة قبل التحليل.", "Enter a message or channel link before analyzing."),
+      });
       return;
     }
-    if ((state.scanMode === "message" || state.scanMode === "group") && !state.messageId.trim()) {
-      setNotice(setState, { kind: "error", text: "أدخل رقم الرسالة قبل التحليل." });
+    if (
+      (state.scanMode === "message" || state.scanMode === "group") &&
+      !isPositiveInteger(state.messageId)
+    ) {
+      setNotice(setState, {
+        kind: "error",
+        text: localize(state.language, "أدخل رقم رسالة صحيحًا قبل التحليل.", "Enter a valid positive message ID before analyzing."),
+      });
       return;
     }
     if (state.scanMode === "range") {
       const from = Number(state.rangeFrom);
       const to = Number(state.rangeTo);
-      if (!from || !to || from < 1 || to < 1 || to < from || to - from + 1 > 1000) {
+      if (
+        !isPositiveInteger(state.rangeFrom) ||
+        !isPositiveInteger(state.rangeTo) ||
+        to < from ||
+        to - from + 1 > 1000
+      ) {
         setNotice(setState, {
           kind: "error",
-          text: "النطاق غير صالح، يجب أن يكون من 1 إلى 1000 رسالة.",
+          text: localize(
+            state.language,
+            "النطاق غير صالح، ويجب ألا يتجاوز 1000 رسالة.",
+            "The range is invalid or exceeds 1,000 messages.",
+          ),
         });
         return;
       }
     }
-    if (state.scanMode === "latest") {
-      const limit = Number(state.latestLimit);
-      if (!state.latestLimit || limit < 1 || limit > 1000) {
-        setNotice(setState, { kind: "error", text: "عدد الرسائل يجب أن يكون بين 1 و1000." });
-        return;
-      }
+    if (
+      state.scanMode === "latest" &&
+      (!isPositiveInteger(state.latestLimit) || Number(state.latestLimit) > 1000)
+    ) {
+      setNotice(setState, {
+        kind: "error",
+        text: localize(
+          state.language,
+          "عدد الرسائل يجب أن يكون بين 1 و1000.",
+          "The message count must be between 1 and 1,000.",
+        ),
+      });
+      return;
     }
     setState((current) => ({
       ...current,
       analyzed: true,
       notice: {
         kind: "success",
-        text: `محاكاة: ظهرت نتائج التحليل بنمط «${modeLabel(current.scanMode)}»، لم تتم إضافة أي ملف للطابور.`,
+        text: localize(
+          current.language,
+          `محاكاة: ظهرت نتائج التحليل بنمط «${modeLabel(current.scanMode, current.language)}»، ولم يُضف أي ملف للطابور.`,
+          `Simulation: ${modeLabel(current.scanMode, current.language)} results are visible; nothing was added to the queue.`,
+        ),
       },
     }));
   };
 
   const enqueue = () => {
-    if (!state.folder) {
-      setNotice(setState, {
-        kind: "warning",
-        text: "اختر مجلد Drive الوجهة قبل إضافة الملفات للطابور.",
-      });
+    const chosen = transferableSelection(filteredFiles);
+    const reason = enqueueBlockReason(state.folder, chosen.length);
+    if (reason) {
+      setNotice(setState, { kind: "warning", text: blockReasonText });
       return;
     }
-    const chosen = state.files.filter((file) => file.selected && file.status !== "quarantined");
-    if (!chosen.length) {
-      setNotice(setState, {
-        kind: "warning",
-        text: "حدد ملفًا واحدًا على الأقل قبل الإضافة للطابور.",
-      });
-      return;
-    }
-    setState((current) => ({
-      ...current,
-      queue: chosen.map((file) => ({ ...file, status: "queued" as const })),
-      files: current.files.map((file) =>
-        chosen.some((item) => item.id === file.id) ? { ...file, status: "queued" as const } : file,
-      ),
-      notice: {
-        kind: "success",
-        text: `محاكاة: تمت إضافة ${chosen.length} ملفات إلى الطابور.`,
-      },
-    }));
+    setState((current) => {
+      const existingIds = new Set(current.queue.map((file) => file.id));
+      const additions = chosen
+        .filter((file) => !existingIds.has(file.id))
+        .map((file) => ({
+          ...file,
+          status: "queued" as const,
+          progress: 0,
+          speed: "",
+          remaining: "",
+        }));
+      return {
+        ...current,
+        queue: [...current.queue, ...additions],
+        files: current.files.map((file) =>
+          chosen.some((item) => item.id === file.id)
+            ? { ...file, status: "queued" as const }
+            : file,
+        ),
+        notice: {
+          kind: "success",
+          text: localize(
+            current.language,
+            `محاكاة: أُضيف ${additions.length} ملف للطابور المحلي.`,
+            `Simulation: ${additions.length} file(s) were added to the local queue.`,
+          ),
+        },
+      };
+    });
     onNavigate("queue");
   };
 
@@ -471,8 +632,12 @@ function AnalyzeSection({
       <SectionTitle
         titleId="analyze-title"
         eyebrow="ANALYZE & SELECT"
-        title="التحليل والاختيار"
-        description="اختر نطاق الفحص ونوع الوسائط، ثم راجع الملفات وحدد ما تريد نقله قبل إضافته إلى القائمة."
+        title={pageLabels.analyze[state.language]}
+        description={localize(
+          state.language,
+          "اختر نطاق الفحص ونوع الوسائط، ثم راجع الملفات وحدد ما تريد نقله قبل إضافته إلى القائمة.",
+          "Choose a scan scope and media types, review the results, then select files before queuing them.",
+        )}
       />
       <div className="td-analysis-line td-panel">
         <label className="td-label td-grow" htmlFor="td-link">
@@ -482,6 +647,10 @@ function AnalyzeSection({
             className="td-input"
             placeholder="https://t.me/channel/123"
             autoComplete="off"
+            value={state.sourceLink}
+            onChange={(event) =>
+              setState((current) => ({ ...current, sourceLink: event.target.value }))
+            }
           />
         </label>
         <label className="td-label" htmlFor="td-scan-mode">
@@ -494,7 +663,7 @@ function AnalyzeSection({
           >
             {modes.map((mode) => (
               <option value={mode.value} key={mode.value}>
-                {mode.label}
+                  {mode.label[state.language]}
               </option>
             ))}
           </select>
@@ -567,7 +736,7 @@ function AnalyzeSection({
           ) : null}
           <div className="td-hint">
             <Info size={15} aria-hidden="true" />
-            {scanHint(state.scanMode)}
+            {scanHint(state.scanMode, state.language)}
           </div>
         </div>
         <div className="td-media-filter">
@@ -580,7 +749,7 @@ function AnalyzeSection({
               aria-pressed={state.mediaTypes.includes(choice.value)}
               onClick={() => toggleMedia(choice.value)}
             >
-              {choice.label}
+              {choice.label[state.language]}
             </button>
           ))}
         </div>
@@ -614,12 +783,19 @@ function AnalyzeSection({
                 className="td-button td-button-primary"
                 onClick={enqueue}
                 disabled={!canEnqueue}
+                aria-describedby="td-enqueue-reason"
               >
                 <UploadCloud size={15} aria-hidden="true" />
                 إضافة للطابور
               </button>
             </div>
           </div>
+          <p
+            id="td-enqueue-reason"
+            className={`td-control-reason ${canEnqueue ? "is-ready" : ""}`}
+          >
+            {blockReasonText}
+          </p>
           <div className="td-table-wrap">
             <table className="td-table">
               <thead>
@@ -650,7 +826,9 @@ function AnalyzeSection({
                       <strong>{file.name}</strong>
                       <small>{file.meta}</small>
                     </td>
-                    <td data-label="النوع">{typeLabel(file.type)}</td>
+                    <td data-label={localize(state.language, "النوع", "Type")}>
+                      {typeLabel(file.type, state.language)}
+                    </td>
                     <td className="td-number" data-label="الحجم">
                       {file.size}
                     </td>
@@ -659,7 +837,7 @@ function AnalyzeSection({
                     </td>
                     <td data-label="الحالة">
                       <span className={`td-status td-status-${file.status}`}>
-                        {statusLabel(file.status)}
+                        {statusLabel(file.status, state.language)}
                       </span>
                     </td>
                   </tr>
@@ -685,29 +863,39 @@ function AnalyzeSection({
 }
 
 function QueueSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
-  const rows: MockFile[] = state.queue.length ? state.queue : state.files.slice(0, 4);
-  const runningCount = state.engine === "running" ? Math.min(2, state.queue.length) : 0;
+  const rows: MockFile[] = state.queue;
+  const metrics = queueMetrics(state.queue);
 
   const start = () => {
     if (!state.queue.length) {
-      setNotice(setState, { kind: "warning", text: "الطابور فارغ." });
+      setNotice(setState, {
+        kind: "warning",
+        text: localize(state.language, "الطابور فارغ.", "The queue is empty."),
+      });
       return;
     }
     if (!state.folder) {
-      setNotice(setState, { kind: "warning", text: "حدد مجلد الوجهة قبل البدء." });
+      setNotice(setState, {
+        kind: "warning",
+        text: localize(
+          state.language,
+          "حدد مجلد الوجهة قبل البدء.",
+          "Choose a destination folder before starting.",
+        ),
+      });
       return;
     }
     setState((current) => ({
       ...current,
       engine: "running",
-      queue: current.queue.map((file, index) =>
-        index < 2
-          ? { ...file, status: "running", progress: 68, speed: "14.2 MB/s", remaining: "0:34" }
-          : file,
-      ),
+      queue: startQueuedFiles(current.queue, current.concurrency),
       notice: {
         kind: "info",
-        text: "محاكاة محلية، لم يتم نقل أي ملف. لم يتم تنزيل أو رفع أي ملف حقيقي.",
+        text: localize(
+          current.language,
+          `محاكاة محلية بتزامن ${current.concurrency}، ولم يُنقل أي ملف حقيقي.`,
+          `Local simulation with concurrency ${current.concurrency}; no real file was transferred.`,
+        ),
       },
     }));
   };
@@ -716,21 +904,40 @@ function QueueSection({ state, setState }: { state: SandboxState; setState: SetS
     setState((current) => ({
       ...current,
       engine: "paused",
-      notice: { kind: "info", text: "محاكاة: تم الإيقاف المؤقت." },
+      notice: {
+        kind: "info",
+        text: localize(current.language, "محاكاة: تم الإيقاف المؤقت.", "Simulation paused."),
+      },
     }));
 
   const resume = () =>
     setState((current) => ({
       ...current,
       engine: "running",
-      notice: { kind: "info", text: "محاكاة: تم الاستئناف. لا يوجد نقل حقيقي." },
+      queue: startQueuedFiles(current.queue, current.concurrency),
+      notice: {
+        kind: "info",
+        text: localize(
+          current.language,
+          "محاكاة: تم الاستئناف. لا يوجد نقل حقيقي.",
+          "Simulation resumed. No real transfer is running.",
+        ),
+      },
     }));
 
   const stop = () =>
     setState((current) => ({
       ...current,
       engine: "stopped",
-      notice: { kind: "info", text: "محاكاة: تم الإيقاف." },
+      queue: current.queue.map((file) =>
+        file.status === "running"
+          ? { ...file, status: "queued" as const, speed: "", remaining: "" }
+          : file,
+      ),
+      notice: {
+        kind: "info",
+        text: localize(current.language, "محاكاة: تم الإيقاف.", "Simulation stopped."),
+      },
     }));
 
   return (
@@ -738,32 +945,36 @@ function QueueSection({ state, setState }: { state: SandboxState; setState: SetS
       <SectionTitle
         titleId="queue-title"
         eyebrow="TRANSFERS"
-        title="التحويلات"
-        description="تنزيل محلي إلى ملف .part ثم رفع قابل للاستئناف. هذه الشاشة تجريبية ولا تنقل ملفات."
+        title={pageLabels.queue[state.language]}
+        description={localize(
+          state.language,
+          "هذه محاكاة لطابور قابل للاستئناف؛ الشاشة التجريبية لا تنزّل أو ترفع ملفات.",
+          "This is a resumable-queue simulation; the sandbox downloads and uploads no files.",
+        )}
       />
       <div className="td-metrics">
         <div>
-          <span>في الطابور</span>
-          <strong>{state.queue.length}</strong>
+          <span>{localize(state.language, "في الانتظار", "Queued")}</span>
+          <strong>{metrics.queued}</strong>
         </div>
         <div>
-          <span>قيد التنفيذ</span>
+          <span>{localize(state.language, "قيد التنفيذ", "Running")}</span>
           <strong>
-            {runningCount}
-            <small> / 100</small>
+            {metrics.running}
+            <small> / {state.concurrency}</small>
           </strong>
         </div>
         <div>
-          <span>مكتمل</span>
-          <strong>37</strong>
+          <span>{localize(state.language, "مكتمل", "Completed")}</span>
+          <strong>{metrics.uploaded}</strong>
         </div>
         <div>
-          <span>فشل</span>
-          <strong>1</strong>
+          <span>{localize(state.language, "فشل", "Failed")}</span>
+          <strong>{metrics.failed}</strong>
         </div>
         <div>
-          <span>المنقول</span>
-          <strong>18.4 GB</strong>
+          <span>{localize(state.language, "المنقول", "Transferred")}</span>
+          <strong>{formatBytes(metrics.transferredBytes)}</strong>
         </div>
       </div>
       <NoticeBar notice={state.notice} />
@@ -795,8 +1006,18 @@ function QueueSection({ state, setState }: { state: SandboxState; setState: SetS
       </div>
       <div className="td-destination-banner">
         <Folder size={15} aria-hidden="true" />
-        مجلد الوجهة: <strong>{state.folder ?? "غير محدد"}</strong>
+        {localize(state.language, "مجلد الوجهة", "Destination folder")}: {" "}
+        <strong>{state.folder ?? localize(state.language, "غير محدد", "Not selected")}</strong>
       </div>
+      {!rows.length ? (
+        <div className="td-empty-state" role="status">
+          {localize(
+            state.language,
+            "الطابور فارغ. حلّل النتائج وحدد الملفات ثم أضفها هنا.",
+            "The queue is empty. Analyze, select files, and add them here.",
+          )}
+        </div>
+      ) : null}
       <div className="td-table-wrap">
         <table className="td-table">
           <thead>
@@ -818,7 +1039,7 @@ function QueueSection({ state, setState }: { state: SandboxState; setState: SetS
                 </td>
                 <td data-label="الحالة">
                   <span className={`td-status td-status-${file.status}`}>
-                    {statusLabel(file.status)}
+                    {statusLabel(file.status, state.language)}
                   </span>
                 </td>
                 <td data-label="التقدم">
@@ -859,7 +1080,7 @@ function QueueSection({ state, setState }: { state: SandboxState; setState: SetS
 const SAMPLE_LOGS = [
   "04:02:11.884  OK    upload.verified id=1aQ9x…kP2 size=4292118",
   "04:02:03.117  INFO  upload.start item=7d2a94 resumable session opened",
-  "04:01:58.402  INFO  download.complete item=7d2a94 local=/content/tmp/7d2a94.part",
+  "04:01:58.402  INFO  download.complete item=7d2a94 local=[redacted]/7d2a94.part",
   "04:01:12.660  WARN  quota.check usage=42.7% remaining=57.3GB",
   "04:00:47.031  ERROR transfer.failed item=7d2a95 reason=size_mismatch",
   "03:59:20.775  INFO  queue.enqueue count=3 concurrency=2",
@@ -876,8 +1097,12 @@ function LogsSection({ state, setState }: { state: SandboxState; setState: SetSa
       <SectionTitle
         titleId="logs-title"
         eyebrow="AUDIT TRAIL"
-        title="السجلات"
-        description="سجلات منقّحة. لا أرقام هواتف ولا رموز ولا توكنات، حتى في التنزيل."
+        title={pageLabels.logs[state.language]}
+        description={localize(
+          state.language,
+          "سجلات عينة منقّحة بلا أرقام هواتف أو رموز أو توكنات أو مسارات تشغيل حقيقية.",
+          "Redacted sample logs with no phone numbers, codes, tokens, or real runtime paths.",
+        )}
       />
       <div className="td-log-toolbar">
         <label className="td-label td-grow" htmlFor="td-log-search">
@@ -929,58 +1154,154 @@ function LogsSection({ state, setState }: { state: SandboxState; setState: SetSa
 }
 
 function SettingsSection({ state, setState }: { state: SandboxState; setState: SetSandbox }) {
-  const [workers, setWorkers] = useState(2);
+  const setLanguage = (language: Language) =>
+    setState((current) => ({
+      ...current,
+      language,
+      notice: {
+        kind: "success",
+        text: localize(
+          language,
+          "تم تغيير اللغة والاتجاه محليًا مع الاحتفاظ بالحالة.",
+          "Language and direction changed locally without resetting state.",
+        ),
+      },
+    }));
 
   return (
     <section className="td-page" aria-labelledby="settings-title">
       <SectionTitle
         titleId="settings-title"
         eyebrow="PREFERENCES"
-        title="الإعدادات والتصدير"
-        description="تجربة شكل الإعدادات فقط. لا يتم حفظ أي تغيير في SQLite من هذه الصفحة."
+        title={pageLabels.settings[state.language]}
+        description={localize(
+          state.language,
+          "إعدادات محلية لهذه الصفحة فقط؛ لا يُحفظ أي تغيير خارج الذاكرة.",
+          "Local settings for this page only; no change is persisted outside memory.",
+        )}
       />
       <NoticeBar notice={state.notice} />
       <div className="td-panel">
         <div className="td-setting-row">
           <div>
-            <h2>الخيوط المتزامنة</h2>
-            <p>القيمة الافتراضية 2، والحد الأقصى 100. فوق 8 يظهر تحذير.</p>
+            <h2>{localize(state.language, "التحويلات المتزامنة", "Concurrent transfers")}</h2>
+            <p>
+              {localize(
+                state.language,
+                "النطاق المحلي من 1 إلى 4، والقيمة الافتراضية 2.",
+                "The local range is 1 to 4, with a default of 2.",
+              )}
+            </p>
           </div>
           <div className="td-setting-control">
-            <strong className="td-big-number">{workers}</strong>
+            <strong className="td-big-number">{state.concurrency}</strong>
             <label className="td-label" htmlFor="td-workers">
               عدد الخيوط
               <input
                 id="td-workers"
                 type="range"
-                min={1}
-                max={100}
-                value={workers}
-                onChange={(event) => setWorkers(Number(event.target.value))}
+                min={MIN_CONCURRENCY}
+                max={MAX_CONCURRENCY}
+                value={state.concurrency}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    concurrency: Number(event.target.value),
+                    notice: {
+                      kind: "info",
+                      text: localize(
+                        current.language,
+                        `محاكاة: التزامن الآن ${event.target.value}.`,
+                        `Simulation: concurrency is now ${event.target.value}.`,
+                      ),
+                    },
+                  }))
+                }
               />
             </label>
             <div className="td-range-labels">
-              <span>1</span>
-              <span>100</span>
+              <span>{MIN_CONCURRENCY}</span>
+              <span>{MAX_CONCURRENCY}</span>
             </div>
-            {workers > 8 ? (
-              <p className="td-warn-line">
-                تحذير تجريبي: أكثر من 8 خيوط غير مختبر مقابل ذاكرة Colab.
-              </p>
-            ) : null}
           </div>
         </div>
         <div className="td-setting-row">
           <div>
-            <h2>اللغة</h2>
-            <p>هذه النسخة التجريبية عربية RTL فقط. لا يوجد theme switcher.</p>
+            <h2>{localize(state.language, "اللغة", "Language")}</h2>
+            <p>
+              {localize(
+                state.language,
+                "تبديل محلي بين العربية RTL والإنجليزية LTR من دون تصفير الحالة.",
+                "Switch locally between Arabic RTL and English LTR without resetting state.",
+              )}
+            </p>
           </div>
-          <div className="td-segment">
-            <button type="button" className="is-active">
+          <div className="td-segment" aria-label={localize(state.language, "اللغة", "Language")}>
+            <button
+              type="button"
+              className={state.language === "ar" ? "is-active" : ""}
+              aria-pressed={state.language === "ar"}
+              onClick={() => setLanguage("ar")}
+            >
               العربية
             </button>
-            <button type="button" disabled>
+            <button
+              type="button"
+              className={state.language === "en" ? "is-active" : ""}
+              aria-pressed={state.language === "en"}
+              onClick={() => setLanguage("en")}
+            >
               English
+            </button>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(state.language, "المظهر", "Theme")}</h2>
+            <p>
+              {localize(
+                state.language,
+                "المظهر محلي داخل صفحة التجربة فقط.",
+                "The theme applies only inside this local sandbox.",
+              )}
+            </p>
+          </div>
+          <div className="td-segment" aria-label={localize(state.language, "المظهر", "Theme")}>
+            <button
+              type="button"
+              className={state.theme === "light" ? "is-active" : ""}
+              aria-pressed={state.theme === "light"}
+              onClick={() =>
+                setState((current) => ({
+                  ...current,
+                  theme: "light",
+                  notice: {
+                    kind: "success",
+                    text: localize(current.language, "تم تفعيل المظهر الفاتح محليًا.", "Local light theme enabled."),
+                  },
+                }))
+              }
+            >
+              <Sun size={15} aria-hidden="true" />
+              {localize(state.language, "فاتح", "Light")}
+            </button>
+            <button
+              type="button"
+              className={state.theme === "dark" ? "is-active" : ""}
+              aria-pressed={state.theme === "dark"}
+              onClick={() =>
+                setState((current) => ({
+                  ...current,
+                  theme: "dark",
+                  notice: {
+                    kind: "success",
+                    text: localize(current.language, "تم تفعيل المظهر الداكن محليًا.", "Local dark theme enabled."),
+                  },
+                }))
+              }
+            >
+              <Moon size={15} aria-hidden="true" />
+              {localize(state.language, "داكن", "Dark")}
             </button>
           </div>
         </div>
@@ -1065,17 +1386,29 @@ export default function TeleDriveSandbox() {
   );
 
   return (
-    <div className="td-app" dir="rtl">
+    <div
+      className="td-app"
+      lang={state.language}
+      dir={state.language === "ar" ? "rtl" : "ltr"}
+      data-theme={state.theme}
+    >
       <TopBar state={state} />
       <SectionNav
         page={state.page}
+        language={state.language}
         onNavigate={(page) => setState((current) => ({ ...current, page }))}
       />
       <main className="td-main">
         <div className="td-demo-banner">
           <Gauge size={15} aria-hidden="true" />
-          <strong>نسخة تجريبية محلية</strong>
-          <span>لا يوجد اتصال فعلي، ولا يتم نقل أي ملف.</span>
+          <strong>{localize(state.language, "نسخة تجريبية محلية", "Local UI prototype")}</strong>
+          <span>
+            {localize(
+              state.language,
+              "لا يوجد اتصال فعلي، ولا يتم نقل أي ملف.",
+              "There is no live connection and no file is transferred.",
+            )}
+          </span>
         </div>
         {pages[state.page]}
       </main>
