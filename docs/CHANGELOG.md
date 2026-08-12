@@ -1,5 +1,52 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M20] — 2026-08-12 — واجهة نهارية إجبارية + تتابع منطقي 1→5 + سقف تزامن 100 (ADR-0001)
+
+### Verified (venv حقيقي، مخرجات فعلية — لا سجلات منسوخة)
+- Base SHA = `77e97b789583b07b375f188894a5aca796b03b68` (= رأس `origin/main`، آخر مدموج PR #34). ملف المهمة كان يتوقع `ad3a454`، وهو **ليس** الرأس الحالي؛ النسخة المحلية shallow (`depth=1`) فلا يمكن إثبات علاقة النسب محليًا، و`gh` يرد `401 Bad credentials` فتعذّر الفحص عبر الـAPI. بُني العمل من آخر `main` الفعلي (`77e97b7`) وسُجِّل الانحراف بدل الادّعاء.
+- `python -m compileall -q teledrive` → exit 0
+- `python -m pytest -q tests` → **629 passed** (كان 596؛ +33)
+- `python teledrive_launcher.py --check` → `binding check ok: 46/46 ready actions resolve` (45 + `flow.sync`)
+- `python -m teledrive.notebook_cells --check` → `notebooks are in sync` · `cmp` → متطابقان
+- `python -m teledrive.package_service --build` → `tests passed` · archive OK
+- lint/build: `npx eslint .` → **0 errors** (6 تحذيرات سابقة) · `npx vite build` → **✓ built** (لا `bun` في الساندبوكس؛ نفس البوابتين عبر npm، والتعديل لا يمس أي ملف frontend)
+- خادم Gradio حي داخل الساندبوكس على `0.0.0.0:7860`: الصفحة المُقدَّمة تحوي `--td-bg:#F4F0F5` و`color-scheme: light` و`MutationObserver`.
+
+### M20-T01 — التزامن 100 (ADR-0001)
+- `config.py`: `HARD_CONCURRENCY_CAP = 100`، `CONCURRENCY_MIN`/`DEFAULT_CONCURRENCY`/`CONCURRENCY_WARN_ABOVE = 8`، ومستويان جديدان `turbo=16`/`max=100`.
+- `services.SettingsService`: المدى 1..100، رفض صريح للخارج بدل القصّ الصامت، والنتيجة تحمل `warn` فوق 8.
+- `handlers.h_settings_set_concurrency`: يعرض `n/100` ويُلحق `warn.concurrency_high` فوق 8.
+- `transfer_manager.py` و`queue_manager.py` **لم يُلمسا** — يستوردان الثابت وقت النداء فارتفع سقفهما تلقائيًا.
+
+### M20-T02 — الوضع النهاري الإجباري
+- **جديد** `teledrive/theme.py`: كل متغيرات Gradio معرَّفة تحت `:root` و`.dark`/`body.dark`/`.gradio-container.dark` بـ`!important` + `color-scheme: light`، و`FORCE_LIGHT_JS` يشطب صنف `dark` ويعيد شطبه عبر `MutationObserver`.
+- الحارسان يُسلَّمان عبر `head=`/`js=` في `launch()` — **لا** عبر `gr.HTML`، لأن Gradio يُدرج محتوى المكوّن بـ`innerHTML` فلا يُنفَّذ أي `<script>` بداخله (اكتُشف بتحذير Gradio الحقيقي أثناء الاختبار).
+- `services.DEFAULT_THEME = "light"` مصدرًا واحدًا يقرأه `PreferencesService` و`shell_seed` → **KNOWN_ISSUES #42 مُغلقة**.
+
+### M20-T03 — التتابع المنطقي 1→5
+- **جديد** `flow.py` (`FlowService`/`FlowState`، بلا Gradio) و`ui_flow_view.py` (12 تحديثًا بترتيب `flow_outputs`).
+- `ui.py` **أُعيد بناؤه**: خمس بطاقات مرقّمة رأسية بدل `gr.Tab` المتجاورة. الكشف مشتق من الحالة الحية فقط: لا تظهر 2 قبل (تيليجرام + درايف + مجلد)، ولا 3 قبل نتائج فعلية، ولا 4 قبل تحديد، ولا 5 قبل عناصر في القائمة — وتختفي الخطوات فورًا إذا سقط الاتصال.
+- `ui_binder.py`: `register_sync`/`load_sync` + سلسلة `.then(flow.sync)` بعد كل ربط، وحدث `release` للـslider (كتابة واحدة بدل واحدة لكل بكسل).
+- **أول رسم** يقرأ نفس `FlowService`، فلا فرق بين الصفحة المرسومة من الخادم وأي مزامنة لاحقة.
+- كل `action_id`/معالج/ترتيب مدخلات/عدد مخرجات محفوظ حرفيًا؛ اللوحات الأربع لمجلد Drive وازدواج `export.build_zip` كما هي.
+
+### M20-T04 — البراهين
+- **جديد** `tests/test_ui_contract_proofs.py` (18 برهان ربط) و`tests/test_flow.py` (7 اختبارات).
+- الـ45 إجراءً كانت **أصلًا** `tested=True` ببراهين أقوى من التي افترضها ملف المهمة (كُتب على `ad3a454`)، فلم يكن هناك زر «ميت» يُظهَر؛ أُضيف `flow.sync` فصار الإجمالي 46.
+
+### Changed (اختبارات حُدِّثت بأمانة، بلا حذف ولا skip)
+`test_concurrency` (السقف الجديد) · `test_settings_concurrency` (1..100 + التحذير) · `test_phase_3` (الحد الجديد) · `test_ui_layout_contract` (السلايدر من الثوابت) · `test_theme_switch` + `test_ui_colab_render_contract` (النهاري هو الافتراضي والداكن لا يستطيع الفوز) · `test_analyze_ui_contract` + `test_analyze_ui_modes` (مرساة المصدر صارت `_step_analyze` بدل `gr.Tab`).
+
+### Protected (لم تُلمس)
+`transfer_manager.py` · `queue_manager.py` · `database.py` · `migrations.py` · `drive_auth.py` · `drive_client.py` · `telegram_auth.py` · `telegram_client.py` · `checkpoint_manager.py` · `storage_manager.py` · `async_runtime.py` · `redaction.py` · `tests/mocks/` · النوت‌بوكان · `notebook_cells.py` · `colab_cells.json` · `requirements.*` · `bun.lock` · `package.json` · `.github/` · React/frontend.
+
+### انحرافات (أمانة)
+- الأساس `77e97b7` وليس `ad3a454` المذكور في الملف (تعذّر إثبات النسب: clone بعمق 1 و`gh` بلا صلاحية)، والفرع `arena/019ff3b0-drive-buddy-3579bf74` مثبَّت من المنصة بدل الاسم المقترح في الملف.
+- `services.py` و`handlers.py` و`action_registry.py` و`ui_binder.py` عُدِّلت — ملف المهمة يسمح بذلك صراحةً (قسم «ملفات تُعدَّل») وهي ليست ضمن قائمة المحميات.
+- بأمر المالك بالدمج: `theme.py` أُضيف **بجانب** `ui_theme.py` القائم بدل استبداله، فبقيت لوحتا oklch وربط `settings.set_theme` تعملان، ويعلوهما الحارس النهاري.
+- `export.build_zip` بقي جاهزًا (كان كذلك قبل الجلسة)؛ اختبارات `unready_specs()` لم تنكسر لأنها تستخدم spec وهميًا مُحقَنًا لا `next()` على السجل.
+- **الحالة الصادقة: Code-complete candidate + Fake-tested.** لا `Colab-ready` ولا `Complete` — الإثبات الحي بمتصفح Colab بيد المالك (#43).
+
 ## [M19-T01] — 2026-08-12 — إعادة تصميم واجهة Gradio: خمس مناطق + ثيم oklch نهاري/ليلي + استجابة (طبقة عرض فقط)
 
 ### Verified (from venv `python-package/.venv`, real output — no copied logs)
