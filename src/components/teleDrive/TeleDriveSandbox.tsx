@@ -39,7 +39,6 @@ import {
   type SandboxState,
   type ScanMode,
 } from "./mockState";
-import "./teleDrive.css";
 
 type SetSandbox = Dispatch<SetStateAction<SandboxState>>;
 
