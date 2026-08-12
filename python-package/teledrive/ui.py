@@ -1,13 +1,25 @@
-"""Gradio layout only — TeleDrive graphite shell (M15-T04, restyled in M17-T03).
+"""Gradio layout only — TeleDrive five-zone shell (M19-T01).
 
-Layout rules (Constitution §4 + DOC-37 Part B):
+Layout rules (Constitution §4 + DOC-37 Part B + M19-T01 §5):
 * ui.py is LAYOUT ONLY. No SQL, no business logic, no lambdas, no ad-hoc events.
 * All events go through ``binder.wire(...)`` — zero direct ``.click/.change/.submit``.
 * All colors come from CSS variables in ``ui_theme.py`` — zero hardcoded colors here.
 * Arabic RTL is the default; the language toggle triggers ``gr.render`` re-render.
 * Runtime state (Telegram/Drive/queue/selection) lives on the ApplicationContext,
   not in Gradio state; ``shell_seed`` reads it live so re-render never fabricates
-  values (empty tables stay empty, chips show "غير متصل" until connected).
+  values (empty tables stay empty, chips show «غير متصل» until connected).
+
+M19-T01 §5.1 — the shell is split into FIVE zones behind ONE navigation bar
+(native Gradio tabs, restyled; the old right rail is removed):
+
+  1. Connection Center — live status, Telegram + Google Drive auth, Drive target.
+  2. Analysis & Selection — link, scan mode, filters, candidates, selection, enqueue.
+  3. Transfers — queue controls, live table, per-item controls.
+  4. Logs — refresh, search, download.
+  5. Settings & Export — concurrency, language, theme, recovery, build, Colab cells.
+
+Every action_id, handler and input/output arity is preserved verbatim from the
+previous shell — only the visual organization changes (see ``_bind_actions``).
 """
 from __future__ import annotations
 
@@ -50,15 +62,13 @@ _MEDIA_CHOICES = (
 )
 MEDIA_TYPES = ("photo", "video", "audio", "voice", "document", "animation", "sticker")
 LOG_LEVELS = ("ALL", "INFO", "WARNING", "ERROR", "RECOVERY")
-# Seven right-rail sections, in the order specified by DOC-37 §6.
+# M19-T01 §5.1 — five zones behind one nav bar, in workflow order.
 NAV_SECTIONS: tuple[tuple[str, str], ...] = (
-    ("nav.dashboard",   "dashboard"),
-    ("nav.queue",       "transfers"),
-    ("nav.analyze",     "analyze"),
-    ("nav.connection",  "connection"),
-    ("nav.logs",        "logs"),
-    ("nav.settings",    "settings"),
-    ("nav.export",      "export"),
+    ("nav.connection", "connection"),
+    ("nav.analyze",    "analyze"),
+    ("nav.queue",      "transfers"),
+    ("nav.logs",       "logs"),
+    ("nav.settings",   "settings"),
 )
 
 
@@ -97,7 +107,7 @@ def build(ctx: ApplicationContext | None = None) -> Any:
             visible=False,
         )
         lang_state = gr.State(language)
-        active_tab = gr.State("dashboard")
+        active_tab = gr.State("connection")
 
         # Do not restrict this render to State.change: Gradio's default render
         # trigger performs the initial page-load render as well as re-rendering
@@ -164,9 +174,6 @@ def _render_shell(
     def chip(val: str, state: str = "warn") -> str:
         return _status_chip(val or t("status.disconnected"), state)
 
-    tg_ok = bool(seed.get("telegram_connected"))
-    dr_ok = bool(seed.get("drive_connected"))
-
     with gr.Column(elem_classes=["td-root", direction]):
         # ===== Top status bar (real chips from ctx, styled HTML) =====
         with gr.Row(elem_classes=["td-topbar"]):
@@ -190,27 +197,20 @@ def _render_shell(
                 value=chip(t("dash.engine_colab"), "ok"), show_label=False,
                 elem_classes=["td-chip-host"],
             )
-            lang_btn = binder.button(gr, "settings.toggle_language", variant="secondary")
+            # DOC-39 quick-access: a second build-zip control mirrors the
+            # in-section button (same action_id, intentionally duplicated and
+            # wired) so the package is reachable from anywhere.
             top_zip_btn = binder.button(gr, "export.build_zip", variant="secondary")
 
-        # ===== Shell grid: content + right nav rail =====
+        # ===== Single nav bar: five zones as native Gradio tabs =====
         with gr.Column(elem_id="td-shell"):
             with gr.Column(elem_id="td-content"):
                 with gr.Tabs(elem_classes=["td-tabs"]):
-                    # Dashboard
-                    _dash_refs = _section_dashboard(ctx, binder, seed)
-                    # Transfers
-                    _queue_refs = _section_transfers(ctx, binder, seed)
-                    # Analyze
-                    _analyze_refs = _section_analyze(ctx, binder, seed)
-                    # Connection center
-                    _conn_refs = _section_connection(ctx, binder, seed)
-                    # Logs
-                    _logs_refs = _section_logs(ctx, binder, seed)
-                    # Settings
-                    _set_refs = _section_settings(ctx, binder, seed)
-                    # Export (prominent primary button in-section; top-bar zip is separate)
-                    _export_refs = _section_export(ctx, binder, seed)
+                    _conn_refs = _zone_connection(ctx, binder, seed)
+                    _analyze_refs = _zone_analyze(ctx, binder, seed)
+                    _queue_refs = _zone_transfers(ctx, binder, seed)
+                    _logs_refs = _zone_logs(ctx, binder, seed)
+                    _set_refs = _zone_settings_export(ctx, binder, seed)
 
                 # Gather well-known refs required by contract tests.
                 refs.update(
@@ -227,8 +227,8 @@ def _render_shell(
                     logs_refresh_btn=_logs_refs["logs_refresh_btn"],
                     logs_search_btn=_logs_refs["logs_search_btn"],
                     logs_download_btn=_logs_refs["logs_download_btn"],
-                    dashboard_json=_dash_refs["dashboard_json"],
-                    dashboard_btn=_dash_refs["dash_btn"],
+                    dashboard_json=_conn_refs["dashboard_json"],
+                    dashboard_btn=_conn_refs["dash_btn"],
                     queue_status=_queue_refs["queue_status"],
                     queue_table=_queue_refs["queue_table"],
                     concurrency_slider=_set_refs["concurrency"],
@@ -245,19 +245,19 @@ def _render_shell(
                     password_panel=_conn_refs["password_panel"],
                     telegram_detail=_conn_refs["telegram_detail"],
                     drive_detail=_conn_refs["drive_detail"],
-                    telegram_card=_dash_refs["telegram_card"],
-                    drive_card=_dash_refs["drive_card"],
-                    queue_card=_dash_refs["queue_card"],
-                    zip_message=_export_refs["zip_message"],
-                    zip_file=_export_refs["zip_file"],
-                    colab_cells_box=_export_refs["colab_cells_box"],
-                    build_zip_btn=_export_refs["build_zip_btn"],
-                    colab_cells_btn=_export_refs["colab_cells_btn"],
-                    colab_status=_export_refs["colab_status"],
-                    folder_dash=_dash_refs["folder_picker"],
+                    telegram_card=_conn_refs["telegram_card"],
+                    drive_card=_conn_refs["drive_card"],
+                    queue_card=_conn_refs["queue_card"],
+                    zip_message=_set_refs["zip_message"],
+                    zip_file=_set_refs["zip_file"],
+                    colab_cells_box=_set_refs["colab_cells_box"],
+                    build_zip_btn=_set_refs["build_zip_btn"],
+                    colab_cells_btn=_set_refs["colab_cells_btn"],
+                    colab_status=_set_refs["colab_status"],
+                    folder_dash=_conn_refs["folder_picker"],
                     folder_transfer=_queue_refs["folder_picker"],
                     folder_settings=_set_refs["folder_picker"],
-                    folder_conn=_conn_refs["folder_picker"],
+                    folder_conn=_conn_refs["drive_folder_picker"],
                     selection_preview=_analyze_refs["selection_preview"],
                     range_start=_analyze_refs["range_start"],
                     range_end=_analyze_refs["range_end"],
@@ -265,42 +265,28 @@ def _render_shell(
                     enqueue_btn=_analyze_refs["enqueue_btn"],
                 )
 
-            # ===== Right navigation rail =====
-            with gr.Column(elem_id="td-rail"):
-                rail_buttons: list[Any] = []
-                for idx, (label_key, _tab_key) in enumerate(NAV_SECTIONS, start=1):
-                    b = gr.Button(
-                        f"{idx}. {t(label_key)}",
-                        elem_classes=["td-item"],
-                    )
-                    rail_buttons.append(b)
-                gr.HTML(
-                    f'<div class="td-rail-foot"><span class="td-chip" data-state="ok">'
-                    f'<span class="td-ltr">{ctx.config.version}</span></span></div>'
-                )
-
-        # ===== Bindings =====
+        # ===== Bindings (every action preserved verbatim) =====
         _bind_actions(
             ctx, binder,
-            dash=_dash_refs, queue=_queue_refs, analyze=_analyze_refs,
-            conn=_conn_refs, logs=_logs_refs, sets=_set_refs,
-            export=_export_refs, lang=lang_state, theme=theme_host,
-            rail_buttons=rail_buttons, active_tab=active_tab,
+            conn=_conn_refs, analyze=_analyze_refs, queue=_queue_refs,
+            logs=_logs_refs, sets=_set_refs,
+            lang=lang_state, theme=theme_host, active_tab=active_tab,
             telegram_chip=telegram_chip, drive_chip=drive_chip,
-            folder_chip=folder_chip,
-            top_zip_btn=top_zip_btn, lang_btn=lang_btn,
+            folder_chip=folder_chip, top_zip_btn=top_zip_btn,
         )
         binder.assert_complete()
 
     return refs
 
 
-# ---------------------------------------------------------------------------
-# Section builders. Each returns the component refs its wiring block needs.
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# Zone builders. Each returns the component refs its wiring block needs.       #
+# The four Drive folder pickers are intentionally duplicated (DOC-39 §4: one   #
+# folder truth mirrored across zones) and stay wired to the same handlers.     #
+# --------------------------------------------------------------------------- #
 
 def _render_folder_picker(ctx, binder, suffix: str, lang: str, open: bool = False) -> dict[str, Any]:
-    """One Drive destination panel reused by dashboard, transfers, settings and connection.
+    """One Drive destination panel reused by connection, transfers and settings.
 
     DOC-39 §4 rules: the panel is ALWAYS visible; when Drive is disconnected
     every control is disabled and the message says to connect first (no fake
@@ -331,8 +317,15 @@ def _render_folder_picker(ctx, binder, suffix: str, lang: str, open: bool = Fals
             "select_btn": select_btn, "current": current, "message": message}
 
 
-def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
-    with gr.Tab(t("nav.dashboard")):
+def _zone_connection(ctx, binder, seed) -> dict[str, Any]:
+    """Zone 1 — Connection Center (was dashboard + connection).
+
+    Live status overview, Telegram login, Google Drive auth and the Drive
+    destination. Nothing here is fabricated: cards/chips read ctx live.
+    """
+    with gr.Tab(t("nav.connection")):
+        gr.Markdown(t("zone.connection.hint"), elem_classes=["td-zone-hint"])
+        # ---- live status overview (real reads of ctx) ----
         with gr.Row():
             telegram_card = gr.Textbox(
                 value=seed["telegram_detail"], label=t("dash.telegram_status"),
@@ -346,69 +339,76 @@ def _section_dashboard(ctx, binder, seed) -> dict[str, Any]:
                 value=seed["queue_header"], label=t("dash.queue_status"),
                 interactive=False, elem_classes=["td-card"],
             )
-        dash_btn = binder.button(gr, "dashboard.refresh", variant="secondary")
+        with gr.Row():
+            dash_btn = binder.button(gr, "dashboard.refresh", variant="secondary")
         dashboard_json = gr.JSON(
             label=t("dash.stats"), value=seed.get("dashboard", {}),
         )
-        folder_picker = _render_folder_picker(ctx, binder, "dash", t("common.language"), open=True)
+        folder_picker = _render_folder_picker(ctx, binder, "dash", t("common.language"), open=False)
+        # ---- Telegram ----
+        with gr.Group(elem_classes=["td-card"]):
+            gr.Markdown(f"### {t('nav.telegram')}", elem_classes=["td-section-title"])
+            with gr.Row():
+                api_id = gr.Textbox(label=t("form.api_id"), type="password")
+                api_hash = gr.Textbox(label=t("form.api_hash"), type="password")
+            credentials_btn = binder.button(gr, "telegram.set_credentials", variant="primary")
+            phone = gr.Textbox(label=t("form.phone"))
+            with gr.Row():
+                send_code_btn = binder.button(gr, "telegram.send_code")
+                resend_code_btn = binder.button(gr, "telegram.resend_code")
+            with gr.Column(
+                visible=seed["otp_visible"], elem_classes=["td-panel-otp"],
+            ) as code_panel:
+                code = gr.Textbox(label=t("form.code"))
+                verify_btn = binder.button(gr, "telegram.verify_code", variant="primary")
+            with gr.Column(
+                visible=seed["password_visible"], elem_classes=["td-panel-2fa"],
+            ) as password_panel:
+                password = gr.Textbox(label=t("form.password"), type="password")
+                verify_pw_btn = binder.button(gr, "telegram.verify_password", variant="primary")
+            with gr.Row():
+                logout_btn = binder.button(gr, "telegram.logout", variant="stop")
+                tg_status_btn = binder.button(gr, "telegram.status", variant="secondary")
+            telegram_detail = gr.Textbox(
+                value=seed["telegram_detail"], label=t("dash.telegram_status"),
+                interactive=False,
+            )
+        # ---- Google Drive ----
+        with gr.Group(elem_classes=["td-card"]):
+            gr.Markdown(f"### {t('nav.drive')}", elem_classes=["td-section-title"])
+            with gr.Row():
+                drive_connect_btn = binder.button(gr, "drive.connect", variant="primary")
+                drive_reconnect_btn = binder.button(gr, "drive.reconnect")
+                drive_status_btn = binder.button(gr, "drive.status", variant="secondary")
+            drive_detail = gr.Textbox(
+                value=seed["drive_detail"], label=t("dash.drive_status"),
+                interactive=False,
+            )
+            drive_folder_picker = _render_folder_picker(ctx, binder, "conn", t("common.language"))
+            quota_btn = binder.button(gr, "drive.refresh_quota", variant="secondary")
+            quota_line = gr.Textbox(
+                value=seed["quota_line"], label=t("dash.drive_space"), interactive=False,
+            )
+            quota_json = gr.JSON(label=t("dash.drive_space"), value=seed["quota_payload"])
     return {
         "telegram_card": telegram_card, "drive_card": drive_card,
         "queue_card": queue_card, "dash_btn": dash_btn,
         "dashboard_json": dashboard_json, "folder_picker": folder_picker,
+        "credentials_btn": credentials_btn, "api_id": api_id, "api_hash": api_hash,
+        "phone": phone, "send_code_btn": send_code_btn,
+        "resend_code_btn": resend_code_btn, "code_panel": code_panel, "code": code,
+        "verify_btn": verify_btn, "password_panel": password_panel, "password": password,
+        "verify_pw_btn": verify_pw_btn, "logout_btn": logout_btn,
+        "tg_status_btn": tg_status_btn, "telegram_detail": telegram_detail,
+        "drive_connect_btn": drive_connect_btn, "drive_reconnect_btn": drive_reconnect_btn,
+        "drive_status_btn": drive_status_btn, "drive_detail": drive_detail,
+        "drive_folder_picker": drive_folder_picker, "quota_btn": quota_btn,
+        "quota_line": quota_line, "quota_json": quota_json,
     }
 
 
-def _section_transfers(ctx, binder, seed) -> dict[str, Any]:
-    with gr.Tab(t("nav.queue")):
-        # DOC-39 §4: the Drive target panel lives HERE, inside transfers —
-        # the same single source of truth as dashboard/settings/connection.
-        folder_picker = _render_folder_picker(ctx, binder, "transfer", t("common.language"), open=True)
-        gr.Markdown(f"### {t('transfer.controls')}", elem_classes=["td-section-title"])
-        with gr.Row():
-            start_btn = binder.button(gr, "queue.start_selected", variant="primary", scale=2)
-            pause_btn = binder.button(gr, "queue.pause")
-            resume_btn = binder.button(gr, "queue.resume")
-            stop_btn = binder.button(gr, "queue.stop", variant="stop")
-        with gr.Row():
-            retry_btn = binder.button(gr, "queue.retry_failed")
-            clear_btn = binder.button(gr, "queue.clear_completed")
-            refresh_q_btn = binder.button(gr, "queue.refresh", variant="secondary")
-        concurrency_chip = gr.HTML(
-            _status_chip(
-                t("settings.concurrency.label") + f" {seed['concurrency']}/4",
-                "ok" if 1 <= seed["concurrency"] <= 4 else "warn",
-            )
-        )
-        queue_status = gr.Textbox(
-            value=seed["queue_header"], label=t("dash.queue_status"), interactive=False,
-        )
-        queue_table = gr.Dataframe(
-            headers=_headers(),
-            value=seed["queue_rows"] if seed["queue_rows"] else None,
-            interactive=False, wrap=True, elem_classes=["td-table"],
-        )
-        if not seed["queue_rows"]:
-            gr.Markdown(f"**{t('queue.empty')}**", elem_classes=["td-empty"])
-        with gr.Group(elem_classes=["td-card"]):
-            gr.Markdown(f"### {t('transfer.item')}", elem_classes=["td-section-title"])
-            with gr.Row():
-                item_id = gr.Textbox(label=t("col.id"), scale=2)
-                pause_item_btn = binder.button(gr, "queue.pause_item")
-                resume_item_btn = binder.button(gr, "queue.resume_item")
-                stop_item_btn = binder.button(gr, "queue.stop_item", variant="stop")
-                retry_item_btn = binder.button(gr, "queue.retry_item")
-    return {
-        "start_btn": start_btn, "pause_btn": pause_btn, "resume_btn": resume_btn,
-        "stop_btn": stop_btn, "retry_btn": retry_btn, "clear_btn": clear_btn,
-        "refresh_q_btn": refresh_q_btn, "queue_status": queue_status,
-        "queue_table": queue_table, "concurrency_chip": concurrency_chip,
-        "item_id": item_id, "pause_item_btn": pause_item_btn,
-        "resume_item_btn": resume_item_btn, "stop_item_btn": stop_item_btn,
-        "retry_item_btn": retry_item_btn, "folder_picker": folder_picker,
-    }
-
-
-def _section_analyze(ctx, binder, seed) -> dict[str, Any]:
+def _zone_analyze(ctx, binder, seed) -> dict[str, Any]:
+    """Zone 2 — Analysis & Selection."""
     with gr.Tab(t("nav.analyze")):
         with gr.Group(elem_classes=["td-card"]):
             gr.Markdown(t("analyze.instructions"), elem_classes=["td-section-title"])
@@ -536,67 +536,59 @@ def _section_analyze(ctx, binder, seed) -> dict[str, Any]:
     }
 
 
-def _section_connection(ctx, binder, seed) -> dict[str, Any]:
-    with gr.Tab(t("nav.connection")):
+def _zone_transfers(ctx, binder, seed) -> dict[str, Any]:
+    """Zone 3 — Transfers (queue controls + live table + per-item controls)."""
+    with gr.Tab(t("nav.queue")):
+        # DOC-39 §4: the Drive target panel lives HERE — the same single source
+        # of truth as connection/settings.
+        folder_picker = _render_folder_picker(ctx, binder, "transfer", t("common.language"), open=True)
+        gr.Markdown(f"### {t('transfer.controls')}", elem_classes=["td-section-title"])
         with gr.Row():
-            with gr.Column(elem_classes=["td-card"]):
-                gr.Markdown(f"### {t('nav.telegram')}", elem_classes=["td-section-title"])
-                with gr.Row():
-                    api_id = gr.Textbox(label=t("form.api_id"), type="password")
-                    api_hash = gr.Textbox(label=t("form.api_hash"), type="password")
-                credentials_btn = binder.button(gr, "telegram.set_credentials", variant="primary")
-                phone = gr.Textbox(label=t("form.phone"))
-                with gr.Row():
-                    send_code_btn = binder.button(gr, "telegram.send_code")
-                    resend_code_btn = binder.button(gr, "telegram.resend_code")
-                with gr.Column(
-                    visible=seed["otp_visible"], elem_classes=["td-panel-otp"],
-                ) as code_panel:
-                    code = gr.Textbox(label=t("form.code"))
-                    verify_btn = binder.button(gr, "telegram.verify_code", variant="primary")
-                with gr.Column(
-                    visible=seed["password_visible"], elem_classes=["td-panel-2fa"],
-                ) as password_panel:
-                    password = gr.Textbox(label=t("form.password"), type="password")
-                    verify_pw_btn = binder.button(gr, "telegram.verify_password", variant="primary")
-                with gr.Row():
-                    logout_btn = binder.button(gr, "telegram.logout", variant="stop")
-                    tg_status_btn = binder.button(gr, "telegram.status", variant="secondary")
-                telegram_detail = gr.Textbox(
-                    value=seed["telegram_detail"], label=t("dash.telegram_status"),
-                    interactive=False,
-                )
-            with gr.Column(elem_classes=["td-card"]):
-                gr.Markdown(f"### {t('nav.drive')}", elem_classes=["td-section-title"])
-                with gr.Row():
-                    drive_connect_btn = binder.button(gr, "drive.connect", variant="primary")
-                    drive_reconnect_btn = binder.button(gr, "drive.reconnect")
-                    drive_status_btn = binder.button(gr, "drive.status", variant="secondary")
-                drive_detail = gr.Textbox(
-                    value=seed["drive_detail"], label=t("dash.drive_status"),
-                    interactive=False,
-                )
-                folder_picker = _render_folder_picker(ctx, binder, "conn", t("common.language"))
-                quota_btn = binder.button(gr, "drive.refresh_quota", variant="secondary")
-                quota_line = gr.Textbox(
-                    value=seed["quota_line"], label=t("dash.drive_space"), interactive=False,
-                )
-                quota_json = gr.JSON(label=t("dash.drive_space"), value=seed["quota_payload"])
+            start_btn = binder.button(gr, "queue.start_selected", variant="primary", scale=2)
+            pause_btn = binder.button(gr, "queue.pause")
+            resume_btn = binder.button(gr, "queue.resume")
+            stop_btn = binder.button(gr, "queue.stop", variant="stop")
+        with gr.Row():
+            retry_btn = binder.button(gr, "queue.retry_failed")
+            clear_btn = binder.button(gr, "queue.clear_completed")
+            refresh_q_btn = binder.button(gr, "queue.refresh", variant="secondary")
+        concurrency_chip = gr.HTML(
+            _status_chip(
+                t("settings.concurrency.label") + f" {seed['concurrency']}/4",
+                "ok" if 1 <= seed["concurrency"] <= 4 else "warn",
+            )
+        )
+        queue_status = gr.Textbox(
+            value=seed["queue_header"], label=t("dash.queue_status"), interactive=False,
+        )
+        queue_table = gr.Dataframe(
+            headers=_headers(),
+            value=seed["queue_rows"] if seed["queue_rows"] else None,
+            interactive=False, wrap=True, elem_classes=["td-table"],
+        )
+        if not seed["queue_rows"]:
+            gr.Markdown(f"**{t('queue.empty')}**", elem_classes=["td-empty"])
+        with gr.Group(elem_classes=["td-card"]):
+            gr.Markdown(f"### {t('transfer.item')}", elem_classes=["td-section-title"])
+            with gr.Row():
+                item_id = gr.Textbox(label=t("col.id"), scale=2)
+                pause_item_btn = binder.button(gr, "queue.pause_item")
+                resume_item_btn = binder.button(gr, "queue.resume_item")
+                stop_item_btn = binder.button(gr, "queue.stop_item", variant="stop")
+                retry_item_btn = binder.button(gr, "queue.retry_item")
     return {
-        "credentials_btn": credentials_btn, "api_id": api_id, "api_hash": api_hash,
-        "phone": phone, "send_code_btn": send_code_btn,
-        "resend_code_btn": resend_code_btn, "code_panel": code_panel, "code": code,
-        "verify_btn": verify_btn, "password_panel": password_panel, "password": password,
-        "verify_pw_btn": verify_pw_btn, "logout_btn": logout_btn,
-        "tg_status_btn": tg_status_btn, "telegram_detail": telegram_detail,
-        "drive_connect_btn": drive_connect_btn, "drive_reconnect_btn": drive_reconnect_btn,
-        "drive_status_btn": drive_status_btn, "drive_detail": drive_detail,
-        "folder_picker": folder_picker, "quota_btn": quota_btn,
-        "quota_line": quota_line, "quota_json": quota_json,
+        "start_btn": start_btn, "pause_btn": pause_btn, "resume_btn": resume_btn,
+        "stop_btn": stop_btn, "retry_btn": retry_btn, "clear_btn": clear_btn,
+        "refresh_q_btn": refresh_q_btn, "queue_status": queue_status,
+        "queue_table": queue_table, "concurrency_chip": concurrency_chip,
+        "item_id": item_id, "pause_item_btn": pause_item_btn,
+        "resume_item_btn": resume_item_btn, "stop_item_btn": stop_item_btn,
+        "retry_item_btn": retry_item_btn, "folder_picker": folder_picker,
     }
 
 
-def _section_logs(ctx, binder, seed) -> dict[str, Any]:
+def _zone_logs(ctx, binder, seed) -> dict[str, Any]:
+    """Zone 4 — Logs (refresh / search / download)."""
     with gr.Tab(t("nav.logs")):
         with gr.Row():
             logs_query = gr.Textbox(label=t("btn.search_logs"), scale=3)
@@ -621,8 +613,12 @@ def _section_logs(ctx, binder, seed) -> dict[str, Any]:
     }
 
 
-def _section_settings(ctx, binder, seed) -> dict[str, Any]:
+def _zone_settings_export(ctx, binder, seed) -> dict[str, Any]:
+    """Zone 5 — Settings & Export (concurrency, language, theme, recovery,
+    checkpoint, build package, Colab cells)."""
     with gr.Tab(t("nav.settings")):
+        gr.Markdown(t("zone.settings_export.hint"), elem_classes=["td-zone-hint"])
+        # ---- concurrency (sync) ----
         concurrency_ready = binder.is_ready("settings.set_concurrency")
         gr.Markdown(f"### {t('settings.concurrency.title')}", elem_classes=["td-section-title"])
         concurrency = gr.Slider(
@@ -637,11 +633,13 @@ def _section_settings(ctx, binder, seed) -> dict[str, Any]:
             label=t("form.concurrency"), interactive=False,
             value=f"{seed['concurrency']}/4", visible=True,
         )
-        with gr.Accordion(t("settings.advanced"), open=False):
+        # ---- language + theme ----
+        with gr.Accordion(t("settings.appearance"), open=True):
+            lang_btn = binder.button(gr, "settings.toggle_language", variant="secondary")
             theme_ready = binder.is_ready("settings.set_theme")
             theme_radio = gr.Radio(
-                choices=[(t("settings.theme.dark"), "dark"),
-                         (t("settings.theme.light"), "light")],
+                choices=[(t("settings.theme.light"), "light"),
+                         (t("settings.theme.dark"), "dark")],
                 value=seed["theme"], label=t("btn.theme"),
                 interactive=theme_ready, visible=True,
             )
@@ -650,6 +648,8 @@ def _section_settings(ctx, binder, seed) -> dict[str, Any]:
                 label=t("btn.theme"), interactive=False, visible=True,
                 value="",
             )
+        # ---- recovery / maintenance ----
+        with gr.Accordion(t("nav.maintenance"), open=False):
             with gr.Row():
                 recover_btn = binder.button(gr, "recovery.restore")
                 checkpoint_btn = binder.button(gr, "maintenance.checkpoint")
@@ -657,16 +657,7 @@ def _section_settings(ctx, binder, seed) -> dict[str, Any]:
                 label=t("nav.maintenance"), interactive=False,
             )
             folder_picker = _render_folder_picker(ctx, binder, "settings", t("common.language"))
-    return {
-        "concurrency": concurrency, "concurrency_box": concurrency_box,
-        "theme_radio": theme_radio, "theme_status": theme_status,
-        "recover_btn": recover_btn, "checkpoint_btn": checkpoint_btn,
-        "maintenance_box": maintenance_box, "folder_picker": folder_picker,
-    }
-
-
-def _section_export(ctx, binder, seed) -> dict[str, Any]:
-    with gr.Tab(t("nav.export")):
+        # ---- export ----
         gr.Markdown(f"### {t('nav.export')}", elem_classes=["td-section-title"])
         with gr.Row():
             build_zip_btn = binder.button(gr, "export.build_zip", variant="primary")
@@ -678,29 +669,35 @@ def _section_export(ctx, binder, seed) -> dict[str, Any]:
         )
         colab_status = gr.Textbox(label=t("common.busy"), interactive=False)
     return {
+        "lang_btn": lang_btn,
+        "concurrency": concurrency, "concurrency_box": concurrency_box,
+        "theme_radio": theme_radio, "theme_status": theme_status,
+        "recover_btn": recover_btn, "checkpoint_btn": checkpoint_btn,
+        "maintenance_box": maintenance_box, "folder_picker": folder_picker,
         "build_zip_btn": build_zip_btn, "zip_message": zip_message, "zip_file": zip_file,
         "colab_cells_btn": colab_cells_btn, "colab_cells_box": colab_cells_box,
         "colab_status": colab_status,
     }
 
 
-# ---------------------------------------------------------------------------
-# Wiring. No direct .click/.change/.submit; everything through binder.wire.
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# Wiring. No direct .click/.change/.submit; everything through binder.wire.     #
+# Input order and output arity are preserved EXACTLY from the prior shell.     #
+# --------------------------------------------------------------------------- #
 
 def _bind_actions(
-    ctx, binder, *, dash, queue, analyze, conn, logs, sets, export,
-    lang, theme, rail_buttons, active_tab, telegram_chip, drive_chip,
-    folder_chip, top_zip_btn, lang_btn,
+    ctx, binder, *, conn, analyze, queue, logs, sets,
+    lang, theme, active_tab, telegram_chip, drive_chip, folder_chip,
+    top_zip_btn,
 ) -> None:
     # Language toggle re-renders the shell via gr.render.
-    binder.wire(lang_btn, "settings.toggle_language", [], [lang], event="click")
+    binder.wire(sets["lang_btn"], "settings.toggle_language", [], [lang], event="click")
 
     # Theme switcher replaces the <style> block.
     binder.wire(sets["theme_radio"], "settings.set_theme", [sets["theme_radio"]],
                 [theme, sets["theme_status"]], event="change")
 
-    # Telegram
+    # Telegram — outputs: (detail, chip, code_panel, password_panel).
     tg_outputs = [conn["telegram_detail"], telegram_chip,
                  conn["code_panel"], conn["password_panel"]]
     binder.wire(conn["credentials_btn"], "telegram.set_credentials",
@@ -713,18 +710,19 @@ def _bind_actions(
     binder.wire(conn["logout_btn"], "telegram.logout", [], tg_outputs)
     binder.wire(conn["tg_status_btn"], "telegram.status", [], tg_outputs)
 
-    # Drive
+    # Drive connect/status — outputs: (detail, chip).
     dr_outputs = [conn["drive_detail"], drive_chip]
     binder.wire(conn["drive_connect_btn"], "drive.connect", [], dr_outputs)
     binder.wire(conn["drive_reconnect_btn"], "drive.reconnect", [], dr_outputs)
     binder.wire(conn["drive_status_btn"], "drive.status", [], dr_outputs)
+
     # The same named handlers back all four visible folder panels; create and
     # select broadcast the ONE folder truth to every panel + the top chip
     # (DOC-39 §4): (own choice, own current, own message, top chip,
     # other currents x3, other messages x3).
     _pickers = (
-        dash["folder_picker"], queue["folder_picker"],
-        sets["folder_picker"], conn["folder_picker"],
+        conn["folder_picker"], queue["folder_picker"],
+        sets["folder_picker"], conn["drive_folder_picker"],
     )
     for picker in _pickers:
         binder.wire(picker["list_btn"], "drive.list_folders", [picker["parent_id"]],
@@ -776,7 +774,7 @@ def _bind_actions(
                  queue["queue_status"], analyze["selection_preview"],
                  analyze["enqueue_btn"]])
 
-    # Transfers
+    # Transfers — outputs: (queue_status, queue_table).
     q_out = [queue["queue_status"], queue["queue_table"]]
     binder.wire(queue["start_btn"], "queue.start_selected", [], q_out)
     binder.wire(queue["pause_btn"], "queue.pause", [], q_out)
@@ -790,10 +788,10 @@ def _bind_actions(
     binder.wire(queue["stop_item_btn"], "queue.stop_item", [queue["item_id"]], q_out)
     binder.wire(queue["retry_item_btn"], "queue.retry_item", [queue["item_id"]], q_out)
 
-    # Dashboard
-    binder.wire(dash["dash_btn"], "dashboard.refresh", [], [dash["dashboard_json"]])
+    # Dashboard / sync — outputs: (dashboard_json).
+    binder.wire(conn["dash_btn"], "dashboard.refresh", [], [conn["dashboard_json"]])
 
-    # Logs
+    # Logs — outputs: (logs_box, logs_status) or (logs_file, logs_status).
     binder.wire(logs["logs_refresh_btn"], "logs.refresh", [logs["logs_level"]],
                 [logs["logs_box"], logs["logs_status"]])
     binder.wire(logs["logs_search_btn"], "logs.search",
@@ -802,26 +800,24 @@ def _bind_actions(
     binder.wire(logs["logs_download_btn"], "logs.download", [logs["logs_level"]],
                 [logs["logs_file"], logs["logs_status"]])
 
-    # Settings
+    # Settings — concurrency outputs: (slider, box).
     binder.wire(sets["concurrency"], "settings.set_concurrency", [sets["concurrency"]],
                 [sets["concurrency"], sets["concurrency_box"]], event="change")
     binder.wire(sets["recover_btn"], "recovery.restore", [], [sets["maintenance_box"]])
     binder.wire(sets["checkpoint_btn"], "maintenance.checkpoint", [],
                 [sets["maintenance_box"]])
 
-    # Export — both the prominent in-section button AND the top-bar zip button
-    # produce the same artifact; both are wired to `export.build_zip`.
-    binder.wire(export["build_zip_btn"], "export.build_zip", [],
-                [export["zip_message"], export["zip_file"]])
+    # Export — outputs: (message, file) and (cells_text, status). The
+    # in-section button AND the top-bar quick-access both drive the same
+    # export.build_zip action (DOC-39 intentional duplicate).
+    binder.wire(sets["build_zip_btn"], "export.build_zip", [],
+                [sets["zip_message"], sets["zip_file"]])
     binder.wire(top_zip_btn, "export.build_zip", [],
-                [export["zip_message"], export["zip_file"]])
-    binder.wire(export["colab_cells_btn"], "export.colab_cells", [],
-                [export["colab_cells_box"], export["colab_status"]])
+                [sets["zip_message"], sets["zip_file"]])
+    binder.wire(sets["colab_cells_btn"], "export.colab_cells", [],
+                [sets["colab_cells_box"], sets["colab_status"]])
 
-    # Right-rail nav: the rail is a visual mirror of native gr.Tabs. Because
-    # ui.py is layout-only and we avoid JS, the active indicator is driven by
-    # Gradio's own Tabs client state; the rail buttons set the Tab value
-    # through a dedicated state component bound to the Tabs element. We skip
-    # custom JS and keep the rail as a styled visual list; Tabs built-in
-    # buttons already exist (hidden visually by CSS) and remain accessible.
-    # Tests verify the 7 sections are present in the required order.
+    # Single nav bar note: navigation is the native Gradio tab bar (restyled
+    # in ui_theme.BASE_CSS). No custom JS or rail is used (Constitution §4:
+    # layout-only, no ad-hoc events), so active_tab stays a passive state —
+    # the built-in tab buttons handle selection.

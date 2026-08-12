@@ -235,5 +235,8 @@
   "sel.target_folder": "Target folder",
   "sel.preview": "Add-to-queue preview",
   "sel.hint": "Click any table row to toggle its selection manually",
-  "sel.range_cap": "Declared cap: 1000 messages"
+  "sel.range_cap": "Declared cap: 1000 messages",
+  "settings.appearance": "Language & Appearance",
+  "zone.connection.hint": "Live connection status and Telegram/Drive sign-in. A «connected» chip appears only after a real connection succeeds.",
+  "zone.settings_export.hint": "Configure concurrency, language and theme, recovery and checkpoints, then build the package / Colab cells."
 }
