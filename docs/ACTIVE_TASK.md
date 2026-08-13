@@ -4,12 +4,12 @@
 |---|---|
 | TASK ID | `M25-T02` |
 | العنوان | تحديث تلقائي للصفحة كاملة أثناء النقل (نبض هادئ كل 2 ثانية) |
-| الحالة | **MERGE IN PROGRESS · Code-complete candidate + Fake-tested** — ليس Colab-ready ولا Complete |
+| الحالة | **MERGED INTO MAIN `2bc33e9f` (PR #47) · Code-complete candidate + Fake-tested** — ليس Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
 | المهندس/المراجع | تعليمة المالك المباشرة (2026-08-13) |
 | الفرع | `arena/019ff87b-drive-buddy-3579bf74` |
 | سابق على main | PR #46 (خزنة الجلسة) → `27f99e1` |
-| الخطوة التالية | ① CI أخضر على الـPR + الدمج · ② المالك: Publish current TeleDrive package على `main` (#27) · ③ فحص حي في Colab أثناء نقل حقيقي |
+| الخطوة التالية | ① المالك: Publish current TeleDrive package على `main` (#27) · ② فحص حي في Colab أثناء نقل حقيقي |
 
 ## ما تغيّر
 

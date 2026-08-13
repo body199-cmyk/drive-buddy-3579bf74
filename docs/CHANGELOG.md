@@ -1,5 +1,10 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M25-T02 MERGED] — 2026-08-13 — PR #47 → main `2bc33e9f`
+
+- **دمج:** PR [#47](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/47) → main = `2bc33e9fc042547e6eda838b9552c24dbb785923` في 2026-08-13T00:34:06Z. CI run `31654744180`: Python package PASS + Frontend build (lint+build) PASS.
+- **فجوة Colab:** التاج `pkg-2026.08.09-m15t07` يبقى قديمًا حتى يعيد المالك تشغيل **Publish current TeleDrive package** على `main` (#27).
+
 ## [M25-T02] — 2026-08-13 — تحديث تلقائي للصفحة كاملة أثناء النقل
 
 - **المشكلة (بلاغ المالك):** أثناء النقل يبقى شريط التقدم وكل أرقام الصفحة مجمّدة على آخر لقطة حتى ضغطة `تحديث` يدوية. السبب أن الجسر لقطةٌ لا بثٌّ: React لا يطلب حالة إلا عند إجراء صريح.
