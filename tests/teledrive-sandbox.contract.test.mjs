@@ -8,6 +8,7 @@ import {
   enqueueBlockReason,
   formatBytes,
   groupQueueSessions,
+  hasActiveTransfer,
   queueMetrics,
   selectableCandidates,
   validateAnalyzeInput,
@@ -337,4 +338,48 @@ test("20 — run() drops stale responses via latestRequest Map", async () => {
   // Success notice only after status === "ok" (still present) and after stale guard.
   assert.match(component, /if \(response\.status !== "ok"\)/);
   assert.match(component, /kind:\s*"success"/);
+});
+
+test("23 — hasActiveTransfer gates the heartbeat on real progress only", () => {
+  assert.equal(hasActiveTransfer(null), false);
+  assert.equal(hasActiveTransfer(emptyState), false);
+  assert.equal(hasActiveTransfer({ ...emptyState, engine: "running" }), true);
+  assert.equal(
+    hasActiveTransfer({ ...emptyState, queue: [{ id: "a", status: "Uploading" }] }),
+    true,
+  );
+  // Terminal rows alone must never keep polling a finished queue.
+  assert.equal(
+    hasActiveTransfer({
+      ...emptyState,
+      queue: [
+        { id: "a", status: "Uploaded" },
+        { id: "b", status: "Failed" },
+      ],
+    }),
+    false,
+  );
+  // A paused engine with nothing in flight stops the heartbeat.
+  assert.equal(
+    hasActiveTransfer({
+      ...emptyState,
+      engine: "paused",
+      queue: [{ id: "a", status: "Paused" }],
+    }),
+    false,
+  );
+});
+
+test("24 — sandbox auto-refreshes the whole live snapshot while transferring", async () => {
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /AUTO_REFRESH_INTERVAL_MS/);
+  assert.match(component, /setInterval/);
+  assert.match(component, /hasActiveTransfer/);
+  assert.match(component, /actionId:\s*"queue\.refresh"/);
+  // Silent heartbeat: talks to the bridge directly, never through run()
+  // (which would flash busy spinners and success notices every tick).
+  assert.match(component, /bridge\s*\.\s*request\(\{/);
+  assert.match(component, /pollInFlight/);
+  // Replaces the full LiveUiState from the response, like a manual Refresh.
+  assert.match(component, /setLiveState\(response\.state\)/);
 });

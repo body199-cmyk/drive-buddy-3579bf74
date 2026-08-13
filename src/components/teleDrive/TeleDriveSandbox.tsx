@@ -34,6 +34,7 @@ import {
   enqueueBlockReason,
   formatBytes,
   groupQueueSessions,
+  hasActiveTransfer,
   localize,
   mediaChoices,
   pageLabels,
@@ -46,6 +47,9 @@ import {
   type Page,
   type ScanMode,
 } from "./viewModel";
+
+/** Quiet auto-refresh heartbeat: how often the live snapshot is polled while a transfer is moving. */
+const AUTO_REFRESH_INTERVAL_MS = 2000;
 
 type Notice = { kind: "info" | "success" | "warning" | "error"; text: string } | null;
 type RunAction = <T = unknown>(
@@ -1258,6 +1262,43 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const language = liveState?.language ?? "ar";
 
   useEffect(() => bridge.subscribe(setLiveState), [bridge]);
+
+  // Quiet auto-refresh: while a transfer is moving, poll the live snapshot so
+  // every panel (chips, folder, queue, candidates) follows Python on its own —
+  // exactly like pressing Refresh, but without flashing notices or busy states.
+  const liveStateRef = useRef<LiveUiState | null>(null);
+  const pollInFlight = useRef(false);
+  useEffect(() => {
+    liveStateRef.current = liveState;
+  }, [liveState]);
+
+  useEffect(() => {
+    if (!live) return;
+    const interval = setInterval(() => {
+      const snapshot = liveStateRef.current;
+      if (!snapshot || !hasActiveTransfer(snapshot)) return;
+      if (pollInFlight.current) return;
+      pollInFlight.current = true;
+      void bridge
+        .request({
+          requestId: newRequestId(),
+          actionId: "queue.refresh",
+          payload: {},
+          language: snapshot.language,
+        })
+        .then((response) => {
+          if (response.state) setLiveState(response.state);
+        })
+        .catch(() => {
+          // Silent heartbeat: a transient bridge failure must not surface as a
+          // user-facing notice or block the next tick.
+        })
+        .finally(() => {
+          pollInFlight.current = false;
+        });
+    }, AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [bridge, live]);
 
   const run: RunAction = async <T,>(actionId: string, payload: Record<string, unknown> = {}) => {
     if (!bridge.isLive()) {
