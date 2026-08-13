@@ -183,9 +183,21 @@ class QueueManager:
         manager.set_scope([i.id for i in items])
         manager.set_workers(ctx.config.concurrency_value())
         self._future = ctx.aio.submit(manager.run())
+        self._future.add_done_callback(self._on_run_done)
         self._status = "running"
         db.add_event("", "transfer", "started", {"count": len(items)})
         return {"status": "running", "started": len(items), "preflight": report}
+
+    def _on_run_done(self, future) -> None:
+        """Release the running label once the worker drain loop finishes.
+
+        Without this the engine would report "running" forever after the first
+        transfer, which makes every later snapshot claim an active transfer and
+        forces the React bridge to keep polling a finished queue. Pause/Stop own
+        their labels and must not be overwritten by a completed run.
+        """
+        if self._status == "running":
+            self._status = "idle"
 
 
     def _manager(self):

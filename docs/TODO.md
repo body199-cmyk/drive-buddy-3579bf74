@@ -5,6 +5,7 @@
 
 | TASK ID | البند | الحالة | الدليل / الملاحظات |
 |---|---|---|---|
+| M25-T02 | **تحديث تلقائي للصفحة كاملة أثناء النقل (نبض هادئ كل 2s)** — React ينادي `queue.refresh` ذاتيًا أثناء `running`/in-flight ويحدّث اللقطة كاملة (لا الشريط فقط)، بلا تعطيل أزرار؛ + إصلاح Python: المحرك يعود `idle` بعد انتهاء النقل | PARTIALLY COMPLETE — merge in progress · Code-complete candidate + Fake-tested | PHASE_M25_T02 · PR من `arena/019ff87b-drive-buddy-3579bf74` · `664 passed` · launcher `48/48` · contracts `24/24` · tsc PASS · bun lint/build لـCI (حاجز شبكة #37) · الإثبات الحي بيد المالك بعد إعادة نشر التاج (#27) |
 | M09-T01 | نظام الاستمرارية متعدد الحسابات: حزمة `docs/` الجذرية + مؤشرات سطر واحد | VERIFIED COMPLETE | ADR-001 · PR #2 |
 | M10-T01 | توحيد هوية v4.5.0 في الحزمة والمولد والنوت‌بوك والواجهة | VERIFIED COMPLETE | PR #3 · commit 936e78b |
 | M10-T02 | توحيد هوية v4.5.0 **في CI** | VERIFIED COMPLETE | commit ff6a484 · run 31243523514 (نجاح Python وFrontend وبناء teledrive_v4.5.zip) |

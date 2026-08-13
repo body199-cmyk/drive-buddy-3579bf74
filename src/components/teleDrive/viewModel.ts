@@ -140,6 +140,27 @@ export function queueMetrics(queue: QueueRow[]): QueueMetrics {
   );
 }
 
+/** Queue rows that mean bytes are moving right now. */
+const IN_FLIGHT_STATES = new Set([
+  "downloading",
+  "uploading",
+  "verifying",
+  "uploadedpendingcheckpoint",
+]);
+
+/**
+ * True while a transfer is actually in flight: the engine reports a running
+ * worker pool, or at least one queue row is downloading/uploading/verifying.
+ * The sandbox gates its quiet auto-refresh heartbeat on this so it only polls
+ * the bridge while there is real progress to observe — never as a permanent
+ * background loop.
+ */
+export function hasActiveTransfer(state: LiveUiState | null): boolean {
+  if (!state) return false;
+  if ((state.engine ?? "").toLowerCase() === "running") return true;
+  return (state.queue ?? []).some((row) => IN_FLIGHT_STATES.has((row.status ?? "").toLowerCase()));
+}
+
 export function isPositiveInteger(value: string): boolean {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0;

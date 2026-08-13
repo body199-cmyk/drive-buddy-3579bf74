@@ -285,3 +285,20 @@ def test_refresh_snapshot_reports_live_counts(ctx):
     assert snapshot["pending"] == 2
     assert snapshot["counts"].get("Pending") == 2
     assert "status" in snapshot
+
+
+def test_engine_returns_to_idle_once_the_run_finishes():
+    """A completed worker drain must not leave the engine labelled running."""
+    queue = QueueManager()
+    queue._status = "running"
+    queue._on_run_done(None)
+    assert queue.status_label() == "idle"
+
+
+def test_finished_run_never_overrides_pause_or_stop():
+    """Pause/Stop own their labels; a completed run must not steal them back."""
+    for label in ("paused", "stopped"):
+        queue = QueueManager()
+        queue._status = label
+        queue._on_run_done(None)
+        assert queue.status_label() == label

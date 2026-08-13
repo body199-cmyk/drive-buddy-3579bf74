@@ -1,5 +1,16 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M25-T02] — 2026-08-13 — تحديث تلقائي للصفحة كاملة أثناء النقل
+
+- **المشكلة (بلاغ المالك):** أثناء النقل يبقى شريط التقدم وكل أرقام الصفحة مجمّدة على آخر لقطة حتى ضغطة `تحديث` يدوية. السبب أن الجسر لقطةٌ لا بثٌّ: React لا يطلب حالة إلا عند إجراء صريح.
+- **الحل:**
+  - `TeleDriveSandbox.tsx`: مؤقّت كل 2000ms ينادي `queue.refresh` عبر `bridge.request` مباشرة (لا عبر `run()`) ويستبدل لقطة `LiveUiState` كاملة — كل الأقسام (chips، المجلد، المحرك، الحصة، الطابور، التقدم، المرشّحون) — بلا وميض notice ولا busy spinner.
+  - `viewModel.hasActiveTransfer()` يبوّب النبض: يعمل فقط والمحرك `running` أو يوجد صف in-flight (`Downloading/Uploading/Verifying/UploadedPendingCheckpoint`). لا حلقة خلفية دائمة. حماية من التداخل بـ`pollInFlight` + `liveStateRef`.
+  - `queue_manager.py`: `_on_run_done` يعيد تسمية المحرك إلى `idle` بعد انتهاء drain (كان يبقى `running` للأبد فيجعل النبض يستمر على طابور منتهٍ). لا يمسّ `paused`/`stopped`.
+- **بوابات محلية:** `664 passed` · launcher `48/48` · notebooks in sync · contracts `24/24` · `tsc --strict` PASS · prettier نظيف · `bun lint/build` لـCI (#37).
+- **محمي لم يُمس:** notebooks · telegram_auth · transfer_manager · database/migrations · requirements.* · bun.lock · package.json · workflows.
+- **الحالة الصادقة:** Code-complete candidate + Fake-tested. ليس Colab-ready / Complete. الإثبات الحي بيد المالك بعد إعادة نشر التاج (#27).
+
 ## [M25-T01 vault] — 2026-08-13 — استئناف Colab: أسرار + خزنة جلسة تليجرام + keep-alive
 
 - **المشكلة:** موت جلسة Colab يمسح `/content`. المستخدم كان يعيد كتابة API ويعيد OTP ويربط Drive من الصفر. خلية الواجهة وحدها لا تكفي على VM فارغ.
