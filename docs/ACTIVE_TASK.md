@@ -2,22 +2,27 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M24-T01` |
-| العنوان | حفظ جلسة Telegram على Drive والاستعادة التلقائية عبر الويب وColab |
+| TASK ID | `M24-T03` |
+| العنوان | تقوية خزينة جلسة Telegram — pre-paint autorestore, logout wipe, in-memory credential fallback, restored-blob validation |
 | الحالة | **Implemented + fake-tested. Not live-verified** — ليس Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
-| الفرع | `arena/01a01447-drive-buddy-3579bf74` |
-| سابق على main | `29b7f48` |
-| الخطوة التالية | المالك: دمج + Publish package + فحص حي على نفس حساب Drive |
+| الفرع | `arena/m24-t03-session-vault-hardening` |
+| Base SHA | `a7b915cf493230e9d9ccaa79d309d50117e45171` |
+| Result SHA | (يُسجَّل بعد الدفع) |
+| الخطوة التالية | مراجعة Brain/المالك → دمج PR → تحقق حي Colab (M24-T04) |
 
 ## ما تغيّر
 
-- `SessionVault` يحفظ/يستعيد `telegram.session` + `telegram_creds.json` على `TeleDrive_AppData`.
-- واجهة Gradio: حفظ / استعادة / نسيان + autorestore عند فتح الصفحة.
-- النوت‌بوك: Drive أولًا ثم probe؛ تخطي إدخال API إن وُجدت الخزينة.
+- `SessionVault.autorestore_once()` يُنادى من `ui.build()` قبل `gr.Blocks`، فأول رسم يقرأ حالة حقيقية بلا اعتماد على page-load.
+- `h_telegram_logout` ينادي `forget_quiet()` قبل `telegram_auth.logout()` (الملف محمي).
+- `save_now` يقرأ `api_id/api_hash/phone` من ذاكرة `TelegramAuth` عند فراغ حقول الواجهة.
+- `save_after_login()` بعد `verify_code` / `verify_password` / `set_credentials` الناجحة، ويتخطى الرفع لو الخزينة موجودة.
+- الاستعادة ترفض أي blob لا يبدأ بـ`SQLite format 3` ولا تكتبه على القرص.
+- `binder.load` صار idempotent عبر إعادة الرسم بتغيير اللغة.
 
-## انحرافات
+## انحرافات / قيود
 
-- لم يُستبدل `session_vault.py` بالكامل: دوال ADR-004 بقيت لأن `telegram_auth.py` محمي.
-- الخليتان 3/4 لم تُستبدلا حرفيًا بنص DOC: بقي Colab Secrets وkeep-alive و`blocking=False` حتى لا ينكسر مسار Colab الحالي.
-- أُضيف زر استعادة يدوي لأن عقد الربط يفرض `binder.wire` لكل فعل جاهز.
+- لا تعديل على أي ملف محمي (§2.3): `telegram_auth.py` / `drive_auth.py` / النوتبوك / اللوكات وغيرها لم تُلمَس.
+- لا مفاتيح ترجمة جديدة، ولا actions جديدة، ولا تعديل على `ERROR_ARITY`.
+- الخطر مقبول بقرار المالك: `telegram_creds.json` يبقى JSON صريحًا على Drive (مُسجَّل في KNOWN_ISSUES).
+- التحقق الحي غير ممكن من Arena؛ الحالة تبقى Implemented + fake-tested حتى M24-T04.

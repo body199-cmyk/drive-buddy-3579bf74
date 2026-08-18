@@ -1,5 +1,16 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-T03] — 2026-08-18 — تقوية خزينة جلسة Telegram
+
+- **استعادة قبل أول رسم:** `SessionVault.autorestore_once()` يُنادى من `ui.build()` قبل `gr.Blocks`، فأول رسم يقرأ حالة حقيقية بدل الاعتماد على حدث page-load.
+- **logout يمسح الخزينة:** `h_telegram_logout` ينادي `forget_quiet()` قبل `telegram_auth.logout()` (الملف محمي)، فلا تعود الجلسة تلقائيًا بعد تسجيل الخروج.
+- **fallback للمفاتيح:** `save_now` يقرأ `api_id/api_hash/phone` من ذاكرة `TelegramAuth` عند فراغ حقول الواجهة (مسار Secrets ومسار الاستعادة).
+- **حفظ تلقائي:** `save_after_login()` بعد `verify_code` / `verify_password` / `set_credentials` الناجحة، ويتخطى الرفع لو الخزينة موجودة.
+- **تحقق من البلوب:** الاستعادة ترفض أي بايتس لا تبدأ بـ`SQLite format 3` ولا تكتب على القرص.
+- **binder.load idempotent** عبر إعادة الرسم بتغيير اللغة.
+- **الحالة الصادقة:** Implemented + fake-tested. Not live-verified.
+- **خطر مقبول بقرار المالك:** `telegram_creds.json` يبقى JSON صريح على Drive.
+
 ## [M24-T01] — 2026-08-18 — حفظ/استعادة جلسة Telegram على Drive
 
 - **save/restore Telegram session on Drive:** `SessionVault.save_now` / `autorestore` / `forget` / `probe` يرفعان `telegram.session` + `telegram_creds.json` إلى `TeleDrive_AppData` على حساب المستخدم. التشغيل يبقى من الملف المحلي فقط.
