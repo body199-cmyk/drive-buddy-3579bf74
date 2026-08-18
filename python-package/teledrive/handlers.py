@@ -63,6 +63,12 @@ def action(action_id: str) -> Callable:
             correlation = uuid.uuid4().hex[:8]
             _log.info("action=%s cid=%s start", action_id, correlation)
             try:
+                vault = getattr(self.ctx, "session_vault", None)
+                if vault is not None and vault.pending:
+                    vault.flush_pending()
+            except Exception:  # noqa: BLE001 - a vault retry must never break an action
+                _log.warning("vault flush skipped action=%s", action_id)
+            try:
                 result = func(self, *args, **kwargs)
                 _log.info("action=%s cid=%s ok", action_id, correlation)
                 return result

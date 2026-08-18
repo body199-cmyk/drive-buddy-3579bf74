@@ -219,15 +219,29 @@ def wipe_session(drive: Any = None, local_path: Path | None = None) -> None:
 
 
 def persist_from_context(ctx: Any, secret: str = "") -> Optional[str]:
-    return save_session(_drive_from_ctx(ctx), secret=secret)
+    """Persist through the one modern vault path used by every authorization flow."""
+    vault = getattr(ctx, "session_vault", None)
+    if vault is None:  # pragma: no cover - ApplicationContext always owns one
+        return None
+    result = vault.save_after_login(force=False)
+    return "saved" if result.saved else None
 
 
 def restore_from_context(ctx: Any, secret: str = "") -> bool:
-    return restore_session(_drive_from_ctx(ctx), secret=secret)
+    vault = getattr(ctx, "session_vault", None)
+    if vault is None:  # pragma: no cover - compatibility fallback
+        return restore_session(_drive_from_ctx(ctx), secret=secret)
+    return bool(vault.autorestore_once().restored)
 
 
 def wipe_from_context(ctx: Any) -> None:
-    wipe_session(_drive_from_ctx(ctx, require_connected=False))
+    vault = getattr(ctx, "session_vault", None)
+    if vault is not None:
+        vault.forget_quiet()
+    try:
+        wipe_session(_drive_from_ctx(ctx, require_connected=False))
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("legacy vault wipe skipped: %s", type(exc).__name__)
 
 
 def _drive_from_ctx(ctx: Any, *, require_connected: bool = True) -> Any:
@@ -308,7 +322,20 @@ from .redaction import mask_phone
 
 VAULT_SESSION_NAME = "telegram.session"
 VAULT_CREDS_NAME = "telegram_creds.json"
-VAULT_FORMAT = 1
+VAULT_FORMAT = 1                  # legacy: raw session + plaintext api_hash
+VAULT_FORMAT_ENCRYPTED = 2        # M24-T05: wrapped session, NO api_hash on Drive
+VAULT_SUPPORTED_FORMATS = (VAULT_FORMAT, VAULT_FORMAT_ENCRYPTED)
+
+
+def _plaintext_vault() -> bool:
+    """Owner escape hatch: keep the old plaintext format (not recommended)."""
+    import os
+
+    return str(os.environ.get("TELEDRIVE_VAULT_PLAINTEXT", "")).strip().lower() in (
+        "1", "true", "yes",
+    )
+
+
 # M24-T03: a restored blob is written to disk ONLY when it really is a SQLite
 # session. Telethon opens the path with sqlite3; junk bytes there produce a
 # corrupt-database crash instead of the honest manual-login fallback.
@@ -338,6 +365,10 @@ class SessionVault:
         # first paint; the language re-render must not repeat the Drive round
         # trip, so the one-shot latch lives on the context-owned vault.
         self._autorestore_done = False
+        # M24-T05 determinism state.
+        self._pending_save = False
+        self._last_fingerprint = ""
+        self.last_result: Optional[VaultResult] = None
 
     # ---------- path helpers ----------
 
@@ -403,6 +434,43 @@ class SessionVault:
         files = self._children_by_name(drive, folder_id)
         return VAULT_SESSION_NAME in files and VAULT_CREDS_NAME in files
 
+    # ---- M24-T05 vault observability and format helpers ----
+
+    def _emit(self, result: VaultResult, detail: str = "") -> VaultResult:
+        """Store and record a redacted outcome without breaking vault work."""
+        self.last_result = result
+        try:
+            from . import database as db
+
+            db.add_event("", "session.vault", result.message_key, {
+                "ok": bool(result.ok),
+                "saved": bool(result.saved),
+                "restored": bool(result.restored),
+                "forgotten": bool(result.forgotten),
+                "phone": result.phone_label,
+                "detail": detail,
+            })
+        except Exception:  # noqa: BLE001 - telemetry must never break the vault
+            pass
+        _log.info("vault %s ok=%s detail=%s", result.message_key, result.ok, detail)
+        return result
+
+    @staticmethod
+    def _fingerprint(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    def _vault_secret(self) -> str:
+        """Read the API hash from live memory or Colab Secrets only."""
+        _, api_hash, _ = self._creds_from_memory()
+        if api_hash:
+            return api_hash
+        try:  # Colab only; absent in CI and tests
+            from google.colab import userdata  # type: ignore
+
+            return str(userdata.get("TELEGRAM_API_HASH") or "").strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
     # ---------- file snapshot / restore ----------
 
     def _checkpoint_sqlite(self, source: Path, dest: Path) -> None:
@@ -421,6 +489,39 @@ class SessionVault:
         finally:
             src.close()
 
+    def _snapshot_bytes(self) -> bytes:
+        """Return a validated snapshot of the live Telethon SQLite session."""
+        source = self._local_session_path()
+        if not source.exists():
+            raise TeleDriveError("telegram session file is missing", "err.session_missing")
+        snapshot = source.with_name("telegram.session.snapshot")
+        data = b""
+        try:
+            self._checkpoint_sqlite(source, snapshot)
+            data = snapshot.read_bytes()
+        except Exception as exc:  # noqa: BLE001 - fall back to a direct read
+            _log.warning("vault snapshot backup fallback: %s", type(exc).__name__)
+            try:
+                conn = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+                try:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                finally:
+                    conn.close()
+            except Exception as inner:  # noqa: BLE001
+                _log.warning("vault wal checkpoint skipped: %s", type(inner).__name__)
+            try:
+                data = source.read_bytes()
+            except OSError as inner:
+                raise TeleDriveError("session read failed", "err.session_missing") from inner
+        finally:
+            try:
+                snapshot.unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                pass
+        if not data.startswith(SQLITE_MAGIC):
+            raise TeleDriveError("session snapshot is not sqlite", "err.session_vault_invalid")
+        return data
+
     def _write_session_bytes(self, data: bytes) -> Path:
         local = self._local_session_path()
         tmp = local.with_suffix(".session.tmp")
@@ -436,7 +537,7 @@ class SessionVault:
             return None
         raw = drive.download_bytes(meta["id"])
         data = json.loads(raw.decode("utf-8"))
-        if int(data.get("format", 0) or 0) != VAULT_FORMAT:
+        if int(data.get("format", 0) or 0) not in VAULT_SUPPORTED_FORMATS:
             raise TeleDriveError("unsupported vault format", "err.session_vault_invalid")
         return data
 
@@ -468,15 +569,11 @@ class SessionVault:
         api_id = str(api_id or "").strip()
         api_hash = str(api_hash or "").strip()
         phone = str(phone or "").strip()
-        # M24-T03: the UI fields are empty on the Colab-Secrets path and on the
-        # auto-restore path, yet the live client already holds the very values
-        # this vault needs. Fall back to that memory instead of refusing a save
-        # the user explicitly asked for.
         memory_id, memory_hash, memory_phone = self._creds_from_memory()
         if not api_id.isdigit():
             api_id = memory_id
         if not api_hash:
-            api_hash = memory_hash
+            api_hash = memory_hash or self._vault_secret()
         if not phone:
             phone = memory_phone
         if not api_id.isdigit():
@@ -484,80 +581,142 @@ class SessionVault:
         if not api_hash:
             raise TeleDriveError("api hash required", "err.bad_api_hash")
 
+        raw = self._snapshot_bytes()
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
-        local_session = self._local_session_path()
-        snapshot = local_session.with_name("telegram.session.snapshot")
-        self._checkpoint_sqlite(local_session, snapshot)
-
+        plaintext = _plaintext_vault()
+        blob = raw if plaintext else wrap_blob(raw, api_hash)
         creds = {
             "api_id": api_id,
-            "api_hash": api_hash,
             "phone": phone,
             "saved_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            "format": VAULT_FORMAT,
+            "format": VAULT_FORMAT if plaintext else VAULT_FORMAT_ENCRYPTED,
             "session_file": VAULT_SESSION_NAME,
         }
-        drive.upsert_bytes(VAULT_SESSION_NAME, snapshot.read_bytes(), folder_id, mime_type="application/octet-stream")
-        drive.upsert_bytes(VAULT_CREDS_NAME, json.dumps(creds, ensure_ascii=False, indent=2).encode("utf-8"), folder_id, mime_type="application/json")
+        if plaintext:
+            creds["api_hash"] = api_hash
+        drive.upsert_bytes(
+            VAULT_SESSION_NAME, blob, folder_id, mime_type="application/octet-stream"
+        )
+        drive.upsert_bytes(
+            VAULT_CREDS_NAME,
+            json.dumps(creds, ensure_ascii=False, indent=2).encode("utf-8"),
+            folder_id,
+            mime_type="application/json",
+        )
+        self._last_fingerprint = self._fingerprint(raw)
+        self._pending_save = False
+        _log.info("telegram vault saved phone=%s format=%s", mask_phone(phone), creds["format"])
+        return self._emit(
+            VaultResult(True, "msg.session_saved", saved=True, phone_label=mask_phone(phone)),
+            f"format={creds['format']} bytes={len(blob)}",
+        )
+
+    def _release_client_for_swap(self) -> bool:
+        """Free the session path before overwriting it when a client is inactive."""
+        auth = getattr(self.ctx, "telegram_auth", None)
+        client = getattr(auth, "client", None)
+        if client is None:
+            return True
+        if getattr(auth, "authorized", False):
+            return False
+        closer = getattr(client, "disconnect", None)
+        if not callable(closer):
+            return False
         try:
-            snapshot.unlink(missing_ok=True)
-        except Exception:
+            outcome = closer()
+            if hasattr(outcome, "__await__"):
+                self.ctx.aio.run(outcome)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("vault could not release telegram client: %s", type(exc).__name__)
+            return False
+        return True
+
+    def _discard_stale_vault(self) -> None:
+        """Remove a restored session that no longer authorizes on Telegram."""
+        try:
+            self._local_session_path().unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
             pass
-        _log.info("telegram vault saved phone=%s", mask_phone(phone))
-        return VaultResult(True, "msg.session_saved", saved=True, phone_label=mask_phone(phone))
+        self._last_fingerprint = ""
+        try:
+            self.forget()
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("stale vault not removed: %s", type(exc).__name__)
 
     def autorestore(self) -> VaultResult:
         if self.ctx.telegram_auth.authorized:
-            return VaultResult(True, "msg.session_already_authorized", restored=True)
+            return self._emit(VaultResult(True, "msg.session_already_authorized", restored=True))
         if not self.ctx.drive_auth.connected:
-            return VaultResult(False, "msg.session_restore_skipped_no_drive")
+            return self._emit(VaultResult(False, "msg.session_restore_skipped_no_drive"))
 
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
         files = self._children_by_name(drive, folder_id)
         if VAULT_SESSION_NAME not in files or VAULT_CREDS_NAME not in files:
-            return VaultResult(False, "msg.session_not_saved")
+            return self._emit(VaultResult(False, "msg.session_not_saved"))
 
         payload = self._read_creds_payload(drive, folder_id)
         if not payload:
-            return VaultResult(False, "err.session_vault_invalid")
+            return self._emit(VaultResult(False, "err.session_vault_invalid"))
 
-        session_bytes = drive.download_bytes(files[VAULT_SESSION_NAME]["id"])
-        # M24-T03: never hand junk to Telethon. A truncated upload or a foreign
-        # file with the same name must degrade to the manual login path, and it
-        # must NOT overwrite a good local session on the way out.
-        if not session_bytes or not session_bytes.startswith(SQLITE_MAGIC):
-            _log.warning("telegram vault restore rejected: not a sqlite session")
-            return VaultResult(False, "err.session_vault_invalid")
-        self._write_session_bytes(session_bytes)
-
+        fmt = int(payload.get("format", 0) or 0)
         api_id = str(payload.get("api_id") or "").strip()
-        api_hash = str(payload.get("api_hash") or "").strip()
         phone = str(payload.get("phone") or "").strip()
+        label = mask_phone(phone)
+        api_hash = str(payload.get("api_hash") or "").strip() or self._vault_secret()
         if not api_id.isdigit() or not api_hash:
-            raise TeleDriveError("vault credentials are incomplete", "err.session_vault_invalid")
+            return self._emit(
+                VaultResult(False, "msg.session_restore_needs_login", phone_label=label),
+                "missing api_hash for unwrap",
+            )
 
+        blob = drive.download_bytes(files[VAULT_SESSION_NAME]["id"])
+        raw = blob if fmt == VAULT_FORMAT else unwrap_blob(blob or b"", api_hash)
+        if not raw or not raw.startswith(SQLITE_MAGIC):
+            _log.warning("telegram vault restore rejected: not a sqlite session")
+            return self._emit(
+                VaultResult(False, "err.session_vault_invalid", phone_label=label),
+                f"format={fmt}",
+            )
+        if not self._release_client_for_swap():
+            return self._emit(
+                VaultResult(False, "msg.session_restore_needs_login", phone_label=label),
+                "telegram client already active",
+            )
+
+        self._write_session_bytes(raw)
+        self._last_fingerprint = self._fingerprint(raw)
         status = self.ctx.telegram_auth.set_credentials(api_id, api_hash)
         if status.authorized:
-            _log.info("telegram vault restored phone=%s", mask_phone(phone))
-            return VaultResult(True, "msg.session_restored", restored=True, phone_label=mask_phone(phone))
-        return VaultResult(False, "msg.session_restore_needs_login", phone_label=mask_phone(phone))
+            return self._emit(
+                VaultResult(True, "msg.session_restored", restored=True, phone_label=label),
+                f"format={fmt}",
+            )
+        self._discard_stale_vault()
+        return self._emit(
+            VaultResult(False, "msg.session_restore_needs_login", phone_label=label),
+            "restored session is not authorized (revoked)",
+        )
 
     def forget(self) -> VaultResult:
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
         files = self._children_by_name(drive, folder_id)
-        for name in (VAULT_SESSION_NAME, VAULT_CREDS_NAME):
+        for name in (VAULT_SESSION_NAME, VAULT_CREDS_NAME, SESSION_VAULT_NAME):
             meta = files.get(name)
             if meta:
-                drive.delete_file(meta["id"])
+                try:
+                    drive.delete_file(meta["id"])
+                except Exception:  # noqa: BLE001
+                    pass
         try:
             self._creds_path().unlink(missing_ok=True)
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
+        self._last_fingerprint = ""
         _log.info("telegram vault forgotten")
-        return VaultResult(True, "msg.session_forgotten", forgotten=True)
+        return self._emit(VaultResult(True, "msg.session_forgotten", forgotten=True))
 
     # ---- quiet lifecycle helpers (M24-T03) ----
 
@@ -571,43 +730,107 @@ class SessionVault:
         existing manual login path untouched.
         """
         if self._autorestore_done:
-            return VaultResult(
+            return self._emit(VaultResult(
                 self.ctx.telegram_auth.authorized,
                 "msg.session_already_authorized",
                 restored=self.ctx.telegram_auth.authorized,
-            )
+            ))
         self._autorestore_done = True
         try:
             return self.autorestore()
         except Exception as exc:  # noqa: BLE001 - the UI build must never die here
             _log.warning("session autorestore skipped: %s", type(exc).__name__)
-            return VaultResult(False, "err.session_vault_invalid")
+            return self._emit(VaultResult(False, "err.session_vault_invalid"), type(exc).__name__)
 
     def save_after_login(self, force: bool = False) -> VaultResult:
-        """Save the vault right after a successful login. Never raises.
-
-        The goal of the whole feature is that the user never re-enters a code,
-        so persistence cannot depend on remembering a button. Skips silently
-        when Telegram is not authorized, when Drive is not connected, when the
-        credentials are not in memory, or when this Drive account already has a
-        vault (``force=True`` overwrites it).
-        """
+        """Persist authorization once Drive is ready, preserving an honest retry latch."""
         try:
             if not self.ctx.telegram_auth.authorized:
-                return VaultResult(False, "err.session_not_authorized")
+                return self._emit(VaultResult(False, "err.session_not_authorized"))
             if not getattr(self.ctx.drive_auth, "connected", False):
-                return VaultResult(False, "msg.session_restore_skipped_no_drive")
+                self._pending_save = True
+                return self._emit(
+                    VaultResult(False, "msg.session_restore_skipped_no_drive"),
+                    "deferred: drive not ready",
+                )
             api_id, api_hash, phone = self._creds_from_memory()
+            if not api_hash:
+                api_hash = self._vault_secret()
             if not api_id.isdigit() or not api_hash:
-                return VaultResult(False, "err.session_vault_invalid")
-            drive = self._drive_client()
-            folder_id = self._vault_folder_id(drive)
-            if not force and self._vault_present(drive, folder_id):
-                return VaultResult(True, "msg.session_saved", saved=False)
+                return self._emit(
+                    VaultResult(False, "err.session_vault_invalid"), "no credentials in memory"
+                )
+            if not force and self._last_fingerprint:
+                try:
+                    if self._fingerprint(self._snapshot_bytes()) == self._last_fingerprint:
+                        return self._emit(VaultResult(True, "msg.session_saved", saved=False), "unchanged")
+                except Exception:  # noqa: BLE001 - fall through to a real save
+                    pass
             return self.save_now(api_id, api_hash, phone)
         except Exception as exc:  # noqa: BLE001 - a login must never fail on this
-            _log.warning("session autosave skipped: %s", type(exc).__name__)
-            return VaultResult(False, "err.session_vault_invalid")
+            self._pending_save = True
+            _log.warning("session autosave deferred: %s", type(exc).__name__)
+            return self._emit(VaultResult(False, "err.session_vault_invalid"), type(exc).__name__)
+
+    @property
+    def pending(self) -> bool:
+        """True when an authorized sign-in is waiting for Drive."""
+        return bool(self._pending_save)
+
+    def flush_pending(self) -> Optional[VaultResult]:
+        """Persist the deferred sign-in once Telegram and Drive are both live."""
+        if not self._pending_save:
+            return None
+        if not self.ctx.telegram_auth.authorized:
+            return None
+        if not getattr(self.ctx.drive_auth, "connected", False):
+            return None
+        self._pending_save = False
+        return self.save_after_login(force=True)
+
+    def status(self) -> dict[str, Any]:
+        """Return redacted vault state for notebooks and diagnostics."""
+        local = self._local_session_path()
+        exists = local.exists()
+        info: dict[str, Any] = {
+            "telegram_state": getattr(self.ctx.telegram_auth, "state", ""),
+            "telegram_authorized": bool(getattr(self.ctx.telegram_auth, "authorized", False)),
+            "drive_connected": bool(getattr(self.ctx.drive_auth, "connected", False)),
+            "local_session": str(local),
+            "local_exists": exists,
+            "local_bytes": local.stat().st_size if exists else 0,
+            "pending_save": self._pending_save,
+            "last_result": self.last_result.message_key if self.last_result else "",
+            "vault_files": [],
+            "vault_format": 0,
+            "saved_at": "",
+            "phone_label": "",
+        }
+        if not info["drive_connected"]:
+            return info
+        try:
+            drive = self._drive_client()
+            folder_id = self._vault_folder_id(drive)
+            children = self._children_by_name(drive, folder_id)
+            files = [
+                {
+                    "name": name,
+                    "size": int(meta.get("size") or 0),
+                    "modified": str(meta.get("modifiedTime") or ""),
+                }
+                for name, meta in children.items()
+                if name
+            ]
+            files.sort(key=lambda item: item["name"])
+            info["vault_files"] = files
+            if VAULT_CREDS_NAME in children:
+                payload = self._read_creds_payload(drive, folder_id) or {}
+                info["vault_format"] = int(payload.get("format", 0) or 0)
+                info["saved_at"] = str(payload.get("saved_at") or "")
+                info["phone_label"] = mask_phone(str(payload.get("phone") or ""))
+        except Exception as exc:  # noqa: BLE001 - a read model never raises
+            info["error"] = type(exc).__name__
+        return info
 
     def forget_quiet(self) -> VaultResult:
         """Delete the vault without ever raising. Used by the logout handler.
@@ -618,11 +841,11 @@ class SessionVault:
         """
         try:
             if not getattr(self.ctx.drive_auth, "connected", False):
-                return VaultResult(False, "msg.session_restore_skipped_no_drive")
+                return self._emit(VaultResult(False, "msg.session_restore_skipped_no_drive"))
             return self.forget()
         except Exception as exc:  # noqa: BLE001 - logout is more important
             _log.warning("session forget skipped: %s", type(exc).__name__)
-            return VaultResult(False, "err.session_vault_invalid")
+            return self._emit(VaultResult(False, "err.session_vault_invalid"), type(exc).__name__)
 
 
 _KEEPALIVE_JS = r"""
