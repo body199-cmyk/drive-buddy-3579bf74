@@ -7,7 +7,7 @@
 | TASK ID | `M24-T05` |
 | Branch | `arena/m24-t05-session-vault-determinism` |
 | Base SHA | `70e3406931134c289637d7892f6eeb5ebef7ae94` |
-| Commit status | Not attempted; local changes await owner approval |
+| Commit status | Local commit succeeded; push, PR, and merge are authorized and pending execution |
 | Honest status | Implemented + fake-tested. Not live-verified. |
 
 ## STEP 0 diagnostic output — redacted

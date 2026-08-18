@@ -12,7 +12,7 @@
 | Branch | `arena/m24-t05-session-vault-determinism` |
 | Base SHA | `70e3406931134c289637d7892f6eeb5ebef7ae94` (current `origin/main` at start) |
 | HEAD before work | `70e3406931134c289637d7892f6eeb5ebef7ae94` |
-| HEAD after work | لا يزال HEAD عند baseline؛ التغييرات محلية غير ملتزم بها بانتظار موافقة المالك |
+| HEAD after work | التزامان محليان على فرع المهمة؛ القيمة القانونية هي ناتج `git rev-parse HEAD` بعد الدفع |
 | Status | **Implemented + fake-tested. Not live-verified.** |
 | Last green local check | `700 passed`؛ لا يوجد تشغيل CI أو تحقق Colab حي في هذه الجلسة |
 | Honest | ليس Colab-ready ولا Complete. لا يوجد حساب Telegram/Drive حي في بيئة التنفيذ. |
@@ -53,4 +53,4 @@ NONE. لم تُنفّذ Part B لعدم استلام العبارة المطلو
 
 ## Rollback and next step
 
-The safe rollback point remains `70e3406931134c289637d7892f6eeb5ebef7ae94`. No commit, push, or pull request was attempted. The next smallest step is the owner's approval to commit locally and, separately, approval before any remote push/PR/merge; after remote review, the owner must run M24-T06 in a new Colab VM.
+The safe rollback point remains `70e3406931134c289637d7892f6eeb5ebef7ae94`. The local M24-T05 commit succeeded. Push, pull request, and merge are authorized by the owner but have not occurred at the instant of this update. After remote review and merge, the owner must run M24-T06 in a new Colab VM.
