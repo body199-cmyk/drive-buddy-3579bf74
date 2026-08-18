@@ -23,4 +23,8 @@ Restore the backup onto local `/content` before reuse. The session file is never
 - M24-T03: logout deletes the vault through the logout handler, because `telegram_auth.py` is protected and only knows the ADR-004 blob.
 - M24-T03: a restored blob is written to the local session path only when it starts with the SQLite magic header; otherwise the manual login path stays intact.
 - M24-T03: saving falls back to the credentials already held in TelegramAuth memory, and a successful login saves the vault automatically when the account has none.
-- Accepted risk (owner decision, M24-T03): `telegram_creds.json` stays plain JSON next to a raw session copy inside the user's own `TeleDrive_AppData`. Anyone with read access to that Drive folder can take over the Telegram account. Not mitigated in this cycle.
+- M24-T05: `persist_from_context()` is the one persistence path after authorization; the legacy ADR-004 blob is no longer written, and pending saves are retried after Drive becomes ready.
+- M24-T05: the default format is 2. The session snapshot is wrapped with an `api_hash` retained only in live memory or Colab Secrets, while `telegram_creds.json` stores no `api_hash`. Format 1 remains readable for migration and `TELEDRIVE_VAULT_PLAINTEXT=1` is an owner-only legacy escape hatch.
+- M24-T05: snapshotting resists a locked live SQLite file; a restore only swaps a released client path, and a restored session that fails authorization is removed locally and from the vault.
+- M24-T05: logout/forget remove the current vault pair and the residual legacy `td_telegram.session.vault` blob.
+- Status: Implemented + fake-tested. Not live-verified; the owner must complete M24-T06 on a real Colab VM before any Colab-ready claim.
