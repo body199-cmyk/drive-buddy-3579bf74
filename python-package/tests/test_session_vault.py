@@ -1,13 +1,22 @@
-"""ADR-004: obfuscated Telegram session vault + keep-alive."""
+"""ADR-004 obfuscated vault + M24-T01 SessionVault (creds JSON on Drive)."""
 from __future__ import annotations
 
 import json
+import logging
+import sqlite3
 from pathlib import Path
 
 from teledrive import database as db
 from teledrive import session_vault
 from teledrive.config import SESSION_VAULT_NAME
-from teledrive.session_vault import MAGIC
+from teledrive.errors import TeleDriveError
+from teledrive.session_vault import MAGIC, VAULT_CREDS_NAME, VAULT_SESSION_NAME
+
+PROVES = (
+    "session.save",
+    "session.autorestore",
+    "session.forget",
+)
 
 from .mocks.fake_drive import FakeDrive
 from .test_telegram_auth import FakeClient
@@ -129,3 +138,142 @@ def test_existing_session_label_is_not_a_phone(ctx):
     status = auth.set_credentials("12345", "h")
     assert status.authorized
     assert status.account_label == "saved-session"
+
+
+def _sqlite_session(path: Path, payload: bytes = b"vault-bytes") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS sessions (data BLOB)")
+        conn.execute("DELETE FROM sessions")
+        conn.execute("INSERT INTO sessions(data) VALUES (?)", (payload,))
+        conn.commit()
+    finally:
+        conn.close()
+    return path
+
+
+def _connect_fake_drive(ctx, drive=None):
+    from teledrive.drive_auth import CONNECTED
+
+    drive = drive or FakeDrive()
+    ctx.drive_client = drive
+    ctx.drive_auth.state = CONNECTED
+    ctx.drive_auth.service = object()
+    return drive
+
+
+def test_save_now_rejects_when_telegram_is_not_authorized(ctx):
+    vault = ctx.session_vault
+    assert ctx.telegram_auth.authorized is False
+    try:
+        vault.save_now("1234567", "testhash", "+201234567890")
+        raise AssertionError("save_now must refuse when telegram is not authorized")
+    except TeleDriveError as exc:
+        assert exc.message_key == "err.session_not_authorized"
+
+
+def test_save_now_uploads_session_and_creds(ctx, caplog):
+    from teledrive import config
+
+    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"session-blob")
+    ctx.telegram_auth.state = ta.AUTHORIZED
+    ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
+    drive = _connect_fake_drive(ctx)
+    caplog.set_level(logging.INFO)
+    result = ctx.session_vault.save_now("1234567", "testhash", "+201234567890")
+    assert result.ok and result.saved
+    assert result.message_key == "msg.session_saved"
+    names = {meta["name"] for meta in drive.files.values()}
+    assert VAULT_SESSION_NAME in names
+    assert VAULT_CREDS_NAME in names
+    creds_meta = next(m for m in drive.files.values() if m["name"] == VAULT_CREDS_NAME)
+    payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
+    assert payload["api_id"] == "1234567"
+    assert payload["session_file"] == VAULT_SESSION_NAME
+    logged = "\n".join(rec.getMessage() for rec in caplog.records)
+    assert "+201234567890" not in logged
+    assert "testhash" not in logged
+
+
+def test_autorestore_skips_when_drive_is_disconnected(ctx):
+    result = ctx.session_vault.autorestore()
+    assert result.ok is False
+    assert result.message_key == "msg.session_restore_skipped_no_drive"
+
+
+def test_autorestore_reports_not_saved_when_vault_is_empty(ctx):
+    _connect_fake_drive(ctx)
+    result = ctx.session_vault.autorestore()
+    assert result.ok is False
+    assert result.message_key == "msg.session_not_saved"
+
+
+def test_autorestore_writes_local_session_and_calls_set_credentials(ctx, monkeypatch):
+    from teledrive import config
+
+    drive = _connect_fake_drive(ctx)
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    raw = b"SQLite format 3\x00restored-session"
+    drive.upsert_bytes(VAULT_SESSION_NAME, raw, folder_id)
+    creds = {
+        "api_id": "7654321",
+        "api_hash": "restoredhash",
+        "phone": "+201111111111",
+        "saved_at": "2026-08-18T00:00:00Z",
+        "format": 1,
+        "session_file": VAULT_SESSION_NAME,
+    }
+    drive.upsert_bytes(VAULT_CREDS_NAME, json.dumps(creds).encode("utf-8"), folder_id)
+
+    def fake_set_credentials(api_id, api_hash):
+        ctx.telegram_auth.state = "AUTHORIZED"
+        return type("S", (), {"authorized": True, "state": "AUTHORIZED", "account_label": ""})()
+
+    monkeypatch.setattr(ctx.telegram_auth, "set_credentials", fake_set_credentials)
+    dest = Path(config.TELEGRAM_SESSION)
+    if dest.exists():
+        dest.unlink()
+    result = ctx.session_vault.autorestore()
+    assert result.ok and result.restored
+    assert result.message_key == "msg.session_restored"
+    assert dest.read_bytes() == raw
+    assert dest.name == "telegram.session"
+    assert dest.parent.name == "session"
+    assert "/content/drive" not in str(dest)
+
+
+def test_forget_deletes_vault_files(ctx):
+    drive = _connect_fake_drive(ctx)
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    drive.upsert_bytes(VAULT_SESSION_NAME, b"x", folder_id)
+    drive.upsert_bytes(VAULT_CREDS_NAME, b"{}", folder_id)
+    result = ctx.session_vault.forget()
+    assert result.ok and result.forgotten
+    assert result.message_key == "msg.session_forgotten"
+    names = {meta["name"] for meta in drive.files.values()}
+    assert VAULT_SESSION_NAME not in names
+    assert VAULT_CREDS_NAME not in names
+
+
+def test_probe_works_from_external_service_before_adopt(ctx):
+    drive = FakeDrive()
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    drive.upsert_bytes(VAULT_SESSION_NAME, b"x", folder_id)
+    creds = {"api_id": "1", "api_hash": "h", "phone": "+201234567890", "format": 1}
+    drive.upsert_bytes(VAULT_CREDS_NAME, json.dumps(creds).encode("utf-8"), folder_id)
+    probe = ctx.session_vault.probe(drive)
+    assert probe["has_session"] is True
+    assert probe["has_creds"] is True
+    assert probe["phone"] == "+201234567890"
+    assert "+201234567890" not in probe["phone_label"]
+    assert ctx.drive_auth.connected is False
+
+
+def test_restored_session_stays_on_local_runtime_not_mounted_drive(ctx, monkeypatch):
+    from teledrive import config
+
+    path = ctx.session_vault._write_session_bytes(b"local-only")
+    assert path == Path(config.TELEGRAM_SESSION)
+    assert not str(path).startswith("/content/drive")
+    assert "MyDrive" not in str(path)

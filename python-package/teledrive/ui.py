@@ -506,6 +506,11 @@ def _step_connection(ctx, binder, seed, lang) -> dict[str, Any]:
             value=seed["telegram_detail"], label=t("dash.telegram_status"),
             interactive=False,
         )
+        with gr.Row():
+            save_session_btn = binder.button(gr, "session.save")
+            restore_session_btn = binder.button(gr, "session.autorestore")
+            forget_session_btn = binder.button(gr, "session.forget")
+        session_message = gr.Textbox(label=t("form.session_vault"), interactive=False)
     # ---- Google Drive ----
     with gr.Group(elem_classes=["td-card"]):
         gr.Markdown(f"### {t('nav.drive')}", elem_classes=["td-section-title"])
@@ -532,6 +537,8 @@ def _step_connection(ctx, binder, seed, lang) -> dict[str, Any]:
         "verify_btn": verify_btn, "password_panel": password_panel, "password": password,
         "verify_pw_btn": verify_pw_btn, "logout_btn": logout_btn,
         "tg_status_btn": tg_status_btn, "telegram_detail": telegram_detail,
+        "save_session_btn": save_session_btn, "restore_session_btn": restore_session_btn,
+        "forget_session_btn": forget_session_btn, "session_message": session_message,
         "drive_connect_btn": drive_connect_btn, "drive_reconnect_btn": drive_reconnect_btn,
         "drive_status_btn": drive_status_btn, "drive_detail": drive_detail,
         "drive_folder_picker": drive_folder_picker, "quota_btn": quota_btn,
@@ -890,6 +897,14 @@ def _bind_actions(
                 [conn["password"]], tg_outputs)
     binder.wire(conn["logout_btn"], "telegram.logout", [], tg_outputs)
     binder.wire(conn["tg_status_btn"], "telegram.status", [], tg_outputs)
+
+    # Telegram session vault — outputs: (session_message, telegram_detail, chip).
+    session_outputs = [conn["session_message"], conn["telegram_detail"], telegram_chip]
+    binder.wire(conn["save_session_btn"], "session.save",
+                [conn["api_id"], conn["api_hash"], conn["phone"]], session_outputs)
+    binder.wire(conn["restore_session_btn"], "session.autorestore", [], session_outputs)
+    binder.wire(conn["forget_session_btn"], "session.forget", [], session_outputs)
+    binder.load("session.autorestore", session_outputs)
 
     # Drive connect/status — outputs: (detail, chip).
     dr_outputs = [conn["drive_detail"], drive_chip]

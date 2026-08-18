@@ -23,6 +23,7 @@ class _Stop(Exception):
 
 ARGS = {
     "telegram.set_credentials": ("1", "hash"),
+    "session.save": ("1", "hash", "+201234567890"),
     "telegram.send_code": ("+971500000000",),
     "telegram.verify_code": ("12345",),
     "telegram.verify_password": ("pw",),

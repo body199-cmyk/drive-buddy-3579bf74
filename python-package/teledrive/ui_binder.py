@@ -67,6 +67,7 @@ class UIBinder:
         self._sync_action_id: str = ""
         self._sync_handler = None
         self._sync_outputs: list = []
+        self._page_loads: list[tuple[str, Callable[..., Any], list]] = []
 
     # ---- validation ----
 
@@ -216,14 +217,35 @@ class UIBinder:
                   action_id, len(self._sync_outputs))
         return handler
 
+    def load(self, action_id: str, outputs: Sequence[Any] | None = None) -> Callable[..., Any]:
+        """Register a ready action to run once on Blocks.load (page open).
+
+        Gradio has no binder.load in older trees; this is the smallest hook that
+        keeps assert_complete() honest and lets session.autorestore paint the
+        live Telegram chip after a Drive restore.
+        """
+        spec, handler = self.validate(action_id)
+        self._page_loads.append((action_id, handler, list(outputs or [])))
+        rec = WireRecord(
+            action_id=action_id,
+            handler_name=spec.handler_name,
+            service_path=spec.service_path,
+            event="load",
+            component="Blocks",
+        )
+        self.wired.setdefault(action_id, []).append(rec)
+        _log.info("page-load action registered: %s", action_id)
+        return handler
+
     def load_sync(self, block: Any) -> None:
         """Run the sync action once on page load so step 1 is never guessed."""
-        if self._sync_handler is None:
-            return
         loader = getattr(block, "load", None)
         if loader is None:  # pragma: no cover - defensive
             return
-        loader(self._sync_handler, [], list(self._sync_outputs))
+        if self._sync_handler is not None:
+            loader(self._sync_handler, [], list(self._sync_outputs))
+        for _action_id, handler, outputs in getattr(self, "_page_loads", []):
+            loader(handler, [], outputs)
 
     # ---- completeness ----
 

@@ -37,6 +37,7 @@ from .services import (
     StatsService,
 )
 from .package_service import PackageService
+from .session_vault import SessionVault
 from .telegram_auth import TelegramAuth
 from .ui_binder import UIBinder
 
@@ -76,6 +77,7 @@ class ApplicationContext:
         # a Drive service object.
         self.telegram_auth = TelegramAuth(self)
         self.drive_auth = DriveAuth(self)
+        self.session_vault = SessionVault(self)
 
         # Domain services (Phases 5-7).
         self.drive_folders = DriveFolders(self)
