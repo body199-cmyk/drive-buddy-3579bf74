@@ -1,5 +1,14 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M24-T01] — 2026-08-18 — حفظ/استعادة جلسة Telegram على Drive
+
+- **save/restore Telegram session on Drive:** `SessionVault.save_now` / `autorestore` / `forget` / `probe` يرفعان `telegram.session` + `telegram_creds.json` إلى `TeleDrive_AppData` على حساب المستخدم. التشغيل يبقى من الملف المحلي فقط.
+- **notebook probe + auto-restore for same Drive account:** الخلية 3 تربط Drive أولًا ثم تفحص الخزينة؛ إن وُجدت تتخطى إدخال API. الخلية 4 تستدعي `ctx.session_vault.autorestore()` عندما لا تُمرَّر مفاتيح يدوية.
+- **new UI buttons for save/forget** (واستعادة يدوية) + صندوق حالة + page-load `session.autorestore` يعكس حالة تيليجرام الحية.
+- **README runbook update:** قسم «حفظ تسجيل Telegram على نفس حساب Drive» يشرح أول مرة والمرات التالية ونسيان الربط، ويحدّث شرح الخليتين 3 و4.
+- **توافق:** دوال ADR-004 (`persist_from_context` / keepalive) بقيت لأن `telegram_auth.py` محمي.
+- **الحالة الصادقة:** Implemented + fake-tested. Not live-verified.
+
 ## [M25-T02 MERGED] — 2026-08-13 — PR #47 → main `2bc33e9f`
 
 - **دمج:** PR [#47](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/47) → main = `2bc33e9fc042547e6eda838b9552c24dbb785923` في 2026-08-13T00:34:06Z. CI run `31654744180`: Python package PASS + Frontend build (lint+build) PASS.

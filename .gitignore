@@ -34,3 +34,6 @@ dist-ssr
 # TeleDrive: generated artifacts (never commit)
 public/teledrive-package.zip
 .venv/
+/content/teledrive_runtime/
+*.session
+telegram_creds.json

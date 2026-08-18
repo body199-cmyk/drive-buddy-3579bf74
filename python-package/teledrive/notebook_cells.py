@@ -52,10 +52,13 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 
 * Store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` once in Colab Secrets
   (left sidebar key icon). Cell 3 reads them; it only prompts if a secret
-  is missing. Secrets stay in your Google account, never in this notebook.
-* After the first successful Telegram login, an obfuscated session file is
-  saved to Drive `TeleDrive_AppData`. The next VM restores it so you skip
-  phone / OTP / 2FA. Logout deletes that file.
+  is missing **and** this Drive account has no saved Telegram session.
+  Secrets stay in your Google account, never in this notebook.
+* After the first successful Telegram login, press **Save Telegram sign-in
+  to Drive** in the UI. The next VM on the **same Drive account** restores
+  `telegram.session` plus the stored credentials automatically — no API
+  re-entry and no new Telegram code. A different Drive account does not
+  restore. Logout / Forget deletes that saved sign-in.
 * Google Drive auth is **native Colab** — usually one click on a new VM.
   No desktop OAuth JSON and no pasted authorization code.
 * Cell 4 starts a keep-alive (2-min heartbeat + Connect click). It delays
@@ -559,40 +562,11 @@ print("free bytes on local disk:", ctx.bootstrap_info["free_bytes"])
 print("journal mode:", ctx.db.journal_mode())
 '''
 
-CELL_3 = '''# ==== Cell 3: credentials — Colab Secrets (preferred) + native Drive auth ====
-# Add these once in the left-sidebar key icon (they survive every new VM):
-#   TELEGRAM_API_ID
-#   TELEGRAM_API_HASH
-# Missing secrets fall back to a hidden prompt for THIS runtime only.
-# Values are never printed, logged, snapshotted or packaged.
-
-api_id = ""
-api_hash = ""
-cred_source = "hidden prompt"
-try:
-    from google.colab import userdata as _td_userdata
-    try:
-        api_id = str(_td_userdata.get("TELEGRAM_API_ID") or "").strip()
-    except Exception:
-        api_id = ""
-    try:
-        api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
-    except Exception:
-        api_hash = ""
-    if api_id.isdigit() and api_hash:
-        cred_source = "Colab Secrets"
-except Exception:
-    pass
-
-if not (api_id.isdigit() and api_hash):
-    import getpass
-    if not api_id.isdigit():
-        api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
-    if not api_hash:
-        api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
-
-assert api_id.isdigit() and api_hash, "API ID must be numeric and API Hash non-empty"
-print("telegram credentials: loaded from", cred_source)
+CELL_3 = '''# ==== Cell 3: native Colab Drive auth + optional Telegram vault probe ====
+# Drive is connected FIRST. If this Drive account already has a saved
+# Telegram session (telegram.session + telegram_creds.json in TeleDrive_AppData),
+# manual API input is skipped. Otherwise Colab Secrets are preferred, then a
+# hidden prompt for THIS runtime only. Values are never printed or logged.
 
 # Google Drive: native Colab credentials only. No desktop OAuth JSON upload,
 # no pasted authorization code, no persisted Drive token file.
@@ -608,9 +582,49 @@ drive_service = build("drive", "v3", credentials=creds, cache_discovery=False)
 about = drive_service.about().get(
     fields="user(displayName,emailAddress),storageQuota(limit,usage)").execute()
 print("drive verified for:", about["user"].get("emailAddress", "(hidden)"))
+
+from teledrive.session_vault import SessionVault
+
+probe = SessionVault(ctx).probe(drive_service)
+api_id = ""
+api_hash = ""
+phone = probe.get("phone", "")
+cred_source = "hidden prompt"
+
+if probe.get("has_session") and probe.get("has_creds"):
+    print("saved Telegram session found for:", probe.get("phone_label") or "(hidden)")
+    print("manual Telegram API input skipped for this Drive account")
+else:
+    print("no saved Telegram session found for this Drive account")
+    try:
+        from google.colab import userdata as _td_userdata
+        try:
+            api_id = str(_td_userdata.get("TELEGRAM_API_ID") or "").strip()
+        except Exception:
+            api_id = ""
+        try:
+            api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
+        except Exception:
+            api_hash = ""
+        if api_id.isdigit() and api_hash:
+            cred_source = "Colab Secrets"
+    except Exception:
+        pass
+
+    if not (api_id.isdigit() and api_hash):
+        import getpass
+        if not api_id.isdigit():
+            api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
+        if not api_hash:
+            api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
+        if not phone:
+            phone = getpass.getpass("Telegram phone (hidden, international format): ").strip()
+
+    assert api_id.isdigit() and api_hash, "API ID must be numeric and API Hash non-empty"
+    print("telegram credentials: loaded from", cred_source)
 '''
 
-CELL_4 = '''# ==== Cell 4: inject into the ONE context and launch the interface ====
+CELL_4 = '''# ==== Cell 4: inject into the ONE context, attempt restore, launch the UI ====
 # No second context, no second event loop, no second Telegram client, no second
 # Drive service. Everything below reuses the objects created in cells 2 and 3.
 # Drive is adopted FIRST so the session vault can restore telegram.session
@@ -621,12 +635,16 @@ from teledrive import session_vault
 ctx.drive_auth.adopt_service(drive_service)           # already verified above
 print("drive status:", ctx.drive_auth.status().state)
 
-restored = session_vault.restore_from_context(ctx, secret=api_hash)
-print("telegram session vault:", "restored" if restored else "empty (first login or new account)")
-
-ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
-del api_id, api_hash
-print("telegram status:", ctx.telegram_auth.status().state)
+if api_id and api_hash:
+    restored = session_vault.restore_from_context(ctx, secret=api_hash)
+    print("telegram session vault:", "restored" if restored else "empty (first login or new account)")
+    ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
+    del api_id, api_hash
+    print("telegram credentials loaded into runtime memory")
+    print("telegram status:", ctx.telegram_auth.status().state)
+else:
+    restored = ctx.session_vault.autorestore()
+    print("telegram restore:", restored.message_key)
 
 ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resume
 

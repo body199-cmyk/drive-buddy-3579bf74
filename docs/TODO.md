@@ -5,6 +5,7 @@
 
 | TASK ID | البند | الحالة | الدليل / الملاحظات |
 |---|---|---|---|
+| M24-T01 | **حفظ جلسة Telegram على Drive والاستعادة التلقائية عبر الويب وColab** — `telegram.session` + `telegram_creds.json` داخل `TeleDrive_AppData`؛ تشغيل محلي فقط؛ أزرار حفظ/نسيان؛ probe في الخلية 3 | PARTIALLY COMPLETE — Implemented + fake-tested. Not live-verified | ADR-0002 · `session_vault.SessionVault` · tests/test_session_vault.py · README runbook · لا إثبات Colab حي في هذه الجلسة |
 | M25-T02 | **تحديث تلقائي للصفحة كاملة أثناء النقل (نبض هادئ كل 2s)** — React ينادي `queue.refresh` ذاتيًا أثناء `running`/in-flight ويحدّث اللقطة كاملة (لا الشريط فقط)، بلا تعطيل أزرار؛ + إصلاح Python: المحرك يعود `idle` بعد انتهاء النقل | VERIFIED COMPLETE — **مدمج في main `2bc33e9f` (PR #47)** | PHASE_M25_T02 · PR #47 MERGED 2026-08-13T00:34:06Z · CI run `31654744180` (Python + Frontend PASS) · `664 passed` · launcher `48/48` · contracts `24/24` · الإثبات الحي بيد المالك بعد إعادة نشر التاج (#27) |
 | M09-T01 | نظام الاستمرارية متعدد الحسابات: حزمة `docs/` الجذرية + مؤشرات سطر واحد | VERIFIED COMPLETE | ADR-001 · PR #2 |
 | M10-T01 | توحيد هوية v4.5.0 في الحزمة والمولد والنوت‌بوك والواجهة | VERIFIED COMPLETE | PR #3 · commit 936e78b |

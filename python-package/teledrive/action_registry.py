@@ -122,6 +122,36 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         tested=True,
         proof_test="tests/test_telegram_auth.py::test_status_never_exposes_the_full_phone",
     ),
+    ActionSpec(
+        action_id="session.save",
+        handler_name="h_session_save",
+        service_path="session_vault.save_now",
+        label_key="btn.session_save",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_session_vault.py::test_save_now_uploads_session_and_creds",
+    ),
+    ActionSpec(
+        action_id="session.autorestore",
+        handler_name="h_session_autorestore",
+        service_path="session_vault.autorestore",
+        label_key="btn.session_autorestore",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_session_vault.py::test_autorestore_writes_local_session_and_calls_set_credentials",
+    ),
+    ActionSpec(
+        action_id="session.forget",
+        handler_name="h_session_forget",
+        service_path="session_vault.forget",
+        label_key="btn.session_forget",
+        section="connection",
+        implemented=True,
+        tested=True,
+        proof_test="tests/test_session_vault.py::test_forget_deletes_vault_files",
+    ),
 
     # ---- Connection Center: Google Drive (native Colab auth only) ----
     # M17-T02: handler-level proofs now run a FAKE Drive service through the

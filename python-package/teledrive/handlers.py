@@ -91,6 +91,9 @@ ERROR_ARITY: dict[str, int] = {
     "telegram.verify_password": 4,
     "telegram.logout": 4,
     "telegram.status": 4,
+    "session.save": 3,
+    "session.autorestore": 3,
+    "session.forget": 3,
     "drive.connect": 2,
     "drive.reconnect": 2,
     "drive.status": 2,
@@ -305,6 +308,29 @@ class Handlers:
     @action("telegram.status")
     def h_telegram_status(self):
         return self._telegram_view(self.call("telegram.status"))
+
+    def _session_view(self, result, telegram_status=None) -> tuple[str, str, str]:
+        view = self._telegram_view(telegram_status or self.ctx.telegram_auth.status())
+        detail, chip = view[0], view[1]
+        message = t(result.message_key)
+        if getattr(result, "phone_label", ""):
+            message += f" · {result.phone_label}"
+        return message, detail, chip
+
+    @action("session.save")
+    def h_session_save(self, api_id: str = "", api_hash: str = "", phone: str = ""):
+        result = self.call("session.save", api_id, api_hash, phone)
+        return self._session_view(result)
+
+    @action("session.autorestore")
+    def h_session_autorestore(self):
+        result = self.call("session.autorestore")
+        return self._session_view(result)
+
+    @action("session.forget")
+    def h_session_forget(self):
+        result = self.call("session.forget")
+        return self._session_view(result)
 
     # ---- Drive ----
 

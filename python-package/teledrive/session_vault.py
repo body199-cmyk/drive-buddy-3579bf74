@@ -22,6 +22,7 @@ Drive listing from being a raw SQLite session.
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -288,6 +289,228 @@ def reset_keepalive_for_tests() -> None:
     global _KEEPALIVE_STARTED
     with _KEEPALIVE_LOCK:
         _KEEPALIVE_STARTED = False
+
+
+# ---------------------------------------------------------------------------
+# M24-T01 — explicit Telegram session vault on the user's own Drive.
+# The class below is the user-facing save / auto-restore / forget API.
+# The function-level helpers above stay for telegram_auth.py (protected):
+# persist_from_context / wipe_from_context / restore_from_context / keepalive.
+# Telegram still runs ONLY from the local session file under /content.
+# ---------------------------------------------------------------------------
+
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from .errors import DriveNotReadyError, TeleDriveError
+from .redaction import mask_phone
+
+VAULT_SESSION_NAME = "telegram.session"
+VAULT_CREDS_NAME = "telegram_creds.json"
+VAULT_FORMAT = 1
+
+
+def _looks_like_drive_ops(obj: Any) -> bool:
+    needed = ("ensure_folder", "list_children", "download_bytes", "upsert_bytes")
+    return obj is not None and all(hasattr(obj, name) for name in needed)
+
+
+@dataclass
+class VaultResult:
+    ok: bool
+    message_key: str
+    detail: str = ""
+    restored: bool = False
+    saved: bool = False
+    forgotten: bool = False
+    phone_label: str = ""
+
+
+class SessionVault:
+    def __init__(self, ctx) -> None:
+        self.ctx = ctx
+
+    # ---------- path helpers ----------
+
+    def _session_path(self) -> Path:
+        from . import config
+
+        client = getattr(getattr(self.ctx, "telegram_auth", None), "client", None)
+        raw = getattr(client, "session_path", None) if client is not None else None
+        if raw:
+            return Path(raw)
+        return Path(config.TELEGRAM_SESSION)
+
+    def _local_session_path(self) -> Path:
+        path = self._session_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _creds_path(self) -> Path:
+        return self._local_session_path().with_name(VAULT_CREDS_NAME)
+
+    def _drive_client(self, service: Any | None = None) -> Any:
+        if service is not None:
+            if _looks_like_drive_ops(service):
+                return service
+            from .drive_client import DriveService
+
+            return DriveService(service)
+        if not getattr(self.ctx.drive_auth, "connected", False):
+            raise DriveNotReadyError("drive is not connected")
+        existing = getattr(self.ctx, "drive_client", None)
+        if _looks_like_drive_ops(existing):
+            return existing
+        from .drive_client import DriveService
+
+        return DriveService.from_auth(self.ctx.drive_auth)
+
+    def _vault_folder_id(self, drive: Any) -> str:
+        return drive.ensure_folder(DRIVE_APPDATA_FOLDER)
+
+    def _children_by_name(self, drive: Any, folder_id: str) -> dict[str, dict[str, Any]]:
+        children = drive.list_children(folder_id)
+        return {str(child.get("name") or ""): child for child in children}
+
+    # ---------- file snapshot / restore ----------
+
+    def _checkpoint_sqlite(self, source: Path, dest: Path) -> None:
+        if not source.exists():
+            raise TeleDriveError("telegram session file is missing", "err.session_missing")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            dest.unlink()
+        src = sqlite3.connect(str(source))
+        try:
+            out = sqlite3.connect(str(dest))
+            try:
+                src.backup(out)
+            finally:
+                out.close()
+        finally:
+            src.close()
+
+    def _write_session_bytes(self, data: bytes) -> Path:
+        local = self._local_session_path()
+        tmp = local.with_suffix(".session.tmp")
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(data)
+        tmp.replace(local)
+        return local
+
+    def _read_creds_payload(self, drive: Any, folder_id: str) -> dict[str, Any] | None:
+        files = self._children_by_name(drive, folder_id)
+        meta = files.get(VAULT_CREDS_NAME)
+        if not meta:
+            return None
+        raw = drive.download_bytes(meta["id"])
+        data = json.loads(raw.decode("utf-8"))
+        if int(data.get("format", 0) or 0) != VAULT_FORMAT:
+            raise TeleDriveError("unsupported vault format", "err.session_vault_invalid")
+        return data
+
+    # ---------- public API ----------
+
+    def probe(self, service: Any) -> dict[str, Any]:
+        """Used by notebook cell 3 before the app adopts the Drive service."""
+        drive = self._drive_client(service)
+        folder_id = self._vault_folder_id(drive)
+        files = self._children_by_name(drive, folder_id)
+        has_session = VAULT_SESSION_NAME in files
+        has_creds = VAULT_CREDS_NAME in files
+        payload = None
+        if has_creds:
+            try:
+                payload = self._read_creds_payload(drive, folder_id)
+            except Exception:
+                payload = None
+        return {
+            "has_session": has_session,
+            "has_creds": has_creds,
+            "phone": str((payload or {}).get("phone") or ""),
+            "phone_label": mask_phone(str((payload or {}).get("phone") or "")),
+        }
+
+    def save_now(self, api_id: str, api_hash: str, phone: str = "") -> VaultResult:
+        if not self.ctx.telegram_auth.authorized:
+            raise TeleDriveError("telegram is not authorized", "err.session_not_authorized")
+        api_id = str(api_id or "").strip()
+        api_hash = str(api_hash or "").strip()
+        phone = str(phone or "").strip()
+        if not api_id.isdigit():
+            raise TeleDriveError("api id must be numeric", "err.bad_api_id")
+        if not api_hash:
+            raise TeleDriveError("api hash required", "err.bad_api_hash")
+
+        drive = self._drive_client()
+        folder_id = self._vault_folder_id(drive)
+        local_session = self._local_session_path()
+        snapshot = local_session.with_name("telegram.session.snapshot")
+        self._checkpoint_sqlite(local_session, snapshot)
+
+        creds = {
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "phone": phone,
+            "saved_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "format": VAULT_FORMAT,
+            "session_file": VAULT_SESSION_NAME,
+        }
+        drive.upsert_bytes(VAULT_SESSION_NAME, snapshot.read_bytes(), folder_id, mime_type="application/octet-stream")
+        drive.upsert_bytes(VAULT_CREDS_NAME, json.dumps(creds, ensure_ascii=False, indent=2).encode("utf-8"), folder_id, mime_type="application/json")
+        try:
+            snapshot.unlink(missing_ok=True)
+        except Exception:
+            pass
+        _log.info("telegram vault saved phone=%s", mask_phone(phone))
+        return VaultResult(True, "msg.session_saved", saved=True, phone_label=mask_phone(phone))
+
+    def autorestore(self) -> VaultResult:
+        if self.ctx.telegram_auth.authorized:
+            return VaultResult(True, "msg.session_already_authorized", restored=True)
+        if not self.ctx.drive_auth.connected:
+            return VaultResult(False, "msg.session_restore_skipped_no_drive")
+
+        drive = self._drive_client()
+        folder_id = self._vault_folder_id(drive)
+        files = self._children_by_name(drive, folder_id)
+        if VAULT_SESSION_NAME not in files or VAULT_CREDS_NAME not in files:
+            return VaultResult(False, "msg.session_not_saved")
+
+        payload = self._read_creds_payload(drive, folder_id)
+        if not payload:
+            return VaultResult(False, "err.session_vault_invalid")
+
+        session_bytes = drive.download_bytes(files[VAULT_SESSION_NAME]["id"])
+        self._write_session_bytes(session_bytes)
+
+        api_id = str(payload.get("api_id") or "").strip()
+        api_hash = str(payload.get("api_hash") or "").strip()
+        phone = str(payload.get("phone") or "").strip()
+        if not api_id.isdigit() or not api_hash:
+            raise TeleDriveError("vault credentials are incomplete", "err.session_vault_invalid")
+
+        status = self.ctx.telegram_auth.set_credentials(api_id, api_hash)
+        if status.authorized:
+            _log.info("telegram vault restored phone=%s", mask_phone(phone))
+            return VaultResult(True, "msg.session_restored", restored=True, phone_label=mask_phone(phone))
+        return VaultResult(False, "msg.session_restore_needs_login", phone_label=mask_phone(phone))
+
+    def forget(self) -> VaultResult:
+        drive = self._drive_client()
+        folder_id = self._vault_folder_id(drive)
+        files = self._children_by_name(drive, folder_id)
+        for name in (VAULT_SESSION_NAME, VAULT_CREDS_NAME):
+            meta = files.get(name)
+            if meta:
+                drive.delete_file(meta["id"])
+        try:
+            self._creds_path().unlink(missing_ok=True)
+        except Exception:
+            pass
+        _log.info("telegram vault forgotten")
+        return VaultResult(True, "msg.session_forgotten", forgotten=True)
 
 
 _KEEPALIVE_JS = r"""

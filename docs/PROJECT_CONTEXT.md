@@ -62,9 +62,16 @@ docs/
 
 `src/` صفحة هبوط/تحميل فقط. لا يجوز أن يصبح runtime لتيليجرام/درايف.
 
+## Session vault (M24-T01)
+
+التطبيق يدعم الآن **Telegram session vault on the user's own Drive account**.
+ملف الجلسة يُشغَّل محليًا فقط تحت `/content/teledrive_runtime/session/telegram.session`.
+Drive يحتفظ بنسخة احتياطية (`telegram.session` + `telegram_creds.json` داخل `TeleDrive_AppData`) لا أكثر.
+نفس حساب Drive يستعيد الجلسة تلقائيًا؛ حساب مختلف لا يستعيد شيئًا.
+
 ## Secrets
 
-API ID/hash، أرقام هواتف، أكواد، 2FA، session strings، OAuth tokens، روابط خاصة، tracebacks غير منقحة — ممنوعة في كل مكان (ملفات، سجلات، checkoints، ZIP، git).
+API ID/hash، أرقام هواتف، أكواد، 2FA، session strings، OAuth tokens، روابط خاصة، tracebacks غير منقحة — ممنوعة في كل مكان (ملفات، سجلات، checkoints، ZIP، git). تخزين `telegram_creds.json` على Drive الخاص بالمستخدم انحراف مقصود وموثّق في ADR-0002؛ القيم لا تُطبع في السجلات.
 
 ---
 **Next:** TODO #4 (تشغيل البوابات الست في بيئة اختبار كاملة + فحص Gradio 6.20.0 والأسرار).

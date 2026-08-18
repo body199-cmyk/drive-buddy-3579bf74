@@ -13,7 +13,7 @@ TeleDrive محرك نقل داخل Google Colab — واجهة Gradio في نف�
    - يجمع Telegram credentials عبر `getpass` (ذاكرة فقط)، ويؤدي Native Drive auth: `colab_auth.authenticate_user() -> google.auth.default(scopes=[drive]) -> build() -> about().get()` gate.
 
 2. **ApplicationContext** (`app_context.py` + `async_runtime.py` + `config.py`):
-   - مالك وحيد لكل: config، aio، db، auth، queue_manager، progress، telegram_auth، drive_auth، drive_folders، drive_quota، selection، scanner، stats، log_service، settings، preferences، checkpoints، colab_export، package_service، handlers، binder، ui handle.
+   - مالك وحيد لكل: config، aio، db، auth، queue_manager، progress، telegram_auth، drive_auth، session_vault، drive_folders، drive_quota، selection، scanner، stats، log_service، settings، preferences، checkpoints، colab_export، package_service، handlers، binder، ui handle.
    - `resolve(service_path)` يفشل بصوت عالٍ على typo / None / non-callable — يمنع الأزرار الميتة.
 
 3. **UI Binding** (`action_registry.py` + `ui_binder.py` + `handlers.py` + `ui.py` + `theme.py` + `i18n.py`):
@@ -36,7 +36,8 @@ TeleDrive محرك نقل داخل Google Colab — واجهة Gradio في نف�
 6. **Infrastructure**
    - Telegram: `telegram_auth.py` (10 حالات: DISCONNECTED..AUTHORIZED) + `telegram_client.py` + `telegram_links.py` + `media_scanner.py`
    - Drive: `drive_auth.py` (native only) + `drive_client.py` + `drive_folders.py` (persist folder ID لا name) + `drive_quota.py`
-   - Support: `logging_config.py`, `redaction.py`, `errors.py`, `utils.py`, `progress_tracker.py`, `transfer_manager.py`, `package_service.py`, `notebook_cells.py`, `handoff.py`, `snapshot.py`, `auth_manager.py`.
+   - Support: `logging_config.py`, `redaction.py`, `errors.py`, `utils.py`, `progress_tracker.py`, `transfer_manager.py`, `package_service.py`, `notebook_cells.py`, `handoff.py`, `snapshot.py`, `auth_manager.py`, `session_vault.py`.
+   - **SessionVault** (M24-T01): خدمة طبقة تطبيق على السياق الواحد. تعتمد على `DriveService` الموجود أصلًا ولا تملك مصادقة مستقلة. تحفظ/تستعيد `telegram.session` + `telegram_creds.json` داخل `TeleDrive_AppData` ثم تعيد الملف إلى `/content` قبل `set_credentials()` أو أثناء bootstrap النوت‌بوك. Telethon لا يعمل من Drive الموصول.
 
 ## Transfer Order (مقدس — §13)
 
