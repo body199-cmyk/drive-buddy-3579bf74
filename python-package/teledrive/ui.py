@@ -154,6 +154,13 @@ def build(ctx: ApplicationContext | None = None) -> Any:
         language = "ar"
     set_language(language)
 
+    # M24-T03: restore a saved Telegram sign-in BEFORE the first paint. The
+    # page-load event is not a dependency any more: shell_seed() below reads
+    # the live context, so a restored session renders as connected on the very
+    # first render. One-shot and never raising - on failure the manual login
+    # path is exactly what it was.
+    ctx.session_vault.autorestore_once()
+
     with gr.Blocks(
         title=t("app.title"),
         elem_id="td-root",

@@ -225,6 +225,12 @@ class UIBinder:
         live Telegram chip after a Drive restore.
         """
         spec, handler = self.validate(action_id)
+        # M24-T03: the language re-render calls this again for the same action;
+        # replace the entry instead of stacking duplicate page-load bindings.
+        for index, (registered_id, _handler, _outputs) in enumerate(self._page_loads):
+            if registered_id == action_id:
+                self._page_loads[index] = (action_id, handler, list(outputs or []))
+                return handler
         self._page_loads.append((action_id, handler, list(outputs or [])))
         rec = WireRecord(
             action_id=action_id,

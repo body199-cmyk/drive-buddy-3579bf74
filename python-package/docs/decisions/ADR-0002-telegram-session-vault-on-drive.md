@@ -19,3 +19,8 @@ Restore the backup onto local `/content` before reuse. The session file is never
 - If the Telegram session is revoked externally, the app falls back to manual login.
 - This is an intentional deviation from the earlier "credentials live in memory only" rule, but it is scoped to user-owned Drive persistence and does not introduce a second auth mechanism.
 - The ADR-004 obfuscated blob and keepalive hooks remain because `telegram_auth.py` is a protected file and still calls them.
+- M24-T03: the restore now runs at UI build time (before the first paint), so the feature does not depend on a Gradio page-load event firing.
+- M24-T03: logout deletes the vault through the logout handler, because `telegram_auth.py` is protected and only knows the ADR-004 blob.
+- M24-T03: a restored blob is written to the local session path only when it starts with the SQLite magic header; otherwise the manual login path stays intact.
+- M24-T03: saving falls back to the credentials already held in TelegramAuth memory, and a successful login saves the vault automatically when the account has none.
+- Accepted risk (owner decision, M24-T03): `telegram_creds.json` stays plain JSON next to a raw session copy inside the user's own `TeleDrive_AppData`. Anyone with read access to that Drive folder can take over the Telegram account. Not mitigated in this cycle.

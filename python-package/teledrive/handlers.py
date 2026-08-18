@@ -283,6 +283,10 @@ class Handlers:
                 f"telegram connect failed: {type(exc).__name__}",
                 "err.tg_connect_failed",
             ) from exc
+        # M24-T03: an existing local session authorizes right here; if this
+        # Drive account has no vault yet, create it now (skipped when present).
+        if getattr(status, "authorized", False):
+            self.ctx.session_vault.save_after_login()
         return self._telegram_view(status)
 
     @action("telegram.send_code")
@@ -295,14 +299,27 @@ class Handlers:
 
     @action("telegram.verify_code")
     def h_telegram_verify_code(self, code: str):
-        return self._telegram_view(self.call("telegram.verify_code", code))
+        status = self.call("telegram.verify_code", code)
+        # M24-T03: persist the sign-in the moment it becomes real, so the next
+        # Colab VM on this Drive account needs no code. Quiet by design: a
+        # Drive failure must never turn a successful login into an error.
+        if getattr(status, "authorized", False):
+            self.ctx.session_vault.save_after_login()
+        return self._telegram_view(status)
 
     @action("telegram.verify_password")
     def h_telegram_verify_password(self, password: str):
-        return self._telegram_view(self.call("telegram.verify_password", password))
+        status = self.call("telegram.verify_password", password)
+        if getattr(status, "authorized", False):
+            self.ctx.session_vault.save_after_login()
+        return self._telegram_view(status)
 
     @action("telegram.logout")
     def h_telegram_logout(self):
+        # M24-T03: the Drive vault must die WITH the account. This runs BEFORE
+        # the logout while Drive and the session are still live, and it is
+        # quiet so a Drive hiccup can never block signing out.
+        self.ctx.session_vault.forget_quiet()
         return self._telegram_view(self.call("telegram.logout"))
 
     @action("telegram.status")
