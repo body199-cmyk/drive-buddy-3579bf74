@@ -7,7 +7,7 @@
 - **قنوات خاصة بهوية صحيحة:** حل كيان Telegram يسخّن dialogs مرة واحدة عند الحاجة؛ تُخزَّن peer identity للقناة بصيغة Telethon الصحيحة `-100<id>`، ويظهر عدم الوصول كخطأ دائم مترجم `err.private_channel_unresolved`.
 - **استئناف تنزيل محافظ:** إن وُجد `.part` صالح لوسيط قابل للاستئناف، يُقص فقط إلى حد محاذاة `4096` ثم يتابع `iter_download(offset=...)`؛ لا يحذف المسار `.part` ولا يلمس أي ملف Drive. تبقى الصور والمسارات غير المناسبة على تنزيل كامل آمن.
 - **التحقق المحلي:** أضيفت `16` اختبارًا لـM27؛ المجموعة الكاملة `734 passed`، و`compileall` وlauncher `51/51` وفحص النوتبوك و`cmp` وبناء الحزمة و`pnpm lint/build` نجحت.
-- **الحالة الصادقة:** Local/fake-tested فقط؛ لم يُنفذ اختبار Telegram أو Drive أو Colab حي، ولا يجوز وصفها Colab-ready أو Complete.
+- **حالة التسليم:** دُمج PR [#54](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/54) في `main` عند `e230ce9` بعد نجاح فحوص CI الأربع؛ تبقى Local/fake-tested فقط لأن Telegram وDrive وColab الحية لم تُختبر، ولا يجوز وصفها Colab-ready أو Complete.
 
 ## [M26-T01] — 2026-08-19 — تحكم النقل الفعلي: Pause / Stop / Resume
 

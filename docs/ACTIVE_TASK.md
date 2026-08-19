@@ -4,12 +4,14 @@
 |---|---|
 | TASK ID | `M27-T01` |
 | العنوان | تقوية نقل TeleDrive: throttle للتقدم، كشف أعطال المحرك، القنوات الخاصة، واستئناف التنزيل من offset |
-| الحالة | **ACTIVE — local/fake-tested. Not live-verified**؛ ليس Colab-ready ولا Complete |
+| الحالة | **MERGED + CI-passed + local/fake-tested. Not live-verified**؛ ليس Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
-| الفرع | `arena/m27-t01-final-hardening` |
-| Base SHA | `85822af73326d60894bde9737a35672a4aae1e08` (`origin/main`) |
-| Result SHA | لم يُنشأ commit بعد؛ التغييرات المحلية اجتازت البوابات المطلوبة |
-| الخطوة التالية | مراجعة diff نهائيًا، ثم commit وpush وPR؛ لا دمج إلا بعد نجاح CI. يلي ذلك تحقق حي بيد المالك. |
+| فرع المصدر | `arena/m27-t01-final-hardening` (محذوف بعد الدمج) |
+| Base SHA | `85822af73326d60894bde9737a35672a4aae1e08` |
+| Source commit | `f6bf28161dc3c632cf27ebef505587493c208142` |
+| Merge commit / main | `e230ce9da90da5b1ea2e43c0879a5930c57f9104` عبر PR [#54](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/54) في `2026-08-19T03:29:45Z` |
+| CI | أربع فحوص مكتملة بنجاح على PR #54: Python وFrontend لكل من push وpull request |
+| الخطوة التالية | ينفذ المالك بروتوكول Telegram/Drive/Colab الحي؛ لا تغيير كود إضافي قبل ظهور دليل حي أو بلاغ جديد. |
 
 ## ما تغيّر
 
@@ -32,7 +34,8 @@
 | `compileall` وlauncher | PASS؛ `51/51 ready actions resolve` |
 | النوتبوكات و`cmp` وبناء الحزمة | PASS |
 | `pnpm run lint && pnpm run build` | PASS؛ استُخدم pnpm لأن Bun غير متاح |
+| CI البعيد | 4/4 SUCCESS على PR #54 |
 
-## قيود لا تتغير
+## حدود لا تتغير
 
-لا تعديل على الملفات المحمية أو النوتبوكات أو lockfiles أو workflows، ولا يوجد `asyncio.run()` داخل `teledrive/**`. لا تحذف مسارات Pause/Stop ملفات `.part` أو ملفات Google Drive. لم يُنفذ اختبار Telegram أو Google Drive أو Colab حي؛ لذلك تبقى الحالة الصحيحة **local/fake-tested** فقط.
+لا تعديل على الملفات المحمية أو النوتبوكات أو lockfiles أو workflows، ولا يوجد `asyncio.run()` داخل `teledrive/**`. لا تحذف مسارات Pause/Stop ملفات `.part` أو ملفات Google Drive. لم يُنفذ اختبار Telegram أو Google Drive أو Colab حي؛ لذلك تبقى الحالة الصحيحة **Merged + CI-passed + local/fake-tested** فقط.
