@@ -389,7 +389,7 @@ test("23 — hasActiveTransfer gates the heartbeat on real progress only", () =>
 
 test("24 — sandbox auto-refreshes the whole live snapshot while transferring", async () => {
   const component = await readFile(paths.component, "utf8");
-  assert.match(component, /AUTO_REFRESH_INTERVAL_MS/);
+  assert.match(component, /const AUTO_REFRESH_INTERVAL_MS\s*=\s*1000/);
   assert.match(component, /setInterval/);
   assert.match(component, /hasActiveTransfer/);
   assert.match(component, /actionId:\s*"queue\.refresh"/);
