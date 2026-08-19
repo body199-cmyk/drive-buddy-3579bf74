@@ -439,3 +439,29 @@ def test_latest_limit_is_capped_in_service(ctx, monkeypatch):
     ctx.scanner.analyze("https://t.me/testchat", mode="latest", limit=5000, media_types=["all"])
     assert captured_limits["limit"] == MAX_SCAN_MESSAGES
     assert captured_limits["limit"] <= 1000
+
+
+def test_private_invite_for_existing_member_scans_through_the_service(ctx):
+    """Invite links are allowed only after the client resolves existing membership."""
+
+    class InviteTelegram(FakeTelegram):
+        def __init__(self):
+            super().__init__([FakeMessage(mid=9, media_type="document")])
+            self.invites: list[str] = []
+
+        async def resolve_invite(self, invite_hash: str):
+            self.invites.append(invite_hash)
+            return "authorized-private-peer"
+
+    ctx.telegram_auth.state = ta.AUTHORIZED
+    telegram = InviteTelegram()
+    ctx.telegram_auth.client = telegram
+
+    result = ctx.scanner.analyze(
+        "https://t.me/+existingMemberHash", mode="latest", limit=1, media_types=["all"]
+    )
+
+    assert result.total == 1
+    assert telegram.invites == ["existingMemberHash"]
+    assert telegram.iter_calls[0]["chat"] == "authorized-private-peer"
+    assert ctx.queue_manager.pending() == []

@@ -124,6 +124,26 @@ class TelegramService:
                 f"({type(second).__name__})"
             ) from second
 
+    async def resolve_invite(self, invite_hash: str):
+        """Resolve an already-authorized private invite without joining it.
+
+        ``CheckChatInviteRequest`` returns ``chat`` only when this user is
+        already a participant. An invite that would require joining stays a
+        refusal, so Analyze never changes Telegram membership as a side effect.
+        """
+        assert self.client
+        from telethon.tl.functions.messages import CheckChatInviteRequest
+
+        checked = await self.client(CheckChatInviteRequest(str(invite_hash)))
+        chat = getattr(checked, "chat", None)
+        if chat is None:
+            from .errors import PrivateChannelUnresolvedError
+
+            raise PrivateChannelUnresolvedError(
+                "private invite requires membership from the signed-in account"
+            )
+        return await self.resolve_entity(chat)
+
     async def get_message(self, chat: Any, message_id: int):
         assert self.client
         return await self.client.get_messages(chat, ids=message_id)

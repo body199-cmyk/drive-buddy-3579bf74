@@ -23,6 +23,9 @@ try {
     root,
     configFile: false,
     logLevel: "warn",
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("production"),
+    },
     build: {
       emptyOutDir: true,
       lib: {
