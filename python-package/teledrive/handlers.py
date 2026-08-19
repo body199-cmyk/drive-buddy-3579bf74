@@ -76,7 +76,11 @@ def action(action_id: str) -> Callable:
                 message = f"{t(exc.message_key)} [{correlation}]"
                 _log.warning("action=%s cid=%s failed: %s", action_id, correlation,
                              safe_exception(exc))
-                return self._error(action_id, message)
+                # Keep Gradio's existing output shape while marking a handled
+                # application failure for the React bridge.  The bridge turns
+                # this localized warning into a non-success response instead
+                # of showing its generic “Action completed” notice.
+                return self._error(action_id, status_error(message))
             except Exception as exc:  # noqa: BLE001 — never leak a traceback to the UI
                 _log.exception("action=%s cid=%s crashed", action_id, correlation)
                 return self._error(action_id, f"{t('err.unknown')} [{correlation}]")

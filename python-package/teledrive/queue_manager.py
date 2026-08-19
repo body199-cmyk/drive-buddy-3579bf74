@@ -257,6 +257,12 @@ class QueueManager:
         return {"local": str(path), "drive_file_id": file_id}
 
     def pause(self) -> dict:
+        # Pausing an idle queue must be a no-op.  In particular, it must not
+        # advertise a fake paused engine or write a needless checkpoint when
+        # no drain worker exists.
+        if not self.running():
+            return self.snapshot()
+
         manager = self._manager()
         if manager is not None:
             manager.pause()
@@ -302,7 +308,9 @@ class QueueManager:
                 previous.add_done_callback(restart_after_previous)
             else:
                 self._start_resumed_drain(manager)
-        self._status = "running"
+        # A queue with no active drain and no revived Paused row is idle.  Do
+        # not display a false running badge merely because Resume was clicked.
+        self._status = "running" if self.running() else "idle"
         snapshot = self.snapshot()
         snapshot["resumed"] = revived
         return snapshot
