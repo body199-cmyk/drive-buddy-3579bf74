@@ -184,6 +184,8 @@
   "state.Stopped": "Stopped",
   "state.Uploaded": "Uploaded",
   "state.Uploading": "Uploading",
+  "state.Verifying": "Verifying",
+  "state.UploadedPendingCheckpoint": "Pending checkpoint",
   "settings.advanced": "Advanced settings",
   "status.connected": "Connected",
   "status.disconnected": "Disconnected",
