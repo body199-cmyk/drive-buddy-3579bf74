@@ -100,6 +100,69 @@ def test_clean_engine_finish_records_no_crash_event():
     assert "transfer run crashed" not in messages
 
 
+def test_cancelled_engine_finish_is_an_expected_stop_outcome():
+    queue = QueueManager()
+    queue._status = "running"
+    future: Future = Future()
+    future.cancel()
+
+    queue._on_run_done(future)
+
+    assert queue.status_label() == "idle"
+    messages = [event["message"] for event in db.recent_events(50)]
+    assert "transfer run crashed" not in messages
+
+
+def test_old_drain_callback_does_not_idle_a_newer_resume_run():
+    queue = QueueManager()
+    queue._status = "running"
+    old_future: Future = Future()
+    new_future: Future = Future()
+    queue._future = new_future
+    old_future.set_result(None)
+
+    queue._on_run_done(old_future)
+
+    assert queue.status_label() == "running"
+    new_future.set_result(None)
+    queue._on_run_done(new_future)
+    assert queue.status_label() == "idle"
+
+
+class _InlineRuntime:
+    """Captures a fresh drain submission without needing a background loop."""
+
+    def __init__(self):
+        self.submissions = 0
+
+    def submit(self, coro):
+        self.submissions += 1
+        coro.close()
+        future: Future = Future()
+        future.set_result(None)
+        return future
+
+
+def test_resume_restarts_a_fresh_drain_for_a_revived_row_even_if_old_future_runs():
+    queue = QueueManager()
+    item = _item(queue, "resume-race")
+    queue.transition(item.id, "Downloading")
+    queue.transition(item.id, "Paused")
+    manager = TransferManager(None, None, "folder", queue=queue)
+    runtime = _InlineRuntime()
+    queue.bind_context(SimpleNamespace(transfer_manager=manager, aio=runtime))
+    old_future: Future = Future()  # old drain is still transiently running
+    queue._future = old_future
+
+    resumed = queue.resume()
+
+    assert resumed["resumed"] == 1
+    assert runtime.submissions == 0
+    old_future.set_result(None)
+    assert runtime.submissions == 1
+    assert db.get_item(item.id).state == "Pending"
+
+
 def test_run_reraises_unexpected_worker_exception():
     queue = QueueManager()
     _item(queue, "worker-crash")

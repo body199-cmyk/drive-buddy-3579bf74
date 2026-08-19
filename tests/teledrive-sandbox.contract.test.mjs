@@ -392,6 +392,9 @@ test("25 — shipped panel bundle includes the auto-refresh heartbeat", async ()
   assert.match(bundle, /TeleDriveGradioPanel/);
   assert.match(bundle, /setInterval/);
   assert.match(bundle, /queue\.refresh/);
+  // Gradio injects this IIFE straight into a browser scope; Node's process
+  // global is unavailable there and would prevent the panel from mounting.
+  assert.doesNotMatch(bundle, /process\.env\.NODE_ENV/);
 });
 
 test("26 — transfer toolbar and row controls preserve every real action ID", async () => {

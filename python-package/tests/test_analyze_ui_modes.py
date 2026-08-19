@@ -263,14 +263,15 @@ def test_invalid_link_is_localized_not_unknown():
     assert excinfo.value.message_key == "err.bad_link"
 
 
-def test_invite_link_is_refused_with_its_own_key():
+def test_unresolved_invite_link_reports_private_access_without_joining():
     with pytest.raises(TeleDriveError) as excinfo:
         _scanner().analyze("https://t.me/+MxPnyu0DtP0yYTJk", mode="chat")
-    assert excinfo.value.message_key == "err.link_invite_unsupported"
-    # The invite variant with joinchat/ is refused the same way.
+    assert excinfo.value.message_key == "err.private_channel_unresolved"
+    # The joinchat variant has the same safe outcome when no signed-in account
+    # can resolve existing membership; Analyze must never join it automatically.
     with pytest.raises(TeleDriveError) as excinfo2:
-        _scanner().analyze("https://t.me/joinchat/AbCdEfGhIjKl", mode="message")
-    assert excinfo2.value.message_key == "err.link_invite_unsupported"
+        _scanner().analyze("https://t.me/joinchat/AbCdEfGhIjKl", mode="chat")
+    assert excinfo2.value.message_key == "err.private_channel_unresolved"
 
 
 def test_message_mode_without_id_names_the_real_reason():
@@ -339,8 +340,12 @@ def test_locales_declare_every_new_key():
     english = json.loads(EN_LOCALE.read_text(encoding="utf-8"))
     required = (
         set(services.SCAN_VALIDATION_KEYS.values())
-        | set(services.NON_SCANNABLE_LINK_KINDS.values())
-        | {"err.bad_link", "err.bad_scan_request", "analyze.result"}
+        | {
+            "err.bad_link",
+            "err.bad_scan_request",
+            "err.private_channel_unresolved",
+            "analyze.result",
+        }
     )
     assert required.issubset(set(arabic))
     assert required.issubset(set(english))

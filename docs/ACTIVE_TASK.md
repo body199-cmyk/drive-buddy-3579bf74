@@ -2,23 +2,32 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M27-T02` |
-| العنوان | إصلاح شحن بندل React ليحدّث تقدم النقل تلقائيًا |
-| الحالة | **ACTIVE — local/fake-tested. Not live-verified** |
-| الفرع | `arena/react-auto-refresh-bundle` |
-| Base SHA | `50cb7657f07c4e2432e875c0ad36e876e4aac652` (`origin/main`) |
-| السبب المثبت | مصدر `TeleDriveSandbox.tsx` يحتوي نبض `setInterval` كل ثانيتين، لكن `react_panel.py` يحمّل `panel.bundle.gz` وقد كان البندل المشحون لا يحتوي `setInterval`؛ لذلك يعمل زر «تحديث» اليدوي بينما لا يصل أي طلب دوري. |
-| التغيير | أعيد بناء `panel.bundle.gz` و`panel.css.gz` من مدخل Gradio الحقيقي، وأضيف مولّد ثابت وعقد يفك البندل ويثبت وجود global `TeleDriveGradioPanel` و`setInterval` و`queue.refresh`. |
-| الخطوة التالية | تدقيق الفرق وإنشاء commit/PR ثم الدمج فقط بعد CI؛ وبعده يجب إعادة نشر حزمة Colab وتشغيل runtime جديد لاختبار حي. |
+| TASK ID | `M27-T04` |
+| العنوان | إصلاح عيوب النقل والقناة الخاصة وتحميل لوحة React المكتشفة بالتحقق الحي |
+| الحالة | **ACTIVE — local gates + live sandbox-verified؛ CI/Colab النهائيان pending** |
+| الفرع | `fix/m27-t04-live-defects` |
+| Base SHA | `3bbe69b91159fb519e2d7fb6efab9835ad7788f5` (`origin/main` عند البدء) |
 
-## التحقق المحلي
+## العيوب المثبتة
 
-| البوابة | النتيجة |
+| المسار | السبب الذي ثبت | الإصلاح الجاري |
+|---|---|---|
+| Pause / Resume | إعادة إحياء صف `Paused` قد تتقاطع مع drain سابق لم يغلق بعد | تشغيل drain الاستئناف فقط بعد استقرار المستقبل السابق، ومنع callback قديم من إطفاء محرك أحدث |
+| رابط دعوة قناة خاصة | `ScannerService` كان يرفض `t.me/+…` حتى لو كان الحساب عضوًا والقناة قابلة للحل | `CheckChatInviteRequest` لحساب عضو فقط ثم InputPeer؛ لا Join تلقائي ولا مسح غير محدود |
+| React داخل Gradio | الأصل المدمج استدعى `process.env.NODE_ENV` في المتصفح فحجب تركيب اللوحة | بناء Production صريح وحارس عقد يمنع المرجع غير المتاح |
+
+## الأدلة المتاحة قبل GitHub
+
+| البوابة أو السيناريو | النتيجة |
 |---|---|
-| عقد لوحة React | `25 passed` عبر `node --experimental-strip-types --test` |
-| lint + frontend build | PASS؛ مع 7 تحذيرات Fast Refresh موجودة مسبقًا بلا errors |
-| Python suite | `734 passed` |
-| compileall وlauncher | PASS؛ `51/51 ready actions resolve` |
-| notebook check و`cmp` وبناء الحزمة | PASS |
+| نقل Telegram إلى Drive ضمن مساحة اختبار معزولة | PASS؛ الملف البعيد تحقق من وجوده وحجمه |
+| Pause → Resume من offset | PASS؛ `.part` محفوظ وحالة نهائية `Uploaded` |
+| Stop أثناء تنزيل | PASS؛ `Stopped` نهائي، `.part` محفوظ، لا ملف جديد على Drive |
+| Analyze لرابط دعوة خاص | PASS؛ مرشح محدود ثم Dedupe حقيقي للملف الموجود |
+| تركيب لوحة React في متصفح محلي | PASS؛ اللوحة الكاملة مرئية ولا خطأ `process is not defined` |
+| بوابات Python | `738 passed`، launcher `51/51`، notebook/cmp/package PASS |
+| بوابات الواجهة | lint/build PASS، React contracts `26 passed` |
 
-> لا تثبت هذه البوابات تشغيل Colab الحي. بعد الدمج، يلزم نشر الحزمة من `main` ثم Restart للـruntime؛ البندل القديم في جلسة المتصفح الحالية لن يتحول تلقائيًا إلى النسخة الجديدة.
+## الخطوة التالية
+
+فحص diff والأسرار، تحديث `TODO` و`AI_HANDOFF` و`CHANGELOG` و`KNOWN_ISSUES`، ثم commit وpush وPR. لا يجوز وصف النتيجة `Colab-ready` أو `Complete` قبل اختبار Colab ونشر الحزمة من `main`.

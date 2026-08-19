@@ -1,5 +1,13 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M27-T04] — 2026-08-19 — إصلاح عيوب مثبتة أثناء اختبار حي معزول
+
+- **Pause / Resume:** لا يبدأ `QueueManager` drain استئناف جديدًا قبل أن يستقر drain السابق؛ callback قديم لا يستطيع إطفاء تشغيل أحدث، و`CancelledError` المنضبط لا يسجل كتعطل محرك. أثبت الاختبار الحي بقاء `.part` ثم استئناف التنزيل من offset وصولًا إلى `Uploaded`.
+- **روابط الدعوة الخاصة:** حساب Telegram العضو مسبقًا يستطيع تحليل `t.me/+…` أو `joinchat` عبر `CheckChatInviteRequest` ثم InputPeer؛ التطبيق لا ينضم إلى أي قناة ولا يتجاوز حدود المسح.
+- **لوحة React:** بندل Gradio يثبت بيئة الإنتاج عند بنائه، فيمنع `process is not defined` الذي كان يحجب تركيب اللوحة في المتصفح. أصل React أعيد بناؤه وأضيف حارس عقد ضد `process.env.NODE_ENV`.
+- **التحقق:** `738 passed`، launcher `51/51`، notebook/cmp/package، lint/build، وReact contracts `26 passed`. تحقق متصفح محلي حقيقي من ظهور اللوحة، وتحقق Telegram/Drive معزول من النقل والتحكم وDedupe.
+- **الحالة الصادقة:** ليس `Colab-ready` ولا `Complete`؛ يلزم دمج التغيير ونجاح CI وإعادة نشر الحزمة ثم اختبار Colab حقيقي.
+
 ## [M27-T02] — 2026-08-19 — إصلاح تسليم نبض التحديث التلقائي للوحة React
 
 - **السبب المؤكد:** مصدر React كان يتضمن `setInterval` كل ثانيتين مع `queue.refresh`، لكن `ReactPanel` يشحن `panel.bundle.gz` مستقلًا وكان البندل القديم يفتقد `setInterval` تمامًا؛ لذلك يظهر التقدم فقط بعد زر «تحديث» اليدوي.

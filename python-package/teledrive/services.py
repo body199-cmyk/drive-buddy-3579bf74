@@ -64,12 +64,6 @@ SCAN_VALIDATION_KEYS: dict[str, str] = {
     "latest mode requires a positive limit": "err.scan_limit",
 }
 
-# Link kinds that are never a scan source (parsed successfully but refused).
-NON_SCANNABLE_LINK_KINDS: dict[str, str] = {
-    "invite": "err.link_invite_unsupported",
-}
-
-
 # --------------------------------------------------------------------------
 # Scanning + selection
 # --------------------------------------------------------------------------
@@ -342,11 +336,6 @@ class ScannerService:
             parsed = parse_link((link or "").strip())
         except InvalidLink as exc:
             raise TeleDriveError(str(exc), "err.bad_link") from exc
-        refusal_key = NON_SCANNABLE_LINK_KINDS.get(parsed.kind)
-        if refusal_key is not None:
-            raise TeleDriveError(
-                f"link kind {parsed.kind} is not scannable", refusal_key
-            )
         requested_mode = str(mode or DEFAULT_SCAN_MODE).strip().lower()
         # Legacy alias: "auto" means whole chat scan (same as "chat")
         if requested_mode == "auto":
@@ -367,6 +356,16 @@ class ScannerService:
             raise TeleDriveError(
                 reason, SCAN_VALIDATION_KEYS.get(reason, "err.bad_scan_request")
             ) from exc
+        if parsed.kind == "invite":
+            resolver = getattr(telegram_auth.client, "resolve_invite", None)
+            if not callable(resolver):
+                raise TeleDriveError(
+                    "Telegram client cannot resolve private invite links",
+                    "err.private_channel_unresolved",
+                )
+            peer = self.ctx.aio.run(resolver(parsed.chat))
+            parsed.chat = peer
+            parsed.kind = "private"
         items = self.ctx.aio.run(
             scan_link(telegram_auth.client, parsed, request)
         )

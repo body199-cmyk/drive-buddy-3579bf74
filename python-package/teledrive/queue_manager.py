@@ -1,6 +1,7 @@
 """Queue manager: ONLY module allowed to mutate item state."""
 from __future__ import annotations
 
+from concurrent.futures import CancelledError
 from typing import Iterable, Optional
 
 from . import database as db
@@ -206,10 +207,21 @@ class QueueManager:
         only records an unexpected engine-level failure that would otherwise be
         indistinguishable from a clean queue finish.
         """
+        # Resume can replace the tracked future while a previous drain is
+        # finishing. A stale callback may still record its own exception, but
+        # it must never overwrite the status of the newer run.
+        # Direct diagnostic/test invocation may not have installed a tracked
+        # future yet; in that case this callback is necessarily current.
+        is_current = self._future is None or future is self._future
         error = None
         try:
             error = future.exception()
-        except Exception as exc:  # cancelled or already-consumed future
+        except CancelledError:
+            # A bounded operator Stop may cancel a wedged worker after its
+            # grace period. That is an expected control outcome, not an engine
+            # crash and must never produce a false error event.
+            error = None
+        except Exception as exc:  # already-consumed/defensive future failure
             error = exc
         if error is not None:
             _log.error("transfer run crashed: %s", error, exc_info=error)
@@ -219,7 +231,7 @@ class QueueManager:
                 "transfer run crashed",
                 {"error": f"{type(error).__name__}: {error}"[:400]},
             )
-        if self._status == "running":
+        if is_current and self._status == "running":
             self._status = "idle"
 
 
@@ -275,15 +287,40 @@ class QueueManager:
         for item in db.items_in_states(["Paused"]):
             if self.try_transition(item.id, "Pending", reason="resumed"):
                 revived += 1
-        if manager is not None and not self.running():
-            # The drain loop already returned; a resume needs a new one.
-            manager.reset_run_flags()
-            self._future = self._require_ctx().aio.submit(manager.run())
-            self._future.add_done_callback(self._on_run_done)
+        if manager is not None and revived:
+            # A Paused worker may have returned while the previous drain future
+            # still reports running. That old drain has already recorded this
+            # item in its `seen` set, so it can never claim the revived Pending
+            # row. It can also still be unwinding a Telethon generator: starting
+            # another drain immediately would overlap two downloads on the one
+            # client. Queue the fresh drain after the old future settles.
+            previous = self._future
+            if previous is not None and not previous.done():
+                def restart_after_previous(completed):
+                    self._restart_resumed_drain(manager, completed)
+
+                previous.add_done_callback(restart_after_previous)
+            else:
+                self._start_resumed_drain(manager)
         self._status = "running"
         snapshot = self.snapshot()
         snapshot["resumed"] = revived
         return snapshot
+
+    def _restart_resumed_drain(self, manager, completed_future) -> None:
+        """Callback path: only the still-current prior drain may restart work."""
+        if self._future is not completed_future:
+            return
+        self._start_resumed_drain(manager)
+
+    def _start_resumed_drain(self, manager) -> None:
+        """Start revived work after the previous drain is no longer in flight."""
+        if manager.stopping() or not self.pending():
+            return
+        manager.reset_run_flags()
+        self._status = "running"
+        self._future = self._require_ctx().aio.submit(manager.run())
+        self._future.add_done_callback(self._on_run_done)
 
     def stop(self) -> dict:
         """Stop the engine. In-flight files abort at the next chunk boundary
