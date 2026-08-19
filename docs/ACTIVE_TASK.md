@@ -4,30 +4,27 @@
 |---|---|
 | TASK ID | `M27-T04` |
 | العنوان | إصلاح عيوب النقل والقناة الخاصة وتحميل لوحة React المكتشفة بالتحقق الحي |
-| الحالة | **ACTIVE — local gates + live sandbox-verified؛ CI/Colab النهائيان pending** |
-| الفرع | `fix/m27-t04-live-defects` |
-| Base SHA | `3bbe69b91159fb519e2d7fb6efab9835ad7788f5` (`origin/main` عند البدء) |
+| الحالة | **MERGED + CI-PASSED + live sandbox-verified؛ Colab النهائي pending** |
+| PR | [#59](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/59) — MERGED |
+| Merge SHA | `dfbb90b9afc25e5bcbb5ce45ad5d90efd4099ac1` |
+| Base SHA | `3bbe69b91159fb519e2d7fb6efab9835ad7788f5` |
 
-## العيوب المثبتة
+## العيوب المثبتة والمغلقة
 
-| المسار | السبب الذي ثبت | الإصلاح الجاري |
+| المسار | الإصلاح المدمج | الدليل |
 |---|---|---|
-| Pause / Resume | إعادة إحياء صف `Paused` قد تتقاطع مع drain سابق لم يغلق بعد | تشغيل drain الاستئناف فقط بعد استقرار المستقبل السابق، ومنع callback قديم من إطفاء محرك أحدث |
-| رابط دعوة قناة خاصة | `ScannerService` كان يرفض `t.me/+…` حتى لو كان الحساب عضوًا والقناة قابلة للحل | `CheckChatInviteRequest` لحساب عضو فقط ثم InputPeer؛ لا Join تلقائي ولا مسح غير محدود |
-| React داخل Gradio | الأصل المدمج استدعى `process.env.NODE_ENV` في المتصفح فحجب تركيب اللوحة | بناء Production صريح وحارس عقد يمنع المرجع غير المتاح |
+| Pause / Resume | يؤجل drain الاستئناف حتى يغلق المستقبل السابق؛ callback قديم لا يطفئ محركًا أحدث؛ الإلغاء المنضبط لا يسجل crash | Pause→Resume حي من offset انتهى `Uploaded`؛ Stop بقي `Stopped` بلا ملف Drive جديد |
+| رابط دعوة قناة خاصة | يحل دعوة الحساب العضو فقط عبر `CheckChatInviteRequest` ثم InputPeer، بلا Join أو مسح غير محدود | Analyze حي أعاد مرشحًا محدودًا واحدًا؛ Dedupe أكد الملف البعيد الموجود |
+| React داخل Gradio | يبني البندل بإدخال بيئة الإنتاج ويمنع `process.env.NODE_ENV` في الأصل المشحون | ظهرت اللوحة كاملة في متصفح محلي ولم يسجل console خطأ التحميل السابق |
 
-## الأدلة المتاحة قبل GitHub
+## الأدلة
 
-| البوابة أو السيناريو | النتيجة |
+| البوابة | النتيجة |
 |---|---|
-| نقل Telegram إلى Drive ضمن مساحة اختبار معزولة | PASS؛ الملف البعيد تحقق من وجوده وحجمه |
-| Pause → Resume من offset | PASS؛ `.part` محفوظ وحالة نهائية `Uploaded` |
-| Stop أثناء تنزيل | PASS؛ `Stopped` نهائي، `.part` محفوظ، لا ملف جديد على Drive |
-| Analyze لرابط دعوة خاص | PASS؛ مرشح محدود ثم Dedupe حقيقي للملف الموجود |
-| تركيب لوحة React في متصفح محلي | PASS؛ اللوحة الكاملة مرئية ولا خطأ `process is not defined` |
-| بوابات Python | `738 passed`، launcher `51/51`، notebook/cmp/package PASS |
-| بوابات الواجهة | lint/build PASS، React contracts `26 passed` |
+| البوابات المحلية | `738 passed`، launcher `51/51`، compileall/notebook/cmp/package PASS؛ lint/build وReact contracts `26 passed` |
+| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request |
+| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M27_T04.md` |
 
 ## الخطوة التالية
 
-فحص diff والأسرار، تحديث `TODO` و`AI_HANDOFF` و`CHANGELOG` و`KNOWN_ISSUES`، ثم commit وpush وPR. لا يجوز وصف النتيجة `Colab-ready` أو `Complete` قبل اختبار Colab ونشر الحزمة من `main`.
+ينبغي إعادة نشر حزمة Colab من `main` ثم Restart runtime واختبار لوحة React ونقل Telegram→Drive داخل Colab الحقيقي. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.

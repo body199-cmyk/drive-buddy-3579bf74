@@ -6,7 +6,8 @@
 - **روابط الدعوة الخاصة:** حساب Telegram العضو مسبقًا يستطيع تحليل `t.me/+…` أو `joinchat` عبر `CheckChatInviteRequest` ثم InputPeer؛ التطبيق لا ينضم إلى أي قناة ولا يتجاوز حدود المسح.
 - **لوحة React:** بندل Gradio يثبت بيئة الإنتاج عند بنائه، فيمنع `process is not defined` الذي كان يحجب تركيب اللوحة في المتصفح. أصل React أعيد بناؤه وأضيف حارس عقد ضد `process.env.NODE_ENV`.
 - **التحقق:** `738 passed`، launcher `51/51`، notebook/cmp/package، lint/build، وReact contracts `26 passed`. تحقق متصفح محلي حقيقي من ظهور اللوحة، وتحقق Telegram/Drive معزول من النقل والتحكم وDedupe.
-- **الحالة الصادقة:** ليس `Colab-ready` ولا `Complete`؛ يلزم دمج التغيير ونجاح CI وإعادة نشر الحزمة ثم اختبار Colab حقيقي.
+- **الدمج وCI:** PR [#59](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/59) دُمج في `main` عند `dfbb90b` بعد نجاح Python وFrontend على push وpull_request.
+- **الحالة الصادقة:** ليس `Colab-ready` ولا `Complete`؛ يلزم إعادة نشر الحزمة من `main` ثم اختبار Colab حقيقي.
 
 ## [M27-T02] — 2026-08-19 — إصلاح تسليم نبض التحديث التلقائي للوحة React
 
