@@ -2,27 +2,26 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M24-T05` |
-| العنوان | حتمية خزينة جلسة Telegram — مسار حفظ واحد، صيغة 2، snapshot متين، واستعادة متحققة |
+| TASK ID | `M26-T01` |
+| العنوان | Transfer control — Pause / Stop / Resume تعمل فعليًا أثناء النقل |
 | الحالة | **Implemented + fake-tested. Not live-verified** — ليس Colab-ready ولا Complete |
 | المالك التنفيذي | LM Arena Agent |
-| الفرع | `arena/m24-t05-session-vault-determinism` |
-| Base SHA | `70e3406931134c289637d7892f6eeb5ebef7ae94` |
-| Result SHA | التزام محلي ناجح على فرع المهمة؛ راجع `git rev-parse HEAD` للقيمة النهائية قبل/بعد الدفع |
-| الخطوة التالية | دفع الفرع وفتح PR ثم دمجه بموافقة المالك، وبعد ذلك M24-T06 للتحقق الحي في Colab |
+| الفرع | `arena/m26-t01-transfer-control` |
+| Base SHA | `26fd421e68637f5d6b40b25864f6252613081fb3` |
+| Result SHA | لم يُنشأ commit بعد؛ تغييرات محلية خضعت للبوابات المطلوبة |
+| الخطوة التالية | مراجعة المالك ثم موافقته الصريحة على commit/push/PR/merge؛ يلي الدمج اختبار Colab حي |
 
 ## ما تغيّر
 
 | المحور | التغيير |
 |---|---|
-| الحفظ | `persist_from_context` أصبح مدخل الحفظ الموحد؛ يسجل الحفظ المؤجل حين لا يكون Drive جاهزًا ويصرفه في أول إجراء واجهة لاحق. |
-| الخصوصية | الصيغة 2 الافتراضية تغلف ملف الجلسة، ولا تضع `api_hash` في `telegram_creds.json`. |
-| سلامة SQLite | الحفظ يأخذ snapshot متعدد المسارات، والاستعادة ترفض البيانات غير الصحيحة ولا تستبدل ملف جلسة تحت عميل نشط. |
-| الاستعادة والتنظيف | الجلسة المستعادة التي لا تفوض تُحذف محليًا ومن Drive؛ logout/forget ينظفان الصيغة الحديثة وبقايا ADR-004. |
-| الأدلة | اختبار STEP 0 المرسل من المالك يؤكد وجود جلسة SQLite صحيحة واتصال Telegram/Drive ووجود الخزينتين؛ لا يثبت بمفرده الاستعادة بعد VM جديد. |
+| RC-1 | أعلام Pause/Stop أصبحت `threading.Event` آمنة بين خيط Gradio وAsyncRuntime. |
+| RC-2 | callbacks التحميل والرفع تفحص التحكم كل chunk وترفع إشارات تعاونية لا تعد فشلًا. |
+| RC-3 | drain loop لا يلغي المهام بالقوة؛ يجمعها بعد اكتمال الإيقاف التعاوني. |
+| RC-4 | الاستئناف يعيد Paused إلى Pending ويطلق drain جديدًا عند الحاجة. |
+| RC-5 | Start جديد يصفر أعلام Stop/Pause المتبقية من تشغيل سابق. |
+| RC-6 | عناصر progress الموقوفة تحرر بلا تعديل عدادات النجاح أو الفشل. |
 
 ## انحرافات وقيود
 
-لا توجد تعديلات على الملفات المحمية، بما فيها `telegram_auth.py` و`drive_auth.py` و`notebook_cells.py` والنوتبوكات والاعتمادات وworkflow. لم ينفذ Part B لعدم ورود الموافقة المكتوبة المطلوبة. لا توجد actions أو مفاتيح ترجمة أو أزرار أو تعديلات على `ERROR_ARITY` جديدة.
-
-> الحالة تظل **Implemented + fake-tested** إلى أن يجري المالك بروتوكول M24-T06 على Colab حي؛ لا يجوز وصفها بأنها Colab-ready أو Complete قبل ذلك.
+لا تغيير في action IDs أو handlers أو ترتيب المخرجات أو `ERROR_ARITY` أو i18n أو الواجهة. لا تُقاطع مراحل `Verifying` و`UploadedPendingCheckpoint` عمدًا؛ وذلك يمنع ترك ملف Drive يتيمًا. لا حذف من Drive أو blind cleanup في مسارات Pause/Stop. الاختبار الحي على Telegram وDrive وColab لم يُنفذ.

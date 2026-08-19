@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,7 @@ from .config import CONFIG
 from .duplicate_detector import check as dup_check
 from .drive_quota import preflight_or_raise
 from .error_handler import classify
+from .errors import TransferPaused, TransferStopped
 from .logging_config import get_logger
 from .models import MediaItem
 from .progress_tracker import PROGRESS
@@ -26,6 +28,8 @@ _log = get_logger("teledrive.transfer")
 class TransferManager:
     #: how often the drain loop looks for newly enqueued work
     DRAIN_INTERVAL = 0.05
+    #: how often a paused worker re-reads the control flags
+    CONTROL_POLL = 0.2
 
     def __init__(self, telegram, drive, drive_folder_id: str, queue=None,
                  item_ids=None):
@@ -36,9 +40,15 @@ class TransferManager:
         self._queue = queue if queue is not None else QueueManager()
         self._scope: Optional[set[str]] = set(item_ids) if item_ids else None
         self._sema: Optional[asyncio.Semaphore] = None
-        self._paused = asyncio.Event()
-        self._paused.set()  # not paused
-        self._stop = asyncio.Event()
+        # M26-T01 / RC-1: pause(), resume() and stop() are called from the
+        # Gradio request thread while run() lives on the AsyncRuntime thread.
+        # asyncio.Event is NOT thread-safe across loops/threads, so a resume
+        # could fail to wake its waiters. threading.Event is, and the polarity
+        # is deliberately unchanged (set == NOT paused), so pause()/resume()/
+        # stop() bodies and every existing test keep working verbatim.
+        self._paused = threading.Event()
+        self._paused.set()  # set == not paused
+        self._stop = threading.Event()
         self._tasks: list[asyncio.Task] = []
         self._workers: Optional[int] = None
         self._paused_items: set[str] = set()
@@ -110,6 +120,70 @@ class TransferManager:
         self._stop.set()
         self._paused.set()  # unblock waits
 
+    # ---- control surface (M26-T01) ----
+
+    def paused(self) -> bool:
+        """True while the whole engine is paused."""
+        return not self._paused.is_set()
+
+    def stopping(self) -> bool:
+        return self._stop.is_set()
+
+    def reset_run_flags(self) -> None:
+        """Clear the previous run's control state before a new Start.
+
+        ensure_transfer_manager() reuses ONE manager per context (RC-5), so a
+        Stop from an earlier batch would otherwise refuse every later Start.
+        Per-item marks are cleared too: a Stopped ROW is final and is never
+        returned by pending(), so nothing is silently resurrected.
+        """
+        self._stop.clear()
+        self._paused.set()
+        self._paused_items.clear()
+        self._stopped_items.clear()
+
+    async def _wait_resume(self) -> bool:
+        """Block while globally paused. Returns False when the run must stop."""
+        while not self._paused.is_set():
+            if self._stop.is_set():
+                return False
+            await asyncio.sleep(self.CONTROL_POLL)
+        return not self._stop.is_set()
+
+    def _control_signal(self, item_id: str):
+        """The interruption that applies to this item right now, or None.
+
+        Stop wins over Pause: an operator who pressed Stop must never see the
+        file resume later.
+        """
+        if self._stop.is_set() or self.item_stopped(item_id):
+            return TransferStopped(item_id)
+        if not self._paused.is_set() or self.item_paused(item_id):
+            return TransferPaused(item_id)
+        return None
+
+    def _raise_if_interrupted(self, item_id: str) -> None:
+        """Called from the download/upload progress callbacks (RC-2).
+
+        Aborts the in-flight file at the next chunk boundary. The partial
+        .part file stays on local disk and NOTHING on Drive is deleted.
+        """
+        signal = self._control_signal(item_id)
+        if signal is not None:
+            raise signal
+
+    def _pause_item_row(self, item: MediaItem) -> None:
+        """Park an interrupted item as Paused. Temp kept, Drive untouched."""
+        self._queue.try_transition(item.id, "Paused", reason="paused")
+        PROGRESS.release_item(item.id)
+        db.add_event(item.id, "transfer", "paused mid-file", {"temp_kept": True})
+
+    def _stop_item_row(self, item: MediaItem) -> None:
+        """Park an interrupted item as Stopped (final). Drive untouched."""
+        self._queue.try_transition(item.id, "Stopped", reason="stopped")
+        PROGRESS.release_item(item.id)
+        db.add_event(item.id, "transfer", "stopped mid-file", {"temp_kept": True})
+
     def _claimable(self, seen: set[str]) -> list[MediaItem]:
         return [
             i for i in self._queue.pending()
@@ -152,6 +226,10 @@ class TransferManager:
                 break
 
         if tasks:
+            # No task.cancel() here on purpose (RC-3): cancelling mid-chunk
+            # would leave rows stuck in Downloading/Uploading with no owner.
+            # The cooperative signal ends every worker within one chunk, and
+            # gather() then only drains already-finishing work.
             await asyncio.gather(*tasks, return_exceptions=True)
 
 
@@ -160,12 +238,23 @@ class TransferManager:
             if self._stop.is_set() or self.item_stopped(item.id):
                 self._queue.try_transition(item.id, "Stopped")
                 return
-            await self._paused.wait()
+            # M26-T01: threading.Event has no awaitable wait(); _wait_resume
+            # polls it and also honours a Stop pressed while paused.
+            if not await self._wait_resume():
+                self._queue.try_transition(item.id, "Stopped")
+                return
             if not await self._wait_item(item.id):
                 self._queue.try_transition(item.id, "Stopped")
                 return
             try:
                 await self._do_item(item)
+            except TransferPaused:
+                # Belt and braces: _do_item already parks the row. Catching
+                # here too guarantees a control signal can never be mistaken
+                # for a transfer failure by the generic branch below.
+                self._pause_item_row(item)
+            except TransferStopped:
+                self._stop_item_row(item)
             except Exception as exc:  # last-resort classification
                 err = classify(exc)
                 item.last_error_code = err.code
@@ -201,12 +290,21 @@ class TransferManager:
         attempt = 0
         while True:
             attempt += 1
-            await self._paused.wait()
+            if not await self._wait_resume():
+                self._stop_item_row(item)
+                return
             if self._stop.is_set() or not await self._wait_item(item.id):
-                self._queue.try_transition(item.id, "Stopped")
+                self._stop_item_row(item)
                 return
             try:
                 await self._run_once(item)
+                return
+            except TransferPaused:
+                # NOT a failure: no attempt counter, no retry, no classify().
+                self._pause_item_row(item)
+                return
+            except TransferStopped:
+                self._stop_item_row(item)
                 return
             except Exception as exc:
                 err = classify(exc)
@@ -234,6 +332,11 @@ class TransferManager:
         PROGRESS.start_item(item.id, safe, item.size_bytes, phase="download")
 
         def dl_cb(current: int, total: int) -> None:
+            # M26-T01: the ONLY point where a running download can be
+            # interrupted. Telethon calls this per chunk and does not swallow
+            # exceptions, so the raise aborts download_media() cleanly and the
+            # partial .part file is left exactly where it is.
+            self._raise_if_interrupted(item.id)
             PROGRESS.update(item.id, current, phase="download")
             it = db.get_item(item.id)
             if it:
@@ -258,6 +361,9 @@ class TransferManager:
         self._queue.transition(item.id, "Uploading")
 
         def up_cb(current: int, total: int) -> None:
+            # M26-T01: same gate for the resumable upload. drive_client
+            # re-raises TransferControlSignal instead of swallowing it (§4.3).
+            self._raise_if_interrupted(item.id)
             PROGRESS.update(item.id, current, phase="upload")
             it = db.get_item(item.id)
             if it:

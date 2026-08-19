@@ -72,6 +72,17 @@ class ProgressTracker:
             else:
                 self._failed_files += 1
 
+    def release_item(self, item_id: str) -> None:
+        """Drop an in-flight item WITHOUT moving any counter (M26-T01).
+
+        A paused or stopped file was neither completed, nor skipped, nor
+        broken, so done_files / skipped_files / failed_files must all stay
+        exactly where they were. Using finish_item() here would fabricate a
+        failure the user never had.
+        """
+        with self._lock:
+            self._items.pop(item_id, None)
+
     def instant_speed(self) -> float:
         now = time.monotonic()
         with self._lock:

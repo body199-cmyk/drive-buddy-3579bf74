@@ -1,5 +1,14 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M26-T01] — 2026-08-19 — تحكم النقل الفعلي: Pause / Stop / Resume
+
+- **Pause/Stop تعاونيان:** أعلام `threading.Event` آمنة بين ثريد Gradio وAsyncRuntime، وcallbacks التحميل/الرفع توقف الملف الجاري عند حد الـchunk بإشارة لا تُصنّف فشلًا ولا تدخل سياسة retry.
+- **صف وحالة صادقان:** Pause يركن الصف في `Paused` وStop في `Stopped` النهائي، ويحرر عنصر progress من دون زيادة done/failed/skipped؛ يبقى `.part` المحلي ولا يُحذف ملف Drive.
+- **Resume حقيقي:** يعيد كل صف Paused إلى Pending ويعيد إطلاق drain loop إذا انتهى، فيما يصفر Start الجديد أعلام Stop/Pause العالقة من تشغيل سابق.
+- **سلامة ما بعد الرفع:** لا مقاطعة في `Verifying` أو `UploadedPendingCheckpoint`، حتى يثبت ملف Drive ويُسجّل checkpoint بدل ترك ملف يتيم.
+- **التحقق:** `11` اختبارًا جديدًا للتحكم، والمجموعة الكاملة `711 passed`، والـlauncher `51/51`. Bun غير متاح محليًا؛ fallback عبر pnpm نجح.
+- **الحالة الصادقة:** Implemented + fake-tested. Not live-verified؛ اختبار Telegram/Drive/Colab بيد المالك بعد الدمج.
+
 ## [M24-T05] — 2026-08-19 — حتمية خزينة جلسة Telegram
 
 - **مسار حفظ واحد:** نقاط التكامل القديمة `persist_from_context` و`wipe_from_context` تعيد التوجيه إلى `SessionVault`، فلا يُكتب بلوب ADR-004 منافس بعد التفويض.

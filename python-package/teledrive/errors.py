@@ -75,3 +75,22 @@ class CheckpointError(TeleDriveError):
 class VerificationError(TeleDriveError):
     """Drive-side verification of an uploaded file failed."""
     message_key = "err.verify_failed"
+
+
+class TransferControlSignal(Exception):
+    """Cooperative interruption of an in-flight transfer (M26-T01).
+
+    Deliberately NOT a TeleDriveError: this is not a failure, it carries no
+    locale key, it is never classified by error_handler.classify(), never
+    retried, and never rendered to the user. It is raised from a transfer
+    progress callback and caught by TransferManager, which parks the row in
+    the state the operator asked for.
+    """
+
+
+class TransferPaused(TransferControlSignal):
+    """The operator paused; the partial .part file is kept for a later run."""
+
+
+class TransferStopped(TransferControlSignal):
+    """The operator stopped; the row becomes final. Drive is never touched."""
