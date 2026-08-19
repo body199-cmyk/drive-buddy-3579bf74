@@ -776,80 +776,84 @@ function QueueSection({
           <strong>{formatBytes(metrics.transferredBytes)}</strong>
         </div>
       </div>
-      <div className="td-button-row td-transfer-actions">
-        <ActionButton
-          actionId="queue.start_selected"
-          busyAction={busyAction}
-          live={live}
-          className="td-button td-button-primary"
-          onClick={() => void run("queue.start_selected")}
-        >
-          <Play size={15} aria-hidden="true" />
-          {localize(language, "بدء", "Start")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.pause"
-          busyAction={busyAction}
-          live={live}
-          onClick={() => void run("queue.pause")}
-        >
-          <Pause size={15} aria-hidden="true" />
-          {localize(language, "إيقاف مؤقت", "Pause")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.resume"
-          busyAction={busyAction}
-          live={live}
-          onClick={() => void run("queue.resume")}
-        >
-          <RefreshCw size={15} aria-hidden="true" />
-          {localize(language, "استئناف", "Resume")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.stop"
-          busyAction={busyAction}
-          live={live}
-          className="td-button td-button-danger"
-          onClick={() => setStopConfirm(true)}
-        >
-          <Square size={15} aria-hidden="true" />
-          {localize(language, "إيقاف", "Stop")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.retry_failed"
-          busyAction={busyAction}
-          live={live}
-          onClick={() => void run("queue.retry_failed")}
-        >
-          <RotateCcw size={15} aria-hidden="true" />
-          {localize(language, "إعادة الفاشلة", "Retry failed")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.clear_completed"
-          busyAction={busyAction}
-          live={live}
-          onClick={() => void run("queue.clear_completed")}
-        >
-          {localize(language, "مسح المكتملة", "Clear completed")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.clear_incomplete"
-          busyAction={busyAction}
-          live={live}
-          className="td-button td-button-danger"
-          onClick={() => void run("queue.clear_incomplete")}
-        >
-          {localize(language, "مسح غير المكتمل", "Clear incomplete")}
-        </ActionButton>
-        <ActionButton
-          actionId="queue.refresh"
-          busyAction={busyAction}
-          live={live}
-          onClick={() => void run("queue.refresh")}
-        >
-          <RefreshCw size={15} aria-hidden="true" />
-          {localize(language, "تحديث", "Refresh")}
-        </ActionButton>
+      <div className="td-transfer-actions">
+        <div className="td-button-row td-transfer-actions-primary">
+          <ActionButton
+            actionId="queue.start_selected"
+            busyAction={busyAction}
+            live={live}
+            className="td-button td-button-primary"
+            onClick={() => void run("queue.start_selected")}
+          >
+            <Play size={15} aria-hidden="true" />
+            {localize(language, "بدء", "Start")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.pause"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("queue.pause")}
+          >
+            <Pause size={15} aria-hidden="true" />
+            {localize(language, "إيقاف مؤقت", "Pause")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.resume"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("queue.resume")}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {localize(language, "استئناف", "Resume")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.stop"
+            busyAction={busyAction}
+            live={live}
+            className="td-button td-button-danger"
+            onClick={() => setStopConfirm(true)}
+          >
+            <Square size={15} aria-hidden="true" />
+            {localize(language, "إيقاف", "Stop")}
+          </ActionButton>
+        </div>
+        <div className="td-button-row td-transfer-actions-secondary">
+          <ActionButton
+            actionId="queue.retry_failed"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("queue.retry_failed")}
+          >
+            <RotateCcw size={15} aria-hidden="true" />
+            {localize(language, "إعادة الفاشلة", "Retry failed")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.refresh"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("queue.refresh")}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {localize(language, "تحديث", "Refresh")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.clear_completed"
+            busyAction={busyAction}
+            live={live}
+            onClick={() => void run("queue.clear_completed")}
+          >
+            {localize(language, "مسح المكتملة", "Clear completed")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.clear_incomplete"
+            busyAction={busyAction}
+            live={live}
+            className="td-button td-button-danger"
+            onClick={() => void run("queue.clear_incomplete")}
+          >
+            {localize(language, "مسح غير المكتمل", "Clear incomplete")}
+          </ActionButton>
+        </div>
       </div>
       {stopConfirm ? (
         <div className="td-confirm" role="dialog" aria-labelledby="td-stop-title">
