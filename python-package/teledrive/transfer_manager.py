@@ -5,6 +5,7 @@ import asyncio
 import mimetypes
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -30,6 +31,8 @@ class TransferManager:
     DRAIN_INTERVAL = 0.05
     #: how often a paused worker re-reads the control flags
     CONTROL_POLL = 0.2
+    #: Minimum seconds between SQLite progress writes for the same item.
+    DB_PROGRESS_INTERVAL = 0.5
 
     def __init__(self, telegram, drive, drive_folder_id: str, queue=None,
                  item_ids=None):
@@ -60,6 +63,10 @@ class TransferManager:
         # Drive calls are serialized in a worker thread, never on this loop.
         self._drive_lock = threading.Lock()
         self._stop_cancel_task: Optional[asyncio.Task] = None
+        # Download callbacks run on the runtime loop and upload callbacks are
+        # scheduled there from a Drive worker; keep the throttle safe either way.
+        self._progress_lock = threading.Lock()
+        self._last_db_write: dict[str, float] = {}
 
     @property
     def queue(self):
@@ -189,12 +196,14 @@ class TransferManager:
         """Park an interrupted item as Paused. Temp kept, Drive untouched."""
         self._queue.try_transition(item.id, "Paused", reason="paused")
         PROGRESS.release_item(item.id)
+        self._reset_progress_throttle(item.id)
         db.add_event(item.id, "transfer", "paused mid-file", {"temp_kept": True})
 
     def _stop_item_row(self, item: MediaItem) -> None:
         """Park an interrupted item as Stopped (final). Drive untouched."""
         self._queue.try_transition(item.id, "Stopped", reason="stopped")
         PROGRESS.release_item(item.id)
+        self._reset_progress_throttle(item.id)
         db.add_event(item.id, "transfer", "stopped mid-file", {"temp_kept": True})
 
     def request_stop_cancel(self, grace_seconds: float = 5.0) -> None:
@@ -272,9 +281,15 @@ class TransferManager:
         if tasks:
             # No task.cancel() here on purpose (RC-3): cancelling mid-chunk
             # would leave rows stuck in Downloading/Uploading with no owner.
-            # The cooperative signal ends every worker within one chunk, and
-            # gather() then only drains already-finishing work.
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # Operator Stop may cancel a wedged worker after its grace period;
+            # every other worker exception must reach QueueManager's completion
+            # callback instead of being indistinguishable from a clean finish.
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(
+                    result, asyncio.CancelledError
+                ):
+                    raise result
 
 
     async def _process(self, item: MediaItem) -> None:
@@ -370,13 +385,64 @@ class TransferManager:
                 await sleep_for_error(err, attempt)
                 self._queue.try_transition(item.id, "Pending", reason="retry")
 
-    def _record_progress(self, item_id: str, current: int, total: int, phase: str) -> None:
-        """Persist progress only on the AsyncRuntime thread.
+    def _should_persist(self, item_id: str, force: bool) -> bool:
+        """Rate-limit SQLite progress writes while preserving boundary updates."""
 
-        Drive callbacks run in asyncio.to_thread(), while this SQLite connection
-        belongs to the runtime thread. The tracker itself is thread-safe; DB
-        persistence is scheduled back onto the owning loop.
-        """
+        now = time.monotonic()
+        with self._progress_lock:
+            last = self._last_db_write.get(item_id, 0.0)
+            if not force and now - last < self.DB_PROGRESS_INTERVAL:
+                return False
+            self._last_db_write[item_id] = now
+            return True
+
+    def _reset_progress_throttle(self, item_id: str) -> None:
+        """Allow an immediate persistence write when a run changes state."""
+
+        with self._progress_lock:
+            self._last_db_write.pop(item_id, None)
+
+    async def _chat_ref(self, item: MediaItem):
+        """Resolve a stored chat id when the injected client supports it."""
+
+        resolver = getattr(self.telegram, "resolve_entity", None)
+        if not callable(resolver):
+            return item.chat_id
+        return await resolver(item.chat_id)
+
+    async def _download(self, msg, item: MediaItem, temp: Path, progress_cb) -> str:
+        """Resume a usable local partial without deleting it or restarting blindly."""
+
+        partial = getattr(self.telegram, "download_partial", None)
+        offset = temp.stat().st_size if temp.exists() else 0
+        declared = int(item.size_bytes or 0)
+        if (
+            callable(partial)
+            and offset > 0
+            and declared > offset
+            and item.media_type != "photo"
+        ):
+            db.add_event(
+                item.id,
+                "transfer",
+                "resuming download from offset",
+                {"offset": offset, "total": declared},
+            )
+            return await partial(msg, str(temp), declared, progress_cb=progress_cb)
+        return await self.telegram.download_media(msg, str(temp), progress_cb=progress_cb)
+
+    def _record_progress(
+        self,
+        item_id: str,
+        current: int,
+        total: int,
+        phase: str,
+        force: bool = False,
+    ) -> None:
+        """Persist bounded progress on the AsyncRuntime thread."""
+
+        if not self._should_persist(item_id, force):
+            return
         row = db.get_item(item_id)
         if row is None:
             return
@@ -407,8 +473,9 @@ class TransferManager:
             PROGRESS.update(item.id, current, phase="download")
             self._record_progress(item.id, current, total, "download")
 
-        msg = await self.telegram.get_message(item.chat_id, item.message_id)
-        actual_path = await self.telegram.download_media(msg, str(temp), progress_cb=dl_cb)
+        chat_ref = await self._chat_ref(item)
+        msg = await self.telegram.get_message(chat_ref, item.message_id)
+        actual_path = await self._download(msg, item, temp, dl_cb)
         actual = Path(actual_path)
         if not actual.exists():
             raise RuntimeError("downloaded file missing")
@@ -419,7 +486,8 @@ class TransferManager:
                 raise RuntimeError(f"size mismatch download: expected {item.size_bytes}, got {got}")
             item.size_bytes = got
 
-        self._queue.transition(item.id, "Downloaded")
+        self._queue.transition(item.id, "Downloaded", download_pct=100.0)
+        self._reset_progress_throttle(item.id)
 
         # UPLOAD
         self._queue.transition(item.id, "Uploading")
@@ -476,6 +544,7 @@ class TransferManager:
             return
 
         self._queue.transition(item.id, "Uploaded", upload_pct=100.0)
+        self._reset_progress_throttle(item.id)
         db.add_event(item.id, "checkpoint", "durable", {"checkpoint_file_id": checkpoint_id})
         cleanup_item(item.id)
         PROGRESS.finish_item(item.id, ok=True)

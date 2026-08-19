@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -71,3 +71,25 @@ def parse(link: str) -> ParsedLink:
         return ParsedLink(kind="username_only", chat=m.group("user"), raw=s)
 
     raise InvalidLink(f"unrecognized link: {s}")
+
+
+def peer_id(entity: Any) -> int:
+    """Return Telethon's canonical marked integer id for a peer.
+
+    Channels and supergroups use ``-100<id>``; legacy groups use ``-<id>``.
+    Objects without recognized peer markers are preserved to keep test doubles
+    and user references unchanged.
+    """
+
+    raw = int(getattr(entity, "id", 0) or 0)
+    if raw <= 0:
+        return raw
+    is_channel = (
+        getattr(entity, "broadcast", None) is not None
+        or getattr(entity, "megagroup", None) is not None
+    )
+    if is_channel:
+        return int(f"-100{raw}")
+    if getattr(entity, "participants_count", None) is not None:
+        return -raw
+    return raw

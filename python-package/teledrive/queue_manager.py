@@ -200,13 +200,25 @@ class QueueManager:
         return {"status": "running", "started": len(items), "preflight": report}
 
     def _on_run_done(self, future) -> None:
-        """Release the running label once the worker drain loop finishes.
+        """Release the running label and surface a drain-loop crash.
 
-        Without this the engine would report "running" forever after the first
-        transfer, which makes every later snapshot claim an active transfer and
-        forces the React bridge to keep polling a finished queue. Pause/Stop own
-        their labels and must not be overwritten by a completed run.
+        Per-item outcomes remain TransferManager's responsibility. This callback
+        only records an unexpected engine-level failure that would otherwise be
+        indistinguishable from a clean queue finish.
         """
+        error = None
+        try:
+            error = future.exception()
+        except Exception as exc:  # cancelled or already-consumed future
+            error = exc
+        if error is not None:
+            _log.error("transfer run crashed: %s", error, exc_info=error)
+            db.add_event(
+                "",
+                "error",
+                "transfer run crashed",
+                {"error": f"{type(error).__name__}: {error}"[:400]},
+            )
         if self._status == "running":
             self._status = "idle"
 
