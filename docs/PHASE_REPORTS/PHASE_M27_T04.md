@@ -5,7 +5,12 @@
 **الفرع:** `fix/m27-t04-live-defects`
 
 **Base SHA:** `3bbe69b91159fb519e2d7fb6efab9835ad7788f5`
-**الحالة:** **PARTIALLY COMPLETE — live sandbox-verified، والـCI/Colab النهائيان ما زالا pending.**
+**الحالة:** **MERGED + CI-PASSED + live sandbox-verified؛ تحقق Colab النهائي ما زال pending.**
+
+**PR:** [#59](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/59) — MERGED
+
+**Source SHA:** `6eb5512f71ce09fd0b973280645cc3274f47eb28`
+**Merge SHA:** `dfbb90b9afc25e5bcbb5ce45ad5d90efd4099ac1`
 
 ## الهدف
 
@@ -59,8 +64,8 @@
 
 ## ما لا يثبته هذا التقرير
 
-هذا ليس اختبار Google Colab حقيقيًا، ولم يُنشر أرشيف Colab جديد بعد. لذلك تظل الحالة الصادقة **ليست `Colab-ready` وليست `Complete`**. كما أن الفحص التفاعلي الحي غطى تحميل لوحة React والمسارات الحرجة، بينما check registry يثبت ربط الإجراءات الجاهزة ولا يساوي اختبارًا حيًا لكل إجراء حساس.
+هذا ليس اختبار Google Colab حقيقيًا، ولم يُنشر أرشيف Colab جديد بعد. نجحت فحوص CI الأربع على push وpull_request قبل دمج PR #59، لكن ذلك لا يساوي اختبار Colab. لذلك تظل الحالة الصادقة **ليست `Colab-ready` وليست `Complete`**. كما أن الفحص التفاعلي الحي غطى تحميل لوحة React والمسارات الحرجة، بينما check registry يثبت ربط الإجراءات الجاهزة ولا يساوي اختبارًا حيًا لكل إجراء حساس.
 
 ## نقطة التراجع
 
-الرجوع الآمن قبل الدمج هو إعادة الفرع إلى `3bbe69b91159fb519e2d7fb6efab9835ad7788f5` أو إغلاق PR المرتقب. لا توجد عمليات حذف Drive ضمن هذه المرحلة.
+الرجوع الآمن بعد الدمج هو `git revert` لدمج `dfbb90b9afc25e5bcbb5ce45ad5d90efd4099ac1` عبر PR جديد؛ لا إعادة كتابة للتاريخ. لا توجد عمليات حذف Drive ضمن هذه المرحلة.
