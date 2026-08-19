@@ -18,12 +18,11 @@ from .async_runtime import AsyncRuntime
 from .auth_manager import AuthManager
 from .config import CONFIG, RuntimeConfig
 from .logging_config import get_logger
-from .progress_tracker import ProgressTracker
+from .progress_tracker import PROGRESS, ProgressTracker
 from .drive_auth import DriveAuth
 from .drive_folders import DriveFolders
 from .flow import FlowService
 from .handlers import Handlers
-from .progress_tracker import ProgressTracker  # noqa: F401 (re-export order)
 from .queue_manager import QueueManager
 from .services import (
     CheckpointService,
@@ -69,7 +68,9 @@ class ApplicationContext:
         self.db = db
         self.auth: AuthManager = AuthManager()
         self.queue_manager: QueueManager = QueueManager(self)
-        self.progress: ProgressTracker = ProgressTracker()
+        # TransferManager writes the module tracker; the dashboard must read
+        # that exact object rather than a second, permanently empty instance.
+        self.progress: ProgressTracker = PROGRESS
 
         self.ui_state: UIState = UIState(language=self.config.language)
 
@@ -102,6 +103,7 @@ class ApplicationContext:
         self.binder = UIBinder(self, self.handlers)
 
         self.queue_manager.bind_context(self)
+        self.progress.reset()
         self.ui: Any = None          # Gradio launch handle (set by app.launch)
         self.transfer_manager: Any = None
         self.drive_client: Any = None

@@ -165,6 +165,7 @@ class QueueManager:
 
     def start_selected(self, item_ids=None) -> dict:
         from .drive_client import DriveService
+        from .errors import NothingSelectedError
 
         ctx = self._require_ctx()
         if self.running():
@@ -173,7 +174,14 @@ class QueueManager:
         items = self.selected_pending(item_ids)
         if not items:
             self._status = "idle"
-            return {"status": "idle", "started": 0, "message_key": "msg.no_selection"}
+            # Preserve the established explicit-empty selection contract: it
+            # means "start nothing". A normal Start click (None) after Stop
+            # has no Pending work and must surface the translated error.
+            if item_ids is not None:
+                return {"status": "idle", "started": 0, "message_key": "msg.no_selection"}
+            # The decorated handler maps this typed error to the current UI
+            # output shape and localized message instead of failing silently.
+            raise NothingSelectedError("no pending items to transfer")
 
         if ctx.drive_client is None:
             ctx.drive_client = DriveService.from_auth(ctx.drive_auth)
@@ -273,6 +281,12 @@ class QueueManager:
         manager = self._manager()
         if manager is not None:
             manager.stop()
+            # Cooperative callbacks normally settle immediately. This only
+            # handles a wedged await after five seconds on the existing runtime
+            # loop; it never creates another event loop or cancels globally.
+            ctx = self._require_ctx()
+            if ctx.aio.is_running:
+                ctx.aio.call_soon(manager.request_stop_cancel, 5.0)
         self._status = "stopped"
         db.add_event("", "transfer", "stop requested", {"drive_touched": False})
         snapshot = self.snapshot()

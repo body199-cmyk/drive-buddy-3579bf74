@@ -184,6 +184,8 @@
   "state.Stopped": "متوقف",
   "state.Uploaded": "مرفوع",
   "state.Uploading": "قيد الرفع",
+  "state.Verifying": "جارٍ التحقق",
+  "state.UploadedPendingCheckpoint": "بانتظار نقطة الحفظ",
   "settings.advanced": "إعدادات متقدمة",
   "status.connected": "متصل",
   "status.disconnected": "غير متصل",

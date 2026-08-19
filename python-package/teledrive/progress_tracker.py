@@ -72,6 +72,19 @@ class ProgressTracker:
             else:
                 self._failed_files += 1
 
+    def reset(self) -> None:
+        """Clear session-scoped progress when ApplicationContext is recreated."""
+        with self._lock:
+            self._items.clear()
+            self._done_bytes = 0
+            self._done_files = 0
+            self._failed_files = 0
+            self._skipped_files = 0
+            self._total_files = 0
+            self._total_bytes = 0
+            self._speed_samples.clear()
+            self._session_start = time.monotonic()
+
     def release_item(self, item_id: str) -> None:
         """Drop an in-flight item WITHOUT moving any counter (M26-T01).
 

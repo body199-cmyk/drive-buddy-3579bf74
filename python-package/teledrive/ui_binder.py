@@ -23,7 +23,8 @@ from .logging_config import get_logger
 
 _log = get_logger("teledrive.binder")
 
-_EVENTS = ("click", "change", "submit", "select", "input", "release")
+# ``tick`` is gr.Timer's sanctioned event path for live refreshes.
+_EVENTS = ("click", "change", "submit", "select", "input", "release", "tick")
 
 
 def component_update(**props: Any) -> dict[str, Any]:

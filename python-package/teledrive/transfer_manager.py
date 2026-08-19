@@ -6,7 +6,7 @@ import mimetypes
 import os
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from . import checkpoint_manager, database as db
 from .config import CONFIG
@@ -51,8 +51,15 @@ class TransferManager:
         self._stop = threading.Event()
         self._tasks: list[asyncio.Task] = []
         self._workers: Optional[int] = None
+        # Sets are written from Gradio workers and read from the runtime loop.
+        # Events are thread-safe by themselves; the related item sets are not.
+        self._control_lock = threading.RLock()
         self._paused_items: set[str] = set()
         self._stopped_items: set[str] = set()
+        # googleapiclient service objects are not thread-safe. All blocking
+        # Drive calls are serialized in a worker thread, never on this loop.
+        self._drive_lock = threading.Lock()
+        self._stop_cancel_task: Optional[asyncio.Task] = None
 
     @property
     def queue(self):
@@ -87,20 +94,25 @@ class TransferManager:
     # ---- per-item control ----
 
     def pause_item(self, item_id: str) -> None:
-        self._paused_items.add(item_id)
+        with self._control_lock:
+            self._paused_items.add(item_id)
 
     def resume_item(self, item_id: str) -> None:
-        self._paused_items.discard(item_id)
+        with self._control_lock:
+            self._paused_items.discard(item_id)
 
     def stop_item(self, item_id: str) -> None:
-        self._stopped_items.add(item_id)
-        self._paused_items.discard(item_id)
+        with self._control_lock:
+            self._stopped_items.add(item_id)
+            self._paused_items.discard(item_id)
 
     def item_paused(self, item_id: str) -> bool:
-        return item_id in self._paused_items
+        with self._control_lock:
+            return item_id in self._paused_items
 
     def item_stopped(self, item_id: str) -> bool:
-        return item_id in self._stopped_items
+        with self._control_lock:
+            return item_id in self._stopped_items
 
     async def _wait_item(self, item_id: str) -> bool:
         """Returns False when the item was stopped."""
@@ -139,8 +151,9 @@ class TransferManager:
         """
         self._stop.clear()
         self._paused.set()
-        self._paused_items.clear()
-        self._stopped_items.clear()
+        with self._control_lock:
+            self._paused_items.clear()
+            self._stopped_items.clear()
 
     async def _wait_resume(self) -> bool:
         """Block while globally paused. Returns False when the run must stop."""
@@ -183,6 +196,37 @@ class TransferManager:
         self._queue.try_transition(item.id, "Stopped", reason="stopped")
         PROGRESS.release_item(item.id)
         db.add_event(item.id, "transfer", "stopped mid-file", {"temp_kept": True})
+
+    def request_stop_cancel(self, grace_seconds: float = 5.0) -> None:
+        """Loop-thread entry point for a bounded Stop fallback.
+
+        Pause/Stop normally interrupt at the next progress callback. A blocked
+        socket can fail to call back, so QueueManager schedules this method on
+        the one AsyncRuntime loop after Stop. No ad-hoc loop or global timeout
+        is created.
+        """
+        if self._stop_cancel_task is not None and not self._stop_cancel_task.done():
+            return
+        self._stop_cancel_task = asyncio.create_task(
+            self._cancel_stuck_workers(grace_seconds)
+        )
+
+    async def _cancel_stuck_workers(self, grace_seconds: float) -> None:
+        await asyncio.sleep(max(0.0, grace_seconds))
+        if not self._stop.is_set():
+            return
+        for task in list(self._tasks):
+            if not task.done():
+                _log.warning("stop grace elapsed; cancelling stalled transfer task")
+                task.cancel()
+
+    async def _drive_call(self, fn: Callable[..., Any], *args, **kwargs) -> Any:
+        """Run one blocking Drive/googleapiclient call off the runtime loop."""
+        def runner():
+            with self._drive_lock:
+                return fn(*args, **kwargs)
+
+        return await asyncio.to_thread(runner)
 
     def _claimable(self, seen: set[str]) -> list[MediaItem]:
         return [
@@ -248,6 +292,11 @@ class TransferManager:
                 return
             try:
                 await self._do_item(item)
+            except asyncio.CancelledError:
+                # The bounded Stop fallback may cancel a socket await after its
+                # grace period. It is still an operator Stop, never a failure.
+                self._stop_item_row(item)
+                raise
             except TransferPaused:
                 # Belt and braces: _do_item already parks the row. Catching
                 # here too guarantees a control signal can never be mistaken
@@ -264,8 +313,8 @@ class TransferManager:
                 PROGRESS.finish_item(item.id, ok=False)
 
     async def _do_item(self, item: MediaItem) -> None:
-        # Duplicate check
-        rep = dup_check(self.drive, item.source_key, item.size_bytes)
+        # Duplicate check (Drive adapter: always off the runtime loop).
+        rep = await self._drive_call(dup_check, self.drive, item.source_key, item.size_bytes)
         if rep.is_duplicate:
             self._queue.try_transition(item.id, "Skipped", reason="duplicate", drive_file_id=rep.drive_file_id or "")
             PROGRESS.finish_item(item.id, ok=True, skipped=True)
@@ -280,7 +329,7 @@ class TransferManager:
             PROGRESS.finish_item(item.id, ok=False)
             return
         try:
-            preflight_or_raise(self.drive, item.size_bytes)
+            await self._drive_call(preflight_or_raise, self.drive, item.size_bytes)
         except Exception as e:
             self._queue.try_transition(item.id, "Failed", reason="drive_quota",
                                  last_error_code="DRIVE_QUOTA", last_error_msg=str(e)[:400])
@@ -321,7 +370,25 @@ class TransferManager:
                 await sleep_for_error(err, attempt)
                 self._queue.try_transition(item.id, "Pending", reason="retry")
 
+    def _record_progress(self, item_id: str, current: int, total: int, phase: str) -> None:
+        """Persist progress only on the AsyncRuntime thread.
+
+        Drive callbacks run in asyncio.to_thread(), while this SQLite connection
+        belongs to the runtime thread. The tracker itself is thread-safe; DB
+        persistence is scheduled back onto the owning loop.
+        """
+        row = db.get_item(item_id)
+        if row is None:
+            return
+        pct = (current / total * 100) if total else 0.0
+        if phase == "upload":
+            row.upload_pct = pct
+        else:
+            row.download_pct = pct
+        db.upsert_item(row)
+
     async def _run_once(self, item: MediaItem) -> None:
+        loop = asyncio.get_running_loop()
         safe = sanitize_filename(item.safe_name or item.original_name or f"{item.id}.{item.extension}")
         temp = temp_path_for(item.id, safe)
         item.temp_path = str(temp)
@@ -338,10 +405,7 @@ class TransferManager:
             # partial .part file is left exactly where it is.
             self._raise_if_interrupted(item.id)
             PROGRESS.update(item.id, current, phase="download")
-            it = db.get_item(item.id)
-            if it:
-                it.download_pct = (current / total * 100) if total else 0.0
-                db.upsert_item(it)
+            self._record_progress(item.id, current, total, "download")
 
         msg = await self.telegram.get_message(item.chat_id, item.message_id)
         actual_path = await self.telegram.download_media(msg, str(temp), progress_cb=dl_cb)
@@ -365,13 +429,13 @@ class TransferManager:
             # re-raises TransferControlSignal instead of swallowing it (§4.3).
             self._raise_if_interrupted(item.id)
             PROGRESS.update(item.id, current, phase="upload")
-            it = db.get_item(item.id)
-            if it:
-                it.upload_pct = (current / total * 100) if total else 0.0
-                db.upsert_item(it)
+            loop.call_soon_threadsafe(
+                self._record_progress, item.id, current, total, "upload"
+            )
 
         mime, _ = mimetypes.guess_type(safe)
-        result = self.drive.upload_resumable(
+        result = await self._drive_call(
+            self.drive.upload_resumable,
             file_path=str(actual),
             drive_name=safe,
             parent_id=self.drive_folder_id,
@@ -384,7 +448,7 @@ class TransferManager:
         # VERIFY — Drive must prove id + size + parent + source key + not trashed.
         self._queue.transition(item.id, "Verifying", drive_file_id=file_id)
         try:
-            self._verify(file_id, item)
+            await self._drive_call(self._verify, file_id, item)
         except Exception as exc:
             # Do NOT delete temp — mark failed for user review.
             self._queue.transition(item.id, "Failed",
@@ -401,7 +465,7 @@ class TransferManager:
                          drive_file_id=file_id,
                          drive_folder_id=self.drive_folder_id)
         try:
-            checkpoint_id = checkpoint_manager.persist_durable(self.drive)
+            checkpoint_id = await self._drive_call(checkpoint_manager.persist_durable, self.drive)
         except Exception as exc:
             db.add_event(item.id, "RECOVERY",
                          "durable checkpoint failed, temp kept and state left "
