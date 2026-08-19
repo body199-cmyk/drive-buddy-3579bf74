@@ -2,40 +2,23 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M27-T01` |
-| العنوان | تقوية نقل TeleDrive: throttle للتقدم، كشف أعطال المحرك، القنوات الخاصة، واستئناف التنزيل من offset |
-| الحالة | **MERGED + CI-passed + local/fake-tested. Not live-verified**؛ ليس Colab-ready ولا Complete |
-| المالك التنفيذي | LM Arena Agent |
-| فرع المصدر | `arena/m27-t01-final-hardening` (محذوف بعد الدمج) |
-| Base SHA | `85822af73326d60894bde9737a35672a4aae1e08` |
-| Source commit | `f6bf28161dc3c632cf27ebef505587493c208142` |
-| Merge commit / main | `e230ce9da90da5b1ea2e43c0879a5930c57f9104` عبر PR [#54](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/54) في `2026-08-19T03:29:45Z` |
-| CI | أربع فحوص مكتملة بنجاح على PR #54: Python وFrontend لكل من push وpull request |
-| الخطوة التالية | ينفذ المالك بروتوكول Telegram/Drive/Colab الحي؛ لا تغيير كود إضافي قبل ظهور دليل حي أو بلاغ جديد. |
+| TASK ID | `M27-T02` |
+| العنوان | إصلاح شحن بندل React ليحدّث تقدم النقل تلقائيًا |
+| الحالة | **ACTIVE — local/fake-tested. Not live-verified** |
+| الفرع | `arena/react-auto-refresh-bundle` |
+| Base SHA | `50cb7657f07c4e2432e875c0ad36e876e4aac652` (`origin/main`) |
+| السبب المثبت | مصدر `TeleDriveSandbox.tsx` يحتوي نبض `setInterval` كل ثانيتين، لكن `react_panel.py` يحمّل `panel.bundle.gz` وقد كان البندل المشحون لا يحتوي `setInterval`؛ لذلك يعمل زر «تحديث» اليدوي بينما لا يصل أي طلب دوري. |
+| التغيير | أعيد بناء `panel.bundle.gz` و`panel.css.gz` من مدخل Gradio الحقيقي، وأضيف مولّد ثابت وعقد يفك البندل ويثبت وجود global `TeleDriveGradioPanel` و`setInterval` و`queue.refresh`. |
+| الخطوة التالية | تدقيق الفرق وإنشاء commit/PR ثم الدمج فقط بعد CI؛ وبعده يجب إعادة نشر حزمة Colab وتشغيل runtime جديد لاختبار حي. |
 
-## ما تغيّر
-
-| المحور | التغيير المتوافق مع الواجهات الحالية |
-|---|---|
-| SQLite progress | throttle لكل عنصر (`0.5s`) لتفادي كتابة قاعدة البيانات في كل chunk، مع flush مفروض عند الحدود والنهاية. |
-| سلامة المحرك | تعاد استثناءات العامل غير الملغاة من drain loop؛ يسجل callback الطابور `transfer run crashed` ويعيد الحالة إلى `idle`. |
-| قنوات Telegram الخاصة | `resolve_entity()` يسخن dialogs مرة واحدة عند اللزوم، و`peer_id()` ينتج هوية Telethon الصحيحة للقنوات (`-100<id>`). |
-| رسالة الخطأ | عدم الوصول إلى قناة خاصة يصبح `PrivateChannelUnresolvedError` دائمًا ومترجمًا في العربية والإنجليزية. |
-| resume | `download_partial()` يقص `.part` فقط حتى محاذاة `4096` ثم يواصل `iter_download(offset=...)`؛ يبقى المسار الكامل الآمن للصور أو الملف غير القابل للاستئناف. |
-
-## التحقق الفعلي
+## التحقق المحلي
 
 | البوابة | النتيجة |
 |---|---|
-| اختبارات M27 الجديدة | `16 passed` |
-| اختبارات التحكم وM26-T03 | `18 passed` |
-| i18n وحظر `asyncio.run()` داخل `teledrive/**` | `5 passed` |
-| المجموعة الكاملة | `734 passed` |
-| `compileall` وlauncher | PASS؛ `51/51 ready actions resolve` |
-| النوتبوكات و`cmp` وبناء الحزمة | PASS |
-| `pnpm run lint && pnpm run build` | PASS؛ استُخدم pnpm لأن Bun غير متاح |
-| CI البعيد | 4/4 SUCCESS على PR #54 |
+| عقد لوحة React | `25 passed` عبر `node --experimental-strip-types --test` |
+| lint + frontend build | PASS؛ مع 7 تحذيرات Fast Refresh موجودة مسبقًا بلا errors |
+| Python suite | `734 passed` |
+| compileall وlauncher | PASS؛ `51/51 ready actions resolve` |
+| notebook check و`cmp` وبناء الحزمة | PASS |
 
-## حدود لا تتغير
-
-لا تعديل على الملفات المحمية أو النوتبوكات أو lockfiles أو workflows، ولا يوجد `asyncio.run()` داخل `teledrive/**`. لا تحذف مسارات Pause/Stop ملفات `.part` أو ملفات Google Drive. لم يُنفذ اختبار Telegram أو Google Drive أو Colab حي؛ لذلك تبقى الحالة الصحيحة **Merged + CI-passed + local/fake-tested** فقط.
+> لا تثبت هذه البوابات تشغيل Colab الحي. بعد الدمج، يلزم نشر الحزمة من `main` ثم Restart للـruntime؛ البندل القديم في جلسة المتصفح الحالية لن يتحول تلقائيًا إلى النسخة الجديدة.
