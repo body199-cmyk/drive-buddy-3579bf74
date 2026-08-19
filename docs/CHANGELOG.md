@@ -1,5 +1,14 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M27-T05] — 2026-08-19 — تصحيح تجربة الاستخدام للطابور الخامل وتحليل الإدخال الناقص
+
+- **Pause/Resume الخاملان:** لا تكتب Pause checkpoint ولا تعلن `paused` عند غياب drain عامل، وResume لا تعلن `running` إلا عند وجود drain فعلي أو صف `Paused` مستأنف. جولة UI حية بطابور صفر أبقت الشارة `idle` في العمليتين.
+- **Analyze واضح:** تحقق React الأمامي يعرض الآن سبب الرابط أو رقم الرسالة أو النطاق أو الحد غير الصحيح بالعربية/الإنجليزية؛ كما أن `TeleDriveError` المعالج يرجع من bridge كفشل مترجم بدل `Action completed` عام، مع الحفاظ على مخرجات Gradio.
+- **الأصل المشحون:** أعيد بناء `panel.bundle.gz` من مصدر React؛ أضيفت اختبارات Queue وReact bridge وعقد React لحماية المسارين.
+- **التحقق:** `740 passed`، launcher `51/51`، notebook/cmp/package، `pnpm lint` بلا أخطاء، وعقود React `26 passed`. اكتملت مراحل بناء production محليًا؛ أما رمز الخروج النهائي فقد أثبته CI لأن عملية shell بقيت بعد اكتمال Nitro داخل هذا sandbox.
+- **الدمج وCI:** PR [#61](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/61) دُمج في `main` عند `c903423` بعد نجاح Python وFrontend على push وpull_request.
+- **الحالة الصادقة:** ليس `Colab-ready` ولا `Complete`؛ يلزم إعادة نشر الحزمة من `main` ثم اختبار Colab حقيقي.
+
 ## [M27-T04] — 2026-08-19 — إصلاح عيوب مثبتة أثناء اختبار حي معزول
 
 - **Pause / Resume:** لا يبدأ `QueueManager` drain استئناف جديدًا قبل أن يستقر drain السابق؛ callback قديم لا يستطيع إطفاء تشغيل أحدث، و`CancelledError` المنضبط لا يسجل كتعطل محرك. أثبت الاختبار الحي بقاء `.part` ثم استئناف التنزيل من offset وصولًا إلى `Uploaded`.
