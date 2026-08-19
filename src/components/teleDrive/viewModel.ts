@@ -86,6 +86,7 @@ export type QueueMetrics = {
   queued: number;
   running: number;
   uploaded: number;
+  skipped: number;
   failed: number;
   transferredBytes: number;
 };
@@ -96,6 +97,8 @@ export type QueueSession = {
   dateLabel: string;
   rows: QueueRow[];
   uploaded: number;
+  skipped: number;
+  failed: number;
   pending: number;
 };
 
@@ -111,11 +114,15 @@ export function groupQueueSessions(queue: QueueRow[]): QueueSession[] {
       dateLabel,
       rows: [],
       uploaded: 0,
+      skipped: 0,
+      failed: 0,
       pending: 0,
     };
     const status = (row.status ?? "").toLowerCase();
     current.rows.push(row);
     current.uploaded += status === "uploaded" ? 1 : 0;
+    current.skipped += status === "skipped" ? 1 : 0;
+    current.failed += status === "failed" ? 1 : 0;
     current.pending += ["pending", "needsretry", "downloaded"].includes(status) ? 1 : 0;
     groups.set(key, current);
   }
@@ -131,12 +138,13 @@ export function queueMetrics(queue: QueueRow[]): QueueMetrics {
         running:
           metrics.running + (["downloading", "uploading", "verifying"].includes(status) ? 1 : 0),
         uploaded: metrics.uploaded + (status === "uploaded" ? 1 : 0),
+        skipped: metrics.skipped + (status === "skipped" ? 1 : 0),
         failed: metrics.failed + (status === "failed" ? 1 : 0),
         transferredBytes:
           metrics.transferredBytes + (status === "uploaded" ? (row.sizeBytes ?? 0) : 0),
       };
     },
-    { queued: 0, running: 0, uploaded: 0, failed: 0, transferredBytes: 0 },
+    { queued: 0, running: 0, uploaded: 0, skipped: 0, failed: 0, transferredBytes: 0 },
   );
 }
 

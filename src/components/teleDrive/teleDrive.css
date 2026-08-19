@@ -660,7 +660,7 @@
 
 .td-metrics {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   border: 1px solid var(--td-line);
   border-radius: var(--radius-lg);
   overflow: hidden;

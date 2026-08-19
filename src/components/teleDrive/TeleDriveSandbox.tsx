@@ -57,6 +57,22 @@ type RunAction = <T = unknown>(
   payload?: Record<string, unknown>,
 ) => Promise<BridgeResponse<T> | null>;
 
+function queueStartNotice(language: BridgeLanguage, state: LiveUiState | null): string {
+  const metrics = queueMetrics(state?.queue ?? []);
+  if (metrics.queued + metrics.running < 1) {
+    return localize(
+      language,
+      `لا توجد عناصر معلقة للنقل. النتيجة الحالية: مكتمل ${metrics.uploaded}، تم تخطيه ${metrics.skipped}، فشل ${metrics.failed}.`,
+      `There are no pending items to transfer. Current result: ${metrics.uploaded} uploaded, ${metrics.skipped} skipped, ${metrics.failed} failed.`,
+    );
+  }
+  return localize(
+    language,
+    `بدأ النقل. يتحدّث شريط التقدم تلقائيًا: مكتمل ${metrics.uploaded}، تم تخطيه ${metrics.skipped}، فشل ${metrics.failed}.`,
+    `Transfer started. The progress bar updates automatically: ${metrics.uploaded} uploaded, ${metrics.skipped} skipped, ${metrics.failed} failed.`,
+  );
+}
+
 function NoticeBar({ notice }: { notice: Notice }) {
   if (!notice) return null;
   const Icon = notice.kind === "success" ? Check : notice.kind === "error" ? AlertCircle : Info;
@@ -797,6 +813,10 @@ function QueueSection({
           <strong>{metrics.uploaded}</strong>
         </div>
         <div>
+          <span>{localize(language, "تم تخطيه", "Skipped")}</span>
+          <strong>{metrics.skipped}</strong>
+        </div>
+        <div>
           <span>{localize(language, "فشل", "Failed")}</span>
           <strong>{metrics.failed}</strong>
         </div>
@@ -942,6 +962,8 @@ function QueueSection({
                 <small>
                   {session.rows.length} {localize(language, "ملف", "files")} ·{" "}
                   {localize(language, "مكتمل", "uploaded")} {session.uploaded} ·{" "}
+                  {localize(language, "تم تخطيه", "skipped")} {session.skipped} ·{" "}
+                  {localize(language, "فشل", "failed")} {session.failed} ·{" "}
                   {localize(language, "انتظار", "pending")} {session.pending}
                 </small>
               </summary>
@@ -1361,11 +1383,18 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         });
         return response;
       }
+      const genericActionCompletion = response.message?.trim() === "Action completed";
       setNotice({
         kind: "success",
         text:
-          response.message ??
-          localize(language, "تم تنفيذ الإجراء عبر Python.", "Action completed through Python."),
+          actionId === "queue.start_selected" && (!response.message || genericActionCompletion)
+            ? queueStartNotice(language, response.state ?? liveState)
+            : (response.message ??
+              localize(
+                language,
+                "تم تنفيذ الإجراء عبر Python.",
+                "Action completed through Python.",
+              )),
       });
       return response;
     } catch (error) {

@@ -221,9 +221,10 @@ test("12 — queue metrics and transferred bytes derive only from live rows", ()
       { ...base, id: "q", status: "Pending" },
       { ...base, id: "r", status: "Uploading" },
       { ...base, id: "u", status: "Uploaded" },
+      { ...base, id: "s", status: "Skipped" },
       { ...base, id: "f", status: "Failed" },
     ]),
-    { queued: 1, running: 1, uploaded: 1, failed: 1, transferredBytes: 1024 },
+    { queued: 1, running: 1, uploaded: 1, skipped: 1, failed: 1, transferredBytes: 1024 },
   );
   assert.equal(formatBytes(1024), "1.0 KB");
 });
@@ -315,13 +316,17 @@ test("21 — queue sessions group by channel title and created date", () => {
   const sessions = groupQueueSessions([
     { ...base, id: "a", status: "Pending", chatTitle: "Alpha", createdAt: "2026-08-12T01:00:00" },
     { ...base, id: "b", status: "Uploaded", chatTitle: "Alpha", createdAt: "2026-08-12T02:00:00" },
+    { ...base, id: "d", status: "Skipped", chatTitle: "Alpha", createdAt: "2026-08-12T03:00:00" },
+    { ...base, id: "e", status: "Failed", chatTitle: "Alpha", createdAt: "2026-08-12T04:00:00" },
     { ...base, id: "c", status: "Pending", chatTitle: "Beta", createdAt: "2026-08-11T09:00:00" },
   ]);
   assert.equal(sessions.length, 2);
   assert.equal(sessions[0].title, "Alpha");
   assert.equal(sessions[0].dateLabel, "2026-08-12");
-  assert.equal(sessions[0].rows.length, 2);
+  assert.equal(sessions[0].rows.length, 4);
   assert.equal(sessions[0].uploaded, 1);
+  assert.equal(sessions[0].skipped, 1);
+  assert.equal(sessions[0].failed, 1);
   assert.equal(sessions[0].pending, 1);
   assert.equal(sessions[1].title, "Beta");
 });
@@ -331,6 +336,9 @@ test("22 — stop offers clear-incomplete and queue rows render in sessions", as
   assert.match(component, /queue\.clear_incomplete/);
   assert.match(component, /setStopConfirm\(true\)/);
   assert.match(component, /groupQueueSessions/);
+  assert.match(component, /metrics\.skipped/);
+  assert.match(component, /session\.skipped/);
+  assert.match(component, /session\.failed/);
   assert.match(component, /td-session/);
 });
 
@@ -342,6 +350,11 @@ test("20 — run() drops stale responses via latestRequest Map", async () => {
   // Success notice only after status === "ok" (still present) and after stale guard.
   assert.match(component, /if \(response\.status !== "ok"\)/);
   assert.match(component, /kind:\s*"success"/);
+  assert.match(component, /response\.message\?\.trim\(\) === "Action completed"/);
+  assert.match(component, /queueStartNotice\(language, response\.state \?\? liveState\)/);
+  assert.match(component, /metrics\.queued \+ metrics\.running < 1/);
+  assert.match(component, /لا توجد عناصر معلقة للنقل/);
+  assert.match(component, /يتحدّث شريط التقدم تلقائيًا/);
 });
 
 test("23 — hasActiveTransfer gates the heartbeat on real progress only", () => {
