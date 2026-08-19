@@ -2,32 +2,32 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M28-T01` |
-| العنوان | وضوح نتائج الطابور ورسالة بدء النقل وإثبات تحديث التقدم تلقائيًا في لوحة React |
-| الحالة | **MERGED + CI-PASSED + live sandbox-verified؛ Colab النهائي pending** |
-| PR | [#63](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/63) — MERGED |
-| Merge SHA | `00ceaeec0f3dbdec92f67098ca4bb8a90cb865ac` |
-| Base SHA | `313e7f0b4aa7b04414f0cfe41983c6ac84c1a627` |
+| TASK ID | `M28-T02` |
+| العنوان | تقليل نبض تحديث تقدم النقل التلقائي في لوحة React إلى ثانية واحدة |
+| الحالة | **MERGED + CI-PASSED؛ تحقق Colab النهائي pending** |
+| PR | [#65](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/65) — MERGED |
+| Merge SHA | `709e15c2155423b5d22de3ea2c98a06e428b57f5` |
+| Base SHA | `3d4aebe335fb0e3114ea23d15242b2e1a1746a8a` |
 
 ## النطاق المغلق
 
 | المسار | السلوك المدمج | الدليل |
 |---|---|---|
-| مقياس `Skipped` | عدد العناصر المتخطاة مشتق من صفوف SQLite/queue الحية ويظهر في شريط المقاييس | عقد React وصف حي `Skipped` حقيقي |
-| ملخص الجلسة | يعرض عدد الملفات ومكتمل/متخطى/فشل/انتظار لكل قناة وتاريخ | عقد React وجلسات حية متعددة |
-| بدء نقل فعلي | رد `Action completed` العام يتحول إلى ملخص عربي يوضح أن شريط التقدم يتحدث تلقائيًا | رسالة حية مرئية عند بدء فيديو 8.1 MB |
-| صف غير معلّق | لا تعرض الواجهة نجاحًا مصطنعًا؛ تبقى رسالة backend المحددة مرئية | Start حي مع صفر عناصر معلقة |
-| التحديث التلقائي | النبض الرسمي حدّث اللقطة الكاملة بلا نقرة تحديث؛ صف حقيقي انتقل `0% → 55% → 100%` | تشغيل حي وتحقيق Drive مستقل |
+| نبض React | يستدعي `queue.refresh` كل `1000` ms خلال نقل حقيقي فقط | عقد React صريح للقيمة + اختبار كامل للعقود |
+| حارس الخمول | لا نبض للطابور الخامل أو النهائي فقط أو paused دون عنصر in-flight | `hasActiveTransfer` بلا تغيير وعقوده خضراء |
+| منع التداخل | لا يطلق النبض refresh آخر قبل اكتمال الطلب السابق | `pollInFlight` باقٍ وعقد الجسر أخضر |
+| الأصل المشحون | `panel.bundle.gz` يطابق المصدر الجديد | إعادة بناء أصل React وعقد asset أخضر |
 
 ## الأدلة
 
 | البوابة | النتيجة |
 |---|---|
-| البوابات المحلية | `740 passed`، launcher `51/51`، compileall/notebook/cmp/package PASS؛ React contracts `26/26`؛ `pnpm lint` = 0 errors و7 تحذيرات قديمة |
-| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request على PR #63 |
-| التحقق الحي | Telegram وDrive التجريبيان متصلان؛ لم يُضغط زر تحديث؛ ظهرت `Downloading 55%` ثم `Uploaded 100%` لملفي فيديو؛ المجلد الهدف فُحص مستقلًا في Drive |
-| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M28_T01.md` |
+| React | `26 passed`؛ القيمة `1000` محروسة باختبار |
+| Frontend | `pnpm lint` و`pnpm build` ناجحان |
+| Python | `740 passed`؛ launcher `51/51`؛ compileall/notebook/package ناجحة |
+| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request على PR #65 |
+| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M28_T02.md` |
 
 ## الخطوة التالية
 
-ينبغي إعادة نشر حزمة Colab من `main` بعد `00ceaeec` ثم Restart Runtime واختبار واجهة React ونقل Telegram→Drive في **Colab الحقيقي**. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.
+ينبغي إعادة نشر حزمة Colab من `main` بعد `709e15c` ثم Restart Runtime واختبار لوحة React ونقل Telegram→Drive في **Colab الحقيقي**. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.
