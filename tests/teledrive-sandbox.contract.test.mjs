@@ -146,7 +146,7 @@ test("06 — subscribed live snapshots update from the official component value"
   bridge.dispose();
 });
 
-test("07 — analyze validation uses only the real bounded scanner modes", () => {
+test("07 — analyze validation uses only the real bounded scanner modes and reports an input error", async () => {
   assert.equal(
     validateAnalyzeInput({
       sourceLink: "https://t.me/example/1",
@@ -169,6 +169,9 @@ test("07 — analyze validation uses only the real bounded scanner modes", () =>
     }),
     "range",
   );
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /if \(invalid\) \{[\s\S]*?onValidationError\(message\);/);
+  assert.match(component, /وضع الرسالة يحتاج رقم رسالة موجبًا/);
 });
 
 test("08 — quarantined/final candidates remain visible but are not selectable", () => {

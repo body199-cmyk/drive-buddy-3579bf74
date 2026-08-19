@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from concurrent.futures import Future
 from pathlib import Path
 
 import pytest
@@ -191,8 +192,22 @@ def test_retry_failed_never_revives_a_stopped_item():
 
 def test_pause_exports_a_checkpoint_before_reporting_paused(ctx):
     _item(ctx.queue_manager, 12)
+    ctx.queue_manager._future = Future()
     snapshot = ctx.queue_manager.pause()
     assert snapshot["status"] == "paused"
     assert snapshot["checkpoint"]["local"], "pause must write a local checkpoint"
     assert Path(snapshot["checkpoint"]["local"]).exists()
     assert any(e["kind"] == "checkpoint" for e in db.recent_events(50))
+
+
+def test_idle_pause_keeps_the_queue_idle_and_skips_checkpoint(ctx, monkeypatch):
+    monkeypatch.setattr(
+        ctx.queue_manager,
+        "_safe_checkpoint",
+        lambda: pytest.fail("idle Pause must not create a checkpoint"),
+    )
+
+    snapshot = ctx.queue_manager.pause()
+
+    assert snapshot["status"] == "idle"
+    assert "checkpoint" not in snapshot

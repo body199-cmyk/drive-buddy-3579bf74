@@ -5,6 +5,7 @@ import logging
 
 from teledrive import action_registry, database as db
 from teledrive.drive_auth import CONNECTED
+from teledrive.errors import TeleDriveError
 from teledrive.models import MediaItem
 from teledrive.react_panel import ReactPanel
 from teledrive.services import ScanResult
@@ -121,6 +122,29 @@ def test_react_bridge_folder_id_is_persisted_by_existing_service(ctx):
     assert response["status"] == "ok"
     assert response["state"]["folder"]["id"] == "folder-real-id"
     assert db.get_setting("drive_folder_id") == "folder-real-id"
+
+
+def test_react_bridge_returns_localized_analyze_validation_failure(ctx, monkeypatch):
+    def invalid_analyze(*_args, **_kwargs):
+        raise TeleDriveError("message id missing", "err.scan_message_id")
+
+    monkeypatch.setattr(ctx.scanner, "analyze", invalid_analyze)
+
+    response = _bridge(ctx).handle(
+        _request(
+            "analyze.run",
+            {
+                "link": "https://t.me/example/10",
+                "mode": "message",
+                "mediaTypes": ["all"],
+            },
+        )
+    )
+
+    assert response["status"] == "error"
+    assert response["errorKey"] == "bridge.action_failed"
+    assert "وضع الرسالة يحتاج رقم رسالة موجبًا" in response["message"]
+    assert "Action completed" not in response["message"]
 
 
 def test_react_bridge_does_not_enqueue_during_analyze(ctx, monkeypatch):

@@ -393,6 +393,7 @@ function AnalyzeSection({
   busyAction,
   run,
   onNavigate,
+  onValidationError,
 }: {
   state: LiveUiState | null;
   language: BridgeLanguage;
@@ -400,6 +401,7 @@ function AnalyzeSection({
   busyAction: string | null;
   run: RunAction;
   onNavigate(page: Page): void;
+  onValidationError(message: string): void;
 }) {
   const [sourceLink, setSourceLink] = useState("");
   const [mode, setMode] = useState<ScanMode>("message");
@@ -432,7 +434,34 @@ function AnalyzeSection({
       rangeTo,
       limit,
     });
-    if (invalid) return;
+    if (invalid) {
+      const message =
+        invalid === "source"
+          ? localize(
+              language,
+              "ألصق رابط رسالة أو قناة صالحًا.",
+              "Paste a valid message or channel link.",
+            )
+          : invalid === "message"
+            ? localize(
+                language,
+                "وضع الرسالة يحتاج رقم رسالة موجبًا، أو الصق رابط رسالة مباشرًا.",
+                "Message mode needs a positive message id, or paste a direct message link.",
+              )
+            : invalid === "range"
+              ? localize(
+                  language,
+                  "أدخل نطاق رسائل صحيحًا لا يتجاوز 1000 رسالة.",
+                  "Enter a valid message range of no more than 1000 messages.",
+                )
+              : localize(
+                  language,
+                  "أدخل عدد رسائل موجبًا لا يتجاوز 1000.",
+                  "Enter a positive message limit no greater than 1000.",
+                );
+      onValidationError(message);
+      return;
+    }
     await run("analyze.run", {
       link: sourceLink,
       mode,
@@ -1374,6 +1403,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         busyAction={busyAction}
         run={run}
         onNavigate={setPage}
+        onValidationError={(text) => setNotice({ kind: "error", text })}
       />
     ),
     queue: (

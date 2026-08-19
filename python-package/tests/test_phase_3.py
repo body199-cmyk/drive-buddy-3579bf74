@@ -161,9 +161,12 @@ def test_resume_clears_the_pause_gate_on_the_owned_manager(ctx):
     manager = ctx.ensure_transfer_manager("fld")
     manager.pause()
     assert not manager._paused.is_set()
+
     snapshot = ctx.queue_manager.resume()
+
     assert manager._paused.is_set(), "queue.resume must release the manager gate"
-    assert snapshot["status"] == "running"
+    assert snapshot["resumed"] == 0
+    assert snapshot["status"] == "idle"
 
 
 def test_stop_sets_the_manager_stop_flag_and_reports_stopped(ctx):
