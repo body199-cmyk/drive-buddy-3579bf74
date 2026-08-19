@@ -244,3 +244,79 @@ def test_stopping_a_running_upload_parks_the_row_as_stopped(monkeypatch):
     assert tracker.snapshot()["failed_files"] == 0
     assert deleted == []
     assert drive.files == {}
+
+
+def test_paused_item_does_not_hold_the_only_worker_slot(monkeypatch):
+    """A per-item pause must not starve a later runnable item at workers=1."""
+    from teledrive import transfer_manager as tm
+
+    async def scenario():
+        queue = QueueManager()
+        first = _item(queue, mid=21)
+        second = _item(queue, mid=22)
+        manager = TransferManager(_telegram(21), FakeDrive(), "fld_target", queue=queue)
+        # The second message uses the same deterministic fake payload; its id
+        # only matters to QueueManager and is not inspected by this test path.
+        manager.telegram = FakeTelegram(
+            {
+                21: FakeMsg(id=21, document=FakeDoc(id="d21", size=SIZE)),
+                22: FakeMsg(id=22, document=FakeDoc(id="d22", size=SIZE)),
+            }
+        )
+        monkeypatch.setattr(tm, "PROGRESS", ProgressTracker())
+        manager.set_workers(1)
+        manager.pause_item(first.id)
+
+        run_task = asyncio.create_task(manager.run())
+        for _ in range(50):
+            if db.get_item(second.id).state == "Uploaded":
+                break
+            await asyncio.sleep(0.02)
+        else:
+            raise AssertionError("runnable item was starved by a paused item")
+
+        assert db.get_item(first.id).state == "Pending"
+        manager.resume_item(first.id)
+        await run_task
+        assert db.get_item(first.id).state == "Uploaded"
+
+    asyncio.run(scenario())
+
+
+def test_set_workers_keeps_a_live_semaphore_until_tracked_tasks_settle():
+    """Changing the next-run cap must not create a second live permit pool."""
+
+    async def scenario():
+        manager = _manager()
+        manager.set_workers(1)
+        original = manager._semaphore()
+        gate = asyncio.Event()
+        task = asyncio.create_task(gate.wait())
+        manager._tasks = [task]
+
+        assert manager.set_workers(2) == 2
+        assert manager._semaphore() is original
+
+        gate.set()
+        await task
+        manager.set_workers(2)
+        assert manager._sema is None
+
+    asyncio.run(scenario())
+
+
+def test_photo_download_persists_the_authoritative_size():
+    """A tolerated photo-size correction must survive in SQLite for retries."""
+    queue = QueueManager()
+    item = _item(queue, mid=31)
+    item.media_type = "photo"
+    item.size_bytes = 1
+    db.upsert_item(item)
+    drive = FakeDrive()
+    telegram = FakeTelegram({31: FakeMsg(id=31, document=FakeDoc(id="p31", size=SIZE))})
+
+    asyncio.run(TransferManager(telegram, drive, "fld_target", queue=queue).run())
+
+    row = db.get_item(item.id)
+    assert row.state == "Uploaded"
+    assert row.size_bytes == SIZE

@@ -92,10 +92,18 @@ class TransferManager:
         return max(1, min(int(value), HARD_CONCURRENCY_CAP))
 
     def set_workers(self, workers: int) -> int:
-        """Applies to newly started items; running items are never killed."""
+        """Apply a new cap only to a future drain when work is in flight.
+
+        Replacing a live semaphore would split capacity across the old and new
+        objects: current workers release the old object while new workers take
+        the new one.  Keep the existing object until every tracked task has
+        settled, then rebuild lazily on the next run.
+        """
         from .config import HARD_CONCURRENCY_CAP
+
         self._workers = max(1, min(int(workers), HARD_CONCURRENCY_CAP))
-        self._sema = None
+        if not self._tasks or all(task.done() for task in self._tasks):
+            self._sema = None
         return self._workers
 
     # ---- per-item control ----
@@ -293,16 +301,18 @@ class TransferManager:
 
 
     async def _process(self, item: MediaItem) -> None:
+        # A paused item must wait before claiming a worker permit. Otherwise a
+        # paused first item can starve later runnable items when concurrency is
+        # one (or consume every available permit at higher concurrency).
+        if not await self._wait_resume():
+            self._queue.try_transition(item.id, "Stopped")
+            return
+        if not await self._wait_item(item.id):
+            self._queue.try_transition(item.id, "Stopped")
+            return
+
         async with self._semaphore():
             if self._stop.is_set() or self.item_stopped(item.id):
-                self._queue.try_transition(item.id, "Stopped")
-                return
-            # M26-T01: threading.Event has no awaitable wait(); _wait_resume
-            # polls it and also honours a Stop pressed while paused.
-            if not await self._wait_resume():
-                self._queue.try_transition(item.id, "Stopped")
-                return
-            if not await self._wait_item(item.id):
                 self._queue.try_transition(item.id, "Stopped")
                 return
             try:
@@ -485,6 +495,10 @@ class TransferManager:
             if item.media_type not in ("photo",):
                 raise RuntimeError(f"size mismatch download: expected {item.size_bytes}, got {got}")
             item.size_bytes = got
+            # The authoritative size for photos becomes known only after the
+            # download. Persist it before upload/verification so SQLite,
+            # checkpoints, and future retries agree with the in-memory row.
+            db.upsert_item(item)
 
         self._queue.transition(item.id, "Downloaded", download_pct=100.0)
         self._reset_progress_throttle(item.id)
