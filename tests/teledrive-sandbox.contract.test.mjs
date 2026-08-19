@@ -393,3 +393,24 @@ test("25 — shipped panel bundle includes the auto-refresh heartbeat", async ()
   assert.match(bundle, /setInterval/);
   assert.match(bundle, /queue\.refresh/);
 });
+
+test("26 — transfer toolbar and row controls preserve every real action ID", async () => {
+  const component = await readFile(paths.component, "utf8");
+  const queueActions = new Set(
+    [...component.matchAll(/actionId="(queue\.[a-z_]+)"/g)].map((match) => match[1]),
+  );
+
+  assert.deepEqual([...queueActions].sort(), [
+    "queue.clear_completed",
+    "queue.clear_incomplete",
+    "queue.pause",
+    "queue.pause_item",
+    "queue.refresh",
+    "queue.resume",
+    "queue.resume_item",
+    "queue.retry_failed",
+    "queue.retry_item",
+    "queue.start_selected",
+    "queue.stop",
+  ]);
+});
