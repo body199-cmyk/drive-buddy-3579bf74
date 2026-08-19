@@ -8,7 +8,7 @@ from typing import Any
 
 from .logging_config import get_logger
 from .models import MediaItem
-from .telegram_links import ParsedLink
+from .telegram_links import ParsedLink, peer_id
 from .utils import sanitize_filename, slugify, source_key
 
 _log = get_logger("teledrive.scanner")
@@ -106,21 +106,26 @@ def _matches_media_type(message: Any, requested: frozenset[str]) -> bool:
     return "all" in requested or _media_type_of(message) in requested
 
 
-async def _iter_requested_messages(telegram, parsed: ParsedLink, request: ScanRequest):
+async def _iter_requested_messages(
+    telegram, parsed: ParsedLink, request: ScanRequest, chat_ref=None
+):
+    """Iterate through the resolved peer when one is available."""
+
     request = request.validate()
+    target = parsed.chat if chat_ref is None else chat_ref
     if request.mode == "message":
-        yield await telegram.get_message(parsed.chat, request.message_id)
+        yield await telegram.get_message(target, request.message_id)
         return
     if request.mode == "range":
         async for message in telegram.iter_messages(
-            parsed.chat,
+            target,
             min_id=request.start_id - 1,
             max_id=request.end_id + 1,
             reverse=True,
         ):
             yield message
         return
-    async for message in telegram.iter_messages(parsed.chat, limit=request.limit):
+    async for message in telegram.iter_messages(target, limit=request.limit):
         yield message
         if request.mode == "latest" and request.limit and request.limit <= 0:
             break
@@ -163,8 +168,10 @@ async def scan_link(
     chat_title_hint: str = "",
 ) -> list[MediaItem]:
     request = (request or ScanRequest()).validate()
-    entity = await telegram.get_entity(parsed.chat)
-    chat_id = int(getattr(entity, "id", 0))
+    resolver = getattr(telegram, "resolve_entity", None)
+    chat_ref = await resolver(parsed.chat) if callable(resolver) else parsed.chat
+    entity = await telegram.get_entity(chat_ref)
+    chat_id = peer_id(entity)
     chat_title = (
         getattr(entity, "title", None)
         or getattr(entity, "username", None)
@@ -199,10 +206,12 @@ async def scan_link(
 
     if request.mode == "message" and parsed.message_id is not None:
         # A direct message link remains authoritative when the user chose message mode.
-        message = await telegram.get_message(parsed.chat, parsed.message_id)
+        message = await telegram.get_message(chat_ref, parsed.message_id)
         await _add(message)
     else:
-        async for message in _iter_requested_messages(telegram, parsed, request):
+        async for message in _iter_requested_messages(
+            telegram, parsed, request, chat_ref
+        ):
             await _add(message)
             if len(items) >= MAX_SCAN_MESSAGES:
                 break

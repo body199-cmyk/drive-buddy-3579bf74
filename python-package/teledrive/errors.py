@@ -94,3 +94,13 @@ class TransferPaused(TransferControlSignal):
 
 class TransferStopped(TransferControlSignal):
     """The operator stopped; the row becomes final. Drive is never touched."""
+
+
+class PrivateChannelUnresolvedError(TeleDriveError):
+    """The signed-in account cannot resolve a required Telegram peer.
+
+    The text deliberately includes ``no access`` so the existing central
+    classifier treats it as a permanent, non-retryable input/permission error.
+    """
+
+    message_key = "err.private_channel_unresolved"

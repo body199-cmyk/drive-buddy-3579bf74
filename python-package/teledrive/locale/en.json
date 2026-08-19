@@ -98,6 +98,7 @@
   "err.nothing_selected": "Nothing selected",
   "err.password_invalid": "The password is incorrect",
   "err.permanent": "Permanent error, will not retry. Check the link or permissions.",
+  "err.private_channel_unresolved": "This chat cannot be reached from the signed-in account. Open it in Telegram, then run Analyze again.",
   "err.reauth": "Session expired. Please sign in again.",
   "err.scan_limit": "Latest mode needs a positive count",
   "err.scan_media_type": "Unsupported media type",
