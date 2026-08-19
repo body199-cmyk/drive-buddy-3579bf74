@@ -2,29 +2,31 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M27-T04` |
-| العنوان | إصلاح عيوب النقل والقناة الخاصة وتحميل لوحة React المكتشفة بالتحقق الحي |
+| TASK ID | `M27-T05` |
+| العنوان | تصحيح حالة Pause/Resume للطابور الفارغ ورسائل تحقق Analyze في لوحة React |
 | الحالة | **MERGED + CI-PASSED + live sandbox-verified؛ Colab النهائي pending** |
-| PR | [#59](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/59) — MERGED |
-| Merge SHA | `dfbb90b9afc25e5bcbb5ce45ad5d90efd4099ac1` |
-| Base SHA | `3bbe69b91159fb519e2d7fb6efab9835ad7788f5` |
+| PR | [#61](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/61) — MERGED |
+| Merge SHA | `c9034234a6a1a2e487b94719c223356cdeeb84d5` |
+| Base SHA | `fba83eaad2980a20ca60a62b60ef318d0386eef2` |
 
 ## العيوب المثبتة والمغلقة
 
 | المسار | الإصلاح المدمج | الدليل |
 |---|---|---|
-| Pause / Resume | يؤجل drain الاستئناف حتى يغلق المستقبل السابق؛ callback قديم لا يطفئ محركًا أحدث؛ الإلغاء المنضبط لا يسجل crash | Pause→Resume حي من offset انتهى `Uploaded`؛ Stop بقي `Stopped` بلا ملف Drive جديد |
-| رابط دعوة قناة خاصة | يحل دعوة الحساب العضو فقط عبر `CheckChatInviteRequest` ثم InputPeer، بلا Join أو مسح غير محدود | Analyze حي أعاد مرشحًا محدودًا واحدًا؛ Dedupe أكد الملف البعيد الموجود |
-| React داخل Gradio | يبني البندل بإدخال بيئة الإنتاج ويمنع `process.env.NODE_ENV` في الأصل المشحون | ظهرت اللوحة كاملة في متصفح محلي ولم يسجل console خطأ التحميل السابق |
+| Pause على طابور فارغ | لا يغيّر المحرك إلى `paused` ولا يكتب checkpoint في غياب drain عامل | اختبار Python مخصص؛ زر Pause الحي مع 0 صفوف أبقى شارة المحرك `idle` |
+| Resume على طابور فارغ | يحرر gate المدير إن وجد، لكنه لا يدعي `running` بلا drain أو صف `Paused` مستأنف | اختبار Python مخصص؛ جولة Pause→Resume الحية أبقت الشارة `idle` |
+| Analyze بإدخال ناقص | لوحة React تعرض سبب الإدخال مترجمًا بدل تجاهل الطلب أو ترك `Action completed` قديم | عقد React؛ رسالة عربية حية للرابط المفقود ولرقم الرسالة المفقود |
+| خطأ Analyze من الخدمة | `TeleDriveError` المعالج يظهر للـbridge كفشل واضح مع بقاء شكل مخرجات Gradio متوافقًا | `tests/test_react_bridge.py` |
 
 ## الأدلة
 
 | البوابة | النتيجة |
 |---|---|
-| البوابات المحلية | `738 passed`، launcher `51/51`، compileall/notebook/cmp/package PASS؛ lint/build وReact contracts `26 passed` |
-| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request |
-| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M27_T04.md` |
+| البوابات المحلية | `740 passed`، launcher `51/51`، compileall/notebook/cmp/package PASS؛ `pnpm lint` = 0 errors، وReact contracts `26 passed` |
+| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request على PR #61 |
+| التحقق الحي | React/Gradio محلي مع Telegram وDrive التجريبيين المتصلين؛ حالات الطابور والرسائل المرئية تحققت فعليًا |
+| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M27_T05.md` |
 
 ## الخطوة التالية
 
-ينبغي إعادة نشر حزمة Colab من `main` ثم Restart runtime واختبار لوحة React ونقل Telegram→Drive داخل Colab الحقيقي. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.
+ينبغي إعادة نشر حزمة Colab من `main` ثم Restart runtime واختبار React ونقل Telegram→Drive في **Colab الحقيقي**. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.
