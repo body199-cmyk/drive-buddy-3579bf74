@@ -180,6 +180,9 @@ class QueueManager:
         report = self.batch_preflight(items)
 
         manager = ctx.ensure_transfer_manager(report["folder_id"])
+        # M26-T01 / RC-5: ONE manager is reused per context, so a Stop from an
+        # earlier batch would otherwise refuse this Start outright.
+        manager.reset_run_flags()
         manager.set_scope([i.id for i in items])
         manager.set_workers(ctx.config.concurrency_value())
         self._future = ctx.aio.submit(manager.run())
@@ -235,18 +238,46 @@ class QueueManager:
 
 
     def resume(self) -> dict:
+        """Un-pause the engine and really put the paused work back in flight.
+
+        Three things were missing (M26-T01 / RC-4):
+        1. pending() never returns a Paused row, so nothing was re-claimed.
+        2. When the previous drain loop had already finished, no run existed
+           to claim anything at all.
+        3. The status said "running" while nothing ran.
+        Drive is not touched and no file is deleted: a resumed item simply
+        restarts its current file from the beginning, keeping its .part.
+        """
         manager = self._manager()
         if manager is not None:
             manager.resume()
+        revived = 0
+        for item in db.items_in_states(["Paused"]):
+            if self.try_transition(item.id, "Pending", reason="resumed"):
+                revived += 1
+        if manager is not None and not self.running():
+            # The drain loop already returned; a resume needs a new one.
+            manager.reset_run_flags()
+            self._future = self._require_ctx().aio.submit(manager.run())
+            self._future.add_done_callback(self._on_run_done)
         self._status = "running"
-        return self.snapshot()
+        snapshot = self.snapshot()
+        snapshot["resumed"] = revived
+        return snapshot
 
     def stop(self) -> dict:
+        """Stop the engine. In-flight files abort at the next chunk boundary
+        and become Stopped (final). No Drive file is ever deleted and no
+        temp file is blindly cleaned.
+        """
         manager = self._manager()
         if manager is not None:
             manager.stop()
         self._status = "stopped"
-        return self.snapshot()
+        db.add_event("", "transfer", "stop requested", {"drive_touched": False})
+        snapshot = self.snapshot()
+        snapshot["stopping"] = True
+        return snapshot
 
     def pause_item(self, item_id: str) -> dict:
         manager = self._manager()

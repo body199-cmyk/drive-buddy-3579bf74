@@ -2,55 +2,54 @@
 
 > Latest session only. Historical evidence is under `docs/PHASE_REPORTS/`.
 
-## Session card — M24-T05 Telegram session vault determinism
+## Session card — M26-T01 Transfer control
 
 | Field | Value |
 |---|---|
 | UTC date | 2026-08-19 |
-| TASK ID | `M24-T05` |
+| TASK ID | `M26-T01` |
 | Repository | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch | `arena/m24-t05-session-vault-determinism` |
-| Base SHA | `70e3406931134c289637d7892f6eeb5ebef7ae94` (current `origin/main` at start) |
-| HEAD before work | `70e3406931134c289637d7892f6eeb5ebef7ae94` |
-| HEAD after work | التزامان محليان على فرع المهمة؛ القيمة القانونية هي ناتج `git rev-parse HEAD` بعد الدفع |
+| Branch | `arena/m26-t01-transfer-control` |
+| Base SHA | `26fd421e68637f5d6b40b25864f6252613081fb3` |
+| HEAD before work | `26fd421e68637f5d6b40b25864f6252613081fb3` |
+| HEAD after work | تغييرات محلية غير ملتزم بها؛ راجع `git rev-parse HEAD` عند إنشاء الالتزام |
+| Resume status | **RESUME_VERIFIED** — `main` يطابق SHA الدمج المحدد وPR #51 مدموج |
 | Status | **Implemented + fake-tested. Not live-verified.** |
-| Last green local check | `700 passed`؛ لا يوجد تشغيل CI أو تحقق Colab حي في هذه الجلسة |
-| Honest | ليس Colab-ready ولا Complete. لا يوجد حساب Telegram/Drive حي في بيئة التنفيذ. |
+| Last green local check | `711 passed`؛ لا يوجد تحقق Colab حي أو CI جديد في هذه الجلسة |
+| Honest | ليس Colab-ready ولا Complete. |
 
-## Resume and STEP 0 evidence
+## Stale handoff corrected
 
-فحص الاستئناف طابق `main` و`origin/main` مع baseline. مخرجات STEP 0 التي أرسلها المالك أثبتت أن Telegram وDrive كانا متصلين وأن ملف الجلسة المحلي SQLite سليم وفيه صف جلسة، كما أثبتت وجود ملفي الخزينة الحديثة وبقايا بلوب ADR-004 في مجلد التطبيق. لذلك لا يؤيد الدليل سبب RC-0 (دخول غير مكتمل)، ويؤكد تضارب الخزينتين RC-4. لا يحسم الدليل وحده توقيت جهوز Drive عند التفويض أو قفل SQLite أو الاستعادة بعد VM جديد؛ تعالج M24-T05 هذه المسارات في الكود، ويثبتها M24-T06 حيًا.
+كانت بطاقة M24-T05 السابقة تقول إن push وPR والدمج لم تحدث. هذا كان متقادمًا: PR [#51](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/51) مدموج فعليًا في `main` عند `26fd421e68637f5d6b40b25864f6252613081fb3`. أصبح هذا SHA خط أساس M26-T01، ولم يُعد تطبيق تغييرات M24-T05.
 
 ## What changed
 
-| Area | Change |
+| Root cause | Change |
 |---|---|
-| `session_vault.py` | صيغة 2 افتراضية: الجلسة ملفوفة والمعلومات الوصفية لا تتضمن `api_hash`. صيغـة 1 ما زالت قابلة للقراءة، والكتابة النصية الصريحة محصورة في escape hatch صريح للمالك. |
-| Persistence | `persist_from_context()` و`wipe_from_context()` يوجهان نقاط التكامل القديمة إلى `SessionVault`، فيتوقف إنشاء بلوب ADR-004 منافس. |
-| Reliability | snapshot متعدد المسارات، fingerprint لمنع الرفع المكرر، latch للحفظ المؤجل عند تأخر Drive، وإخراج منقح عبر event/log/`last_result`. |
-| Restore | لا استبدال لملف SQLite تحت عميل حي، وتنظيف محلي وعن بُعد إذا فشلت الجلسة المستعادة في التفويض. |
-| Lifecycle | logout/forget ينظفان الملفين الحديثين وبقايا `td_telegram.session.vault`. |
-| `handlers.py` | يغسل أول إجراء واجهة أي حفظ مؤجل، بلا action أو مفتاح i18n أو تغيير arity جديد. |
-| Tests | 7 اختبارات M24-T05 إضافية، بما في ذلك fallback لقفل snapshot، صيغة 2، latch، التنظيف، الاستعادة الملغاة، wrapper، والحالة المنقحة. |
+| RC-1 | استبدلت أعلام التحكم المشتركة عبر ثريد Gradio وAsyncRuntime بـ`threading.Event`. |
+| RC-2 | رفعت إشارات تعاونية من callbacks التحميل والرفع عند حدود الـchunk لتوقيف الملف الجاري بلا تصنيفه كفشل. |
+| RC-3 | لا يوجد `task.cancel()`؛ تتجمع المهام بعد أن تنهي إشارة التحكم مسارها التعاوني. |
+| RC-4 | `resume()` يعيد صفوف Paused إلى Pending ويعيد drain loop عند انتهائه. |
+| RC-5 | `start_selected()` يصفر أعلام التشغيل المتبقية من Stop سابق. |
+| RC-6 | Pause/Stop يحرران progress من دون تحريك عدادات done/failed/skipped. |
 
-## Protected files modified
-
-NONE. لم تُنفّذ Part B لعدم استلام العبارة المطلوبة للموافقة على تعديل `notebook_cells.py` أو النوتبوكات.
+لا تقاطع M26-T01 مرحلتي `Verifying` أو `UploadedPendingCheckpoint`: الملف الذي وصل Drive يجب أن يمر بالتحقق والـcheckpoint كي لا يترك ملفًا يتيمًا. Pause/Stop لا يحذفان ملفًا من Drive ولا ينفذان blind cleanup.
 
 ## Verification (real output)
 
 | Command | Result |
 |---|---|
+| `python3 -m pytest -q tests` قبل التعديل | `700 passed` |
+| `python3 -m pytest -q tests/test_transfer_control.py -v` | `11 passed` |
+| `python3 -m pytest -q tests` بعد التعديل | `711 passed` |
 | `python3 -m compileall teledrive` | PASS |
-| `python3 -m pytest -q tests/test_session_vault.py -v` | `32 passed` |
-| `python3 -m pytest -q tests` | `700 passed` |
 | `python3 teledrive_launcher.py --check` | `binding check ok: 51/51 ready actions resolve` |
 | `python3 -m teledrive.notebook_cells --check` | `notebooks are in sync` |
-| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS (identical) |
-| `python3 -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS (`archive: teledrive_v4.5.zip`) |
-| `bun run lint && bun run build` | NOT RUN: Bun executable unavailable in this sandbox |
-| `pnpm run lint && pnpm run build` | PASS as an environment fallback; scripts completed successfully |
+| `cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb` | PASS |
+| `python3 -m teledrive.package_service --build --output teledrive_v4.5.zip` | PASS |
+| `bun run lint && bun run build` | NOT RUN: Bun unavailable in sandbox |
+| `pnpm run lint && pnpm run build` | PASS fallback |
 
-## Rollback and next step
+## Protected files and next step
 
-The safe rollback point remains `70e3406931134c289637d7892f6eeb5ebef7ae94`. The local M24-T05 commit succeeded. Push, pull request, and merge are authorized by the owner but have not occurred at the instant of this update. After remote review and merge, the owner must run M24-T06 in a new Colab VM.
+لم تُمس ملفات الواجهة أو handlers أو action registry أو النوتبوكات أو lockfiles أو workflows أو `state_machine.py`. لم ينفذ اختبار Telegram/Drive/Colab حي؛ هذا مطلوب من المالك بعد الدمج. نقطة التراجع الآمنة هي `26fd421e68637f5d6b40b25864f6252613081fb3`. الخطوة التالية: مراجعة التغييرات ثم موافقة المالك قبل commit أو push أو PR أو merge.

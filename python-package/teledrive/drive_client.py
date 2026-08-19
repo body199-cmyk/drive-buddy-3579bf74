@@ -125,6 +125,11 @@ class DriveService:
             body=body, media_body=media,
             fields="id,name,size,parents,appProperties,trashed"
         )
+        # M26-T01: a cooperative pause/stop signal raised by the progress
+        # callback MUST escape this loop. Everything else stays swallowed:
+        # a cosmetic progress failure may never break a real upload.
+        from .errors import TransferControlSignal
+
         response = None
         total = os.path.getsize(file_path) or 1
         while response is None:
@@ -132,11 +137,15 @@ class DriveService:
             if status and progress_cb:
                 try:
                     progress_cb(int(status.resumable_progress), total)
+                except TransferControlSignal:
+                    raise
                 except Exception:
                     pass
         if progress_cb:
             try:
                 progress_cb(total, total)
+            except TransferControlSignal:
+                raise
             except Exception:
                 pass
         return response
