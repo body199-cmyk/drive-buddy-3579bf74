@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 
 import { unavailableBridge } from "../src/components/teleDrive/bridgeTypes.ts";
 import { GradioTeleDriveBridge } from "../src/components/teleDrive/gradioBridge.ts";
@@ -382,4 +383,13 @@ test("24 — sandbox auto-refreshes the whole live snapshot while transferring",
   assert.match(component, /pollInFlight/);
   // Replaces the full LiveUiState from the response, like a manual Refresh.
   assert.match(component, /setLiveState\(response\.state\)/);
+});
+
+test("25 — shipped panel bundle includes the auto-refresh heartbeat", async () => {
+  const asset = await readFile(paths.panelAsset);
+  const bundle = gunzipSync(asset).toString("utf8");
+
+  assert.match(bundle, /TeleDriveGradioPanel/);
+  assert.match(bundle, /setInterval/);
+  assert.match(bundle, /queue\.refresh/);
 });
