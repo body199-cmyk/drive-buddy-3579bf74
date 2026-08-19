@@ -695,7 +695,26 @@
 }
 
 .td-transfer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--td-line);
+  border-radius: var(--radius-lg);
+  background: var(--td-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.td-transfer-actions-primary,
+.td-transfer-actions-secondary {
+  align-items: center;
   margin: 0;
+}
+
+.td-transfer-actions-secondary {
+  margin-inline-start: auto;
 }
 
 .td-session-list {
@@ -768,6 +787,7 @@
   height: 100%;
   border-radius: 999px;
   background: var(--td-primary);
+  transition: width 0.5s ease-out;
 }
 
 .td-log-toolbar {
@@ -929,6 +949,10 @@
 
   .td-metrics {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .td-transfer-actions-secondary {
+    margin-inline-start: 0;
   }
 
   .td-metrics div:nth-child(4) {
