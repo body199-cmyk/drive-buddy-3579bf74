@@ -49,7 +49,7 @@ import {
 } from "./viewModel";
 
 /** Quiet auto-refresh heartbeat: how often the live snapshot is polled while a transfer is moving. */
-const AUTO_REFRESH_INTERVAL_MS = 2000;
+const AUTO_REFRESH_INTERVAL_MS = 1000;
 
 type Notice = { kind: "info" | "success" | "warning" | "error"; text: string } | null;
 type RunAction = <T = unknown>(
