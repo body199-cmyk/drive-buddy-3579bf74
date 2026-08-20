@@ -134,9 +134,17 @@ class _InlineRuntime:
 
     def __init__(self):
         self.submissions = 0
+        self.schedules = 0
 
     def submit(self, coro):
         self.submissions += 1
+        coro.close()
+        future: Future = Future()
+        future.set_result(None)
+        return future
+
+    def schedule(self, coro):
+        self.schedules += 1
         coro.close()
         future: Future = Future()
         future.set_result(None)
@@ -159,7 +167,8 @@ def test_resume_restarts_a_fresh_drain_for_a_revived_row_even_if_old_future_runs
     assert resumed["resumed"] == 1
     assert runtime.submissions == 0
     old_future.set_result(None)
-    assert runtime.submissions == 1
+    assert runtime.submissions == 0
+    assert runtime.schedules == 1
     assert db.get_item(item.id).state == "Pending"
 
 

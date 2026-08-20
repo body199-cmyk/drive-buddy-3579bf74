@@ -327,7 +327,9 @@ class QueueManager:
             return
         manager.reset_run_flags()
         self._status = "running"
-        self._future = self._require_ctx().aio.submit(manager.run())
+        runtime = self._require_ctx().aio
+        schedule = getattr(runtime, "schedule", runtime.submit)
+        self._future = schedule(manager.run())
         self._future.add_done_callback(self._on_run_done)
 
     def stop(self) -> dict:
