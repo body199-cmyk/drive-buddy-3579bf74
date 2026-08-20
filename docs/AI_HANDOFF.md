@@ -1,38 +1,37 @@
-# AI Handoff
+# بطاقة تسليم AI
 
-> Latest session only. Historical evidence is under `docs/PHASE_REPORTS/`.
+> آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
-## Session card — M31: UI refresh storm and Resume scheduling
+## بطاقة الجلسة — M32-T01: استبدال ذري لجلسة Telegram التالفة
 
-| Field | Value |
+| الحقل | القيمة |
 |---|---|
-| Repository | `body199-cmyk/drive-buddy-3579bf74` |
-| Code PR | [#69](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/69) — MERGED |
-| Merge SHA | `397b97fa806a0d624f93d6f1afe839d9e5639577` |
-| Status | **CODE MERGED + CI-PASSED + live sandbox-verified; final package republish and Colab verification pending** |
+| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
+| فرع العمل | `fix/m32-t01-atomic-telegram-session` |
+| خط الأساس | `c1a379708cc2da697e67c3147b269d6a4a57120d` |
+| الحالة | **Implemented + fake-tested + full-gated local candidate؛ commit/PR/CI/merge/publish pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M32_ATOMIC_SESSION_REPLACEMENT.md` |
 
-## What changed
+## ما تغير
 
-The global Gradio Timer that refreshed queue and dashboard outputs every second, including while the application was idle, was removed. React remains responsible for the live heartbeat during active transfers, while explicit manual refresh buttons remain wired. This prevents the whole page from appearing to reload or freeze while preserving automatic progress updates during real work.
+يعتمد `SessionVault` الآن زوج جلسة مُؤرشفًا بإصدار وملف بيان نشط. ترفع جلسة الإصدار وبياناتها أولًا، ولا يصبحان المصدر النشط إلا عند نشر البيان بعد اكتمال الرفع. إذا انقطع الحفظ أو فشل قبل البيان، تبقى الجلسة السابقة على Drive قابلة للاستعادة. ولا يزال Vault القديم مدعومًا للقراءة حتى يحل محله دخول ناجح.
 
-The live Resume path also exposed a runtime-loop error. A completion callback was calling `AsyncRuntime.submit()` from inside the shared loop. `AsyncRuntime.schedule()` now creates a task when called from the loop thread and uses the thread-safe submission path externally; QueueManager uses it only for the resumed drain.
+تصنّف `TelegramAuth` أخطاء الجلسة المحفوظة مثل `AuthKeyDuplicatedError` كحاجة لتسجيل جديد: يفصل العميل ويرمي الملف المحلي الذي ثبت فساده فقط، ثم يعود إلى إدخال الهاتف. لا تحذف هذه الحالة زوج Drive القديم. ولا تزال أخطاء الاتصال العابر تحافظ على النسخ كي يعاد التحقق لاحقًا.
 
-## Evidence
+## الأدلة
 
-| Check | Result |
+| الفحص | النتيجة |
 |---|---|
-| Targeted regression suite | `34 passed` |
-| Full Python suite | `743 passed` |
-| Frontend | `pnpm lint`, `pnpm build`, React contracts `26/26` |
+| اختبارات Vault/TelegramAuth/Telegram flow المركزة | `70 passed` |
+| Python كامل | `746 passed` |
 | Launcher | `51/51 ready actions resolve` |
-| CI | Python and Frontend successful on push and pull request for PR #69 |
-| Browser idle verification | Stable page, no console errors, controls remained interactive after removing global Timer |
-| Live Telegram→Drive controls | Ten real files uploaded; Pause preserved partials; Resume continued from offset `8192`; Stop stayed `Stopped` with no remote media file |
-| Drive folder | [TeleDrive-M31-Resume-Controls-20260820](https://drive.google.com/drive/folders/10QE4oPbkQ6zNkmBYaRGPX19Icl1_mQQ8) |
-| Detailed report | `docs/PHASE_REPORTS/PHASE_M31_UI_FREEZE.md` |
+| مولد النوتبوك + التطابق | ناجحان |
+| Frontend lint/build | ناجحان عبر `pnpm` |
+| React contracts | `26/26` ناجح |
+| React bridge | `13 passed` |
 
-No one-time codes, passwords, API hashes, OAuth tokens, phone numbers, or session files entered Git history. The original Telegram session was preserved; the live test used a separate authorized session under the sandbox runtime.
+لم تدخل أسرار أو ملفات جلسات أو OAuth إلى Git. لم يجر اختبار Colab جديد لهذه المرحلة؛ الجلسة الأصلية التي أُبلغ عن بطلان مفتاحها لم تُحذف أو يعاد استخدامها.
 
-## Next action
+## الخطوة التالية
 
-Run **Publish current TeleDrive package** from the merged `main` commit, verify the public manifest/archive, then restart a real Colab runtime and smoke-test the final UI and one Telegram→Drive transfer there. Until that distinct Colab test succeeds, the project is not described as `Colab-ready` or `Complete`.
+نفّذ مراجعة فرق وأسرار أخيرة، ثم commit وpush وPR إلى `main`، وادمج فقط بعد نجاح CI الفعلي. بعد الدمج شغّل **Publish current TeleDrive package**، وتحقق من manifest والحزمة المنشورة. حتى تجربة Colab حقيقية مستقلة على الحزمة الجديدة، لا توصف الحالة بأنها `Colab-ready` أو `Complete`.
