@@ -979,13 +979,11 @@ def _bind_actions(
 
     # Transfers — outputs: (queue_status, queue_table).
     q_out = [queue["queue_status"], queue["queue_table"]]
-    # M26-T03: both actions already exist in the registry and handlers. Timer
-    # is the only sanctioned automatic refresh path; no JS or lambda is used.
-    if not hasattr(gr, "Timer"):
-        raise RuntimeError("gradio>=4.35 is required for live queue refresh")
-    live_timer = gr.Timer(1.0)
-    binder.wire(live_timer, "queue.refresh", [], q_out, event="tick")
-    binder.wire(live_timer, "dashboard.refresh", [], [monitor["dashboard_json"]], event="tick")
+    # M31: do not attach a global Gradio Timer here. It fires queue and
+    # dashboard events even while the app is idle, competing with the embedded
+    # React heartbeat and making the whole page appear to refresh/freeze.
+    # React owns the live transfer heartbeat and gates it on active work; these
+    # explicit buttons remain available for manual refresh outside a transfer.
     binder.wire(queue["start_btn"], "queue.start_selected", [], q_out)
     binder.wire(queue["pause_btn"], "queue.pause", [], q_out)
     binder.wire(queue["resume_btn"], "queue.resume", [], q_out)

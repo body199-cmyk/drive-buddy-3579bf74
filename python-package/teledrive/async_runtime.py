@@ -110,5 +110,18 @@ class AsyncRuntime:
         """Run a coroutine on the shared loop and block for its result."""
         return self.submit(coro).result(timeout)
 
+    def schedule(self, coro: Coroutine[Any, Any, Any] | Awaitable[Any]):
+        """Schedule work from either side of the shared loop boundary.
+
+        ``submit`` intentionally rejects calls made by the loop thread. A
+        completion callback can, however, run on that thread; ``schedule``
+        creates a Task there and uses the thread-safe submission path for
+        external callers.
+        """
+        loop = self.loop
+        if threading.current_thread() is self._thread:
+            return loop.create_task(coro)
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+
     def call_soon(self, fn, *args) -> None:
         self.loop.call_soon_threadsafe(fn, *args)

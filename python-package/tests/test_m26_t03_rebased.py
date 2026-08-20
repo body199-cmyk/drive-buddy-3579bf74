@@ -104,10 +104,10 @@ def test_binder_supports_timer_tick():
     assert "tick" in ui_binder._EVENTS
 
 
-def test_ui_wires_existing_refresh_actions_to_timer():
+def test_ui_does_not_attach_global_refresh_timer_to_the_whole_page():
     source = (Path(__file__).resolve().parents[1] / "teledrive" / "ui.py").read_text(
         encoding="utf-8"
     )
-    assert "live_timer = gr.Timer(1.0)" in source
-    assert 'binder.wire(live_timer, "queue.refresh", [], q_out, event="tick")' in source
-    assert 'binder.wire(live_timer, "dashboard.refresh", [], [monitor["dashboard_json"]], event="tick")' in source
+    assert "live_timer = gr.Timer(1.0)" not in source
+    assert 'binder.wire(queue["refresh_q_btn"], "queue.refresh", [], q_out)' in source
+    assert 'binder.wire(monitor["dash_btn"], "dashboard.refresh", [], [monitor["dashboard_json"]])' in source
