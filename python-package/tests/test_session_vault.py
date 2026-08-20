@@ -14,7 +14,9 @@ from teledrive.session_vault import (
     MAGIC,
     VAULT_CREDS_NAME,
     VAULT_FORMAT_ENCRYPTED,
+    VAULT_MANIFEST_NAME,
     VAULT_SESSION_NAME,
+    VAULT_VERSION_PREFIX,
 )
 
 PROVES = (
@@ -119,8 +121,9 @@ def test_authorize_uploads_vault_and_logout_wipes_it(ctx, tmp_path):
     auth.verify_code("55555")
     assert auth.state == ta.AUTHORIZED
     names = {m["name"] for m in drive.files.values()}
-    assert VAULT_SESSION_NAME in names
-    assert VAULT_CREDS_NAME in names
+    assert VAULT_MANIFEST_NAME in names
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".session") for name in names)
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)
     assert SESSION_VAULT_NAME not in names
 
     dumped = json.dumps(db.recent_events(limit=500), ensure_ascii=False, default=str)
@@ -195,15 +198,15 @@ def test_save_now_uploads_session_and_creds(ctx, caplog):
     assert result.ok and result.saved
     assert result.message_key == "msg.session_saved"
     names = {meta["name"] for meta in drive.files.values()}
-    assert VAULT_SESSION_NAME in names
-    assert VAULT_CREDS_NAME in names
-    creds_meta = next(m for m in drive.files.values() if m["name"] == VAULT_CREDS_NAME)
+    assert VAULT_MANIFEST_NAME in names
+    creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
     assert payload["api_id"] == "1234567"
     assert payload["format"] == VAULT_FORMAT_ENCRYPTED
     assert "api_hash" not in payload
-    assert payload["session_file"] == VAULT_SESSION_NAME
-    session_meta = next(m for m in drive.files.values() if m["name"] == VAULT_SESSION_NAME)
+    assert payload["session_file"].startswith(VAULT_VERSION_PREFIX)
+    assert payload["session_file"].endswith(".session")
+    session_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".session"))
     assert b"session-blob" not in session_meta["_bytes"]
     logged = "\n".join(rec.getMessage() for rec in caplog.records)
     assert "+201234567890" not in logged
@@ -308,7 +311,7 @@ def test_save_now_falls_back_to_in_memory_credentials(ctx, caplog):
     result = ctx.session_vault.save_now("", "", "")
 
     assert result.ok and result.saved
-    creds_meta = next(m for m in drive.files.values() if m["name"] == VAULT_CREDS_NAME)
+    creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
     assert payload["api_id"] == "7654321"
     assert payload["format"] == VAULT_FORMAT_ENCRYPTED
@@ -406,6 +409,9 @@ def test_save_after_login_overwrites_a_preexisting_vault(ctx):
     assert result.saved is True
     after = {meta["name"]: meta["_bytes"] for meta in drive.files.values()}
     assert before != after
+    assert VAULT_SESSION_NAME not in after
+    assert VAULT_CREDS_NAME not in after
+    assert VAULT_MANIFEST_NAME in after
 
 
 def test_save_after_login_uploads_when_the_vault_is_missing(ctx):
@@ -423,8 +429,9 @@ def test_save_after_login_uploads_when_the_vault_is_missing(ctx):
 
     assert result.ok and result.saved
     names = {meta["name"] for meta in drive.files.values()}
-    assert VAULT_SESSION_NAME in names
-    assert VAULT_CREDS_NAME in names
+    assert VAULT_MANIFEST_NAME in names
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".session") for name in names)
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)
 
 
 def test_save_after_login_is_quiet_without_drive(ctx):
@@ -465,11 +472,11 @@ def test_format_two_vault_omits_api_hash_and_restores_from_memory(ctx, monkeypat
     saved = ctx.session_vault.save_after_login()
 
     assert saved.saved is True
-    creds_meta = next(m for m in drive.files.values() if m["name"] == VAULT_CREDS_NAME)
+    creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
     assert payload["format"] == VAULT_FORMAT_ENCRYPTED
     assert "api_hash" not in payload
-    session_meta = next(m for m in drive.files.values() if m["name"] == VAULT_SESSION_NAME)
+    session_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".session"))
     assert b"format-two" not in session_meta["_bytes"]
 
     ctx.telegram_auth.state = ta.DISCONNECTED
@@ -506,7 +513,81 @@ def test_save_after_login_defers_then_flushes_when_drive_connects(ctx):
 
     assert flushed is not None and flushed.saved is True
     assert ctx.session_vault.pending is False
-    assert {meta["name"] for meta in drive.files.values()} >= {VAULT_SESSION_NAME, VAULT_CREDS_NAME}
+    names = {meta["name"] for meta in drive.files.values()}
+    assert VAULT_MANIFEST_NAME in names
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".session") for name in names)
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)
+
+
+def test_failed_replacement_keeps_prior_manifest_active(ctx, monkeypatch):
+    from teledrive import config
+
+    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"old-authorized-session")
+    ctx.telegram_auth.state = ta.AUTHORIZED
+    ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
+    ctx.telegram_auth._api_id = 1234567
+    ctx.telegram_auth._api_hash = "vault-hash"
+    drive = _connect_fake_drive(ctx)
+
+    first = ctx.session_vault.save_after_login()
+    assert first.saved is True
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    before_manifest = next(
+        meta["_bytes"] for meta in drive.files.values() if meta["name"] == VAULT_MANIFEST_NAME
+    )
+    before_active = json.loads(before_manifest.decode("utf-8"))
+
+    _sqlite_session(local, b"new-authorized-session")
+    original_upsert = drive.upsert_bytes
+
+    def fail_new_credentials(name, data, parent_id, mime_type="application/octet-stream"):
+        if name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds"):
+            raise RuntimeError("simulated staged credential write failure")
+        return original_upsert(name, data, parent_id, mime_type=mime_type)
+
+    monkeypatch.setattr(drive, "upsert_bytes", fail_new_credentials)
+    failed = ctx.session_vault.save_after_login(force=True)
+
+    assert failed.ok is False and failed.saved is False
+    assert ctx.session_vault.pending is True
+    after_manifest = next(
+        meta["_bytes"] for meta in drive.files.values() if meta["name"] == VAULT_MANIFEST_NAME
+    )
+    assert after_manifest == before_manifest
+    active_names = {before_active["session_file"], before_active["creds_file"]}
+    assert active_names <= {meta["name"] for meta in drive.files.values()}
+    assert ctx.session_vault.probe(drive)["has_session"] is True
+
+
+def test_successful_replacement_commits_before_old_version_cleanup(ctx):
+    from teledrive import config
+
+    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"old-authorized-session")
+    ctx.telegram_auth.state = ta.AUTHORIZED
+    ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
+    ctx.telegram_auth._api_id = 1234567
+    ctx.telegram_auth._api_hash = "vault-hash"
+    drive = _connect_fake_drive(ctx)
+
+    assert ctx.session_vault.save_after_login().saved is True
+    old_manifest = next(
+        meta["_bytes"] for meta in drive.files.values() if meta["name"] == VAULT_MANIFEST_NAME
+    )
+    old_active = json.loads(old_manifest.decode("utf-8"))
+
+    _sqlite_session(local, b"new-authorized-session")
+    replaced = ctx.session_vault.save_after_login(force=True)
+
+    assert replaced.saved is True
+    new_manifest = next(
+        meta["_bytes"] for meta in drive.files.values() if meta["name"] == VAULT_MANIFEST_NAME
+    )
+    new_active = json.loads(new_manifest.decode("utf-8"))
+    assert new_active != old_active
+    names = {meta["name"] for meta in drive.files.values()}
+    assert {new_active["session_file"], new_active["creds_file"], VAULT_MANIFEST_NAME} <= names
+    assert old_active["session_file"] not in names
+    assert old_active["creds_file"] not in names
 
 
 def test_forget_removes_the_legacy_competing_blob(ctx):
@@ -522,7 +603,7 @@ def test_forget_removes_the_legacy_competing_blob(ctx):
     assert {meta["name"] for meta in drive.files.values()} == set()
 
 
-def test_autorestore_discards_a_revoked_vault(ctx, monkeypatch):
+def test_autorestore_discards_only_local_copy_of_a_revoked_vault(ctx, monkeypatch):
     drive = _connect_fake_drive(ctx)
     folder_id = drive.ensure_folder("TeleDrive_AppData")
     raw = b"SQLite format 3\x00revoked-session"
@@ -545,7 +626,42 @@ def test_autorestore_discards_a_revoked_vault(ctx, monkeypatch):
 
     assert result.ok is False
     assert result.message_key == "msg.session_restore_needs_login"
-    assert {meta["name"] for meta in drive.files.values()} == set()
+    assert {meta["name"] for meta in drive.files.values()} == {VAULT_SESSION_NAME, VAULT_CREDS_NAME}
+
+
+def test_auth_key_duplicated_restore_keeps_drive_vault_and_allows_new_login(ctx):
+    from teledrive import config
+
+    class AuthKeyDuplicatedError(Exception):
+        pass
+
+    class RejectedSessionClient(FakeClient):
+        async def connect(self):
+            raise AuthKeyDuplicatedError("saved key was duplicated")
+
+    drive = _connect_fake_drive(ctx)
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    raw = b"SQLite format 3\x00duplicated-session"
+    drive.upsert_bytes(VAULT_SESSION_NAME, raw, folder_id)
+    creds = {
+        "api_id": "1234567",
+        "api_hash": "legacy-hash",
+        "phone": "+201234567890",
+        "format": 1,
+        "session_file": VAULT_SESSION_NAME,
+    }
+    drive.upsert_bytes(VAULT_CREDS_NAME, json.dumps(creds).encode("utf-8"), folder_id)
+
+    auth = ta.TelegramAuth(ctx, client_factory=RejectedSessionClient)
+    ctx.telegram_auth = auth
+    result = ctx.session_vault.autorestore()
+
+    assert result.ok is False
+    assert result.message_key == "msg.session_restore_needs_login"
+    assert auth.state == ta.READY_FOR_PHONE
+    assert auth.client is None
+    assert not Path(config.TELEGRAM_SESSION).exists()
+    assert {meta["name"] for meta in drive.files.values()} == {VAULT_SESSION_NAME, VAULT_CREDS_NAME}
 
 
 def test_action_wrapper_flushes_pending_save(ctx, monkeypatch):
@@ -573,4 +689,7 @@ def test_status_is_redacted_and_reports_vault_metadata(ctx):
 
     assert status["vault_format"] == VAULT_FORMAT_ENCRYPTED
     assert status["phone_label"] != "+201234567890"
-    assert {entry["name"] for entry in status["vault_files"]} >= {VAULT_SESSION_NAME, VAULT_CREDS_NAME}
+    names = {entry["name"] for entry in status["vault_files"]}
+    assert VAULT_MANIFEST_NAME in names
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".session") for name in names)
+    assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)

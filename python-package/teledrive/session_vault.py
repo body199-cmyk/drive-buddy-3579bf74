@@ -22,9 +22,12 @@ Drive listing from being a raw SQLite session.
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 import threading
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -38,6 +41,8 @@ from .logging_config import get_logger
 _log = get_logger("teledrive.session_vault")
 
 MAGIC = b"TDVS1\n"
+VAULT_MANIFEST_NAME = "td_telegram.active.json"
+VAULT_VERSION_PREFIX = "td_telegram.version."
 _PBKDF2_ROUNDS = 80_000
 _SALT = b"teledrive-session-vault-v1"
 
@@ -412,6 +417,51 @@ class SessionVault:
         children = drive.list_children(folder_id)
         return {str(child.get("name") or ""): child for child in children}
 
+    @staticmethod
+    def _versioned_name(kind: str, version: str) -> str:
+        return f"{VAULT_VERSION_PREFIX}{version}.{kind}"
+
+    def _active_vault_files(
+        self, drive: Any, folder_id: str
+    ) -> tuple[dict[str, dict[str, Any]], str, str]:
+        """Resolve the active pair from a manifest, with legacy fallback.
+
+        A manifest is published only after both versioned files are on Drive.  A
+        failed or interrupted replacement therefore leaves the prior manifest
+        (or legacy pair) as the only active saved session.
+        """
+        files = self._children_by_name(drive, folder_id)
+        manifest = files.get(VAULT_MANIFEST_NAME)
+        if manifest:
+            try:
+                payload = json.loads(drive.download_bytes(manifest["id"]).decode("utf-8"))
+                session_name = str(payload.get("session_file") or "")
+                creds_name = str(payload.get("creds_file") or "")
+                if (
+                    session_name.startswith(VAULT_VERSION_PREFIX)
+                    and creds_name.startswith(VAULT_VERSION_PREFIX)
+                    and session_name in files
+                    and creds_name in files
+                ):
+                    return files, session_name, creds_name
+                _log.warning("telegram vault manifest rejected: incomplete active pair")
+            except Exception as exc:  # noqa: BLE001 - legacy files remain recoverable
+                _log.warning("telegram vault manifest unreadable: %s", type(exc).__name__)
+        return files, VAULT_SESSION_NAME, VAULT_CREDS_NAME
+
+    def _cleanup_superseded_versions(
+        self, drive: Any, folder_id: str, keep: set[str]
+    ) -> None:
+        """Best-effort cleanup only after a new manifest is already live."""
+        legacy_names = {VAULT_SESSION_NAME, VAULT_CREDS_NAME, SESSION_VAULT_NAME}
+        for name, meta in self._children_by_name(drive, folder_id).items():
+            if name in keep or (not name.startswith(VAULT_VERSION_PREFIX) and name not in legacy_names):
+                continue
+            try:
+                drive.delete_file(meta["id"])
+            except Exception as exc:  # noqa: BLE001 - active manifest is already safe
+                _log.warning("telegram vault cleanup skipped: %s", type(exc).__name__)
+
     # ---- credential fallback (M24-T03) ----
 
     def _creds_from_memory(self) -> tuple[str, str, str]:
@@ -547,13 +597,14 @@ class SessionVault:
         """Used by notebook cell 3 before the app adopts the Drive service."""
         drive = self._drive_client(service)
         folder_id = self._vault_folder_id(drive)
-        files = self._children_by_name(drive, folder_id)
-        has_session = VAULT_SESSION_NAME in files
-        has_creds = VAULT_CREDS_NAME in files
+        files, session_name, creds_name = self._active_vault_files(drive, folder_id)
+        has_session = session_name in files
+        has_creds = creds_name in files
         payload = None
         if has_creds:
             try:
-                payload = self._read_creds_payload(drive, folder_id)
+                raw = drive.download_bytes(files[creds_name]["id"])
+                payload = json.loads(raw.decode("utf-8"))
             except Exception:
                 payload = None
         return {
@@ -586,24 +637,45 @@ class SessionVault:
         folder_id = self._vault_folder_id(drive)
         plaintext = _plaintext_vault()
         blob = raw if plaintext else wrap_blob(raw, api_hash)
+        version = uuid.uuid4().hex
+        session_name = self._versioned_name("session", version)
+        creds_name = self._versioned_name("creds", version)
         creds = {
             "api_id": api_id,
             "phone": phone,
             "saved_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "format": VAULT_FORMAT if plaintext else VAULT_FORMAT_ENCRYPTED,
-            "session_file": VAULT_SESSION_NAME,
+            "session_file": session_name,
         }
         if plaintext:
             creds["api_hash"] = api_hash
+
+        # Never overwrite the active pair in place.  The new session and its
+        # metadata are staged under a fresh opaque version; the one small
+        # manifest write below is the commit point.  If any staging write fails,
+        # the previous manifest remains active and recoverable.
         drive.upsert_bytes(
-            VAULT_SESSION_NAME, blob, folder_id, mime_type="application/octet-stream"
+            session_name, blob, folder_id, mime_type="application/octet-stream"
         )
         drive.upsert_bytes(
-            VAULT_CREDS_NAME,
+            creds_name,
             json.dumps(creds, ensure_ascii=False, indent=2).encode("utf-8"),
             folder_id,
             mime_type="application/json",
         )
+        manifest = {
+            "format": 1,
+            "session_file": session_name,
+            "creds_file": creds_name,
+            "saved_at": creds["saved_at"],
+        }
+        drive.upsert_bytes(
+            VAULT_MANIFEST_NAME,
+            json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"),
+            folder_id,
+            mime_type="application/json",
+        )
+        self._cleanup_superseded_versions(drive, folder_id, {session_name, creds_name})
         self._last_fingerprint = self._fingerprint(raw)
         self._pending_save = False
         _log.info("telegram vault saved phone=%s format=%s", mask_phone(phone), creds["format"])
@@ -632,17 +704,22 @@ class SessionVault:
             return False
         return True
 
-    def _discard_stale_vault(self) -> None:
-        """Remove a restored session that no longer authorizes on Telegram."""
+    def _discard_stale_local_session(self) -> None:
+        """Remove only the proven-invalid runtime copy, never the Drive backup.
+
+        A Drive vault is a recovery point.  It must survive a failed restore until
+        a later authorized login publishes a replacement manifest.  The local
+        copy is discarded after its client has been released so the manual login
+        flow creates a genuinely fresh Telethon session file.
+        """
+        if not self._release_client_for_swap():
+            _log.warning("stale local telegram session retained: client still active")
+            return
         try:
             self._local_session_path().unlink(missing_ok=True)
-        except Exception:  # noqa: BLE001
-            pass
-        self._last_fingerprint = ""
-        try:
-            self.forget()
         except Exception as exc:  # noqa: BLE001
-            _log.warning("stale vault not removed: %s", type(exc).__name__)
+            _log.warning("stale local telegram session cleanup skipped: %s", type(exc).__name__)
+        self._last_fingerprint = ""
 
     def autorestore(self) -> VaultResult:
         if self.ctx.telegram_auth.authorized:
@@ -652,11 +729,14 @@ class SessionVault:
 
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
-        files = self._children_by_name(drive, folder_id)
-        if VAULT_SESSION_NAME not in files or VAULT_CREDS_NAME not in files:
+        files, session_name, creds_name = self._active_vault_files(drive, folder_id)
+        if session_name not in files or creds_name not in files:
             return self._emit(VaultResult(False, "msg.session_not_saved"))
 
-        payload = self._read_creds_payload(drive, folder_id)
+        try:
+            payload = json.loads(drive.download_bytes(files[creds_name]["id"]).decode("utf-8"))
+        except Exception:
+            return self._emit(VaultResult(False, "err.session_vault_invalid"))
         if not payload:
             return self._emit(VaultResult(False, "err.session_vault_invalid"))
 
@@ -671,7 +751,7 @@ class SessionVault:
                 "missing api_hash for unwrap",
             )
 
-        blob = drive.download_bytes(files[VAULT_SESSION_NAME]["id"])
+        blob = drive.download_bytes(files[session_name]["id"])
         raw = blob if fmt == VAULT_FORMAT else unwrap_blob(blob or b"", api_hash)
         if not raw or not raw.startswith(SQLITE_MAGIC):
             _log.warning("telegram vault restore rejected: not a sqlite session")
@@ -687,29 +767,46 @@ class SessionVault:
 
         self._write_session_bytes(raw)
         self._last_fingerprint = self._fingerprint(raw)
-        status = self.ctx.telegram_auth.set_credentials(api_id, api_hash)
+        try:
+            status = self.ctx.telegram_auth.set_credentials(api_id, api_hash)
+        except (ConnectionError, TimeoutError, OSError, EOFError) as exc:
+            # A transport failure says nothing about whether the saved login is
+            # valid.  Keep both local and remote copies so the next retry uses
+            # the exact same recovery point.
+            return self._emit(
+                VaultResult(False, "err.tg_connect_failed", phone_label=label),
+                f"restore transport failure: {type(exc).__name__}",
+            )
+        except Exception as exc:  # noqa: BLE001 - preserve the recovery point
+            return self._emit(
+                VaultResult(False, "err.session_vault_invalid", phone_label=label),
+                f"restore verification failure: {type(exc).__name__}",
+            )
         if status.authorized:
             return self._emit(
                 VaultResult(True, "msg.session_restored", restored=True, phone_label=label),
                 f"format={fmt}",
             )
-        self._discard_stale_vault()
+        self._discard_stale_local_session()
         return self._emit(
             VaultResult(False, "msg.session_restore_needs_login", phone_label=label),
-            "restored session is not authorized (revoked)",
+            "restored session is not authorized (revoked; Drive vault retained)",
         )
 
     def forget(self) -> VaultResult:
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
         files = self._children_by_name(drive, folder_id)
-        for name in (VAULT_SESSION_NAME, VAULT_CREDS_NAME, SESSION_VAULT_NAME):
-            meta = files.get(name)
-            if meta:
-                try:
-                    drive.delete_file(meta["id"])
-                except Exception:  # noqa: BLE001
-                    pass
+        for name, meta in files.items():
+            if (
+                name not in (VAULT_SESSION_NAME, VAULT_CREDS_NAME, SESSION_VAULT_NAME, VAULT_MANIFEST_NAME)
+                and not name.startswith(VAULT_VERSION_PREFIX)
+            ):
+                continue
+            try:
+                drive.delete_file(meta["id"])
+            except Exception:  # noqa: BLE001
+                pass
         try:
             self._creds_path().unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
@@ -811,7 +908,10 @@ class SessionVault:
         try:
             drive = self._drive_client()
             folder_id = self._vault_folder_id(drive)
-            children = self._children_by_name(drive, folder_id)
+            children, session_name, creds_name = self._active_vault_files(drive, folder_id)
+            visible_names = {session_name, creds_name}
+            if VAULT_MANIFEST_NAME in children:
+                visible_names.add(VAULT_MANIFEST_NAME)
             files = [
                 {
                     "name": name,
@@ -819,12 +919,12 @@ class SessionVault:
                     "modified": str(meta.get("modifiedTime") or ""),
                 }
                 for name, meta in children.items()
-                if name
+                if name in visible_names
             ]
             files.sort(key=lambda item: item["name"])
             info["vault_files"] = files
-            if VAULT_CREDS_NAME in children:
-                payload = self._read_creds_payload(drive, folder_id) or {}
+            if creds_name in children:
+                payload = json.loads(drive.download_bytes(children[creds_name]["id"]).decode("utf-8"))
                 info["vault_format"] = int(payload.get("format", 0) or 0)
                 info["saved_at"] = str(payload.get("saved_at") or "")
                 info["phone_label"] = mask_phone(str(payload.get("phone") or ""))

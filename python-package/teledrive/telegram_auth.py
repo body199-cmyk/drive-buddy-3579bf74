@@ -11,6 +11,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import database as db
@@ -54,6 +55,17 @@ _SEND_CODE_RPC_KEYS = {
     "ApiIdInvalidError": "err.bad_api_pair",
     "PhoneNumberInvalidError": "err.tg_phone_invalid",
     "PhoneNumberFloodError": "err.tg_phone_flood",
+}
+
+# A saved authorization key can be invalidated by Telegram, including after a
+# duplicate-key event caused by moving between runtimes.  These errors prove
+# only that the local copy cannot authorize; they do not justify deleting the
+# Drive recovery point before a later successful sign-in replaces it.
+_REAUTH_SESSION_ERRORS = {
+    "AuthKeyDuplicatedError",
+    "AuthKeyUnregisteredError",
+    "SessionRevokedError",
+    "SessionExpiredError",
 }
 
 
@@ -115,6 +127,31 @@ class TelegramAuth:
     def _run(self, coro):
         return self.ctx.aio.run(coro)
 
+    def _reset_invalid_saved_session(self, reason: str) -> None:
+        """Release a rejected saved client and make the manual-login path fresh."""
+        client = self.client
+        if client is not None:
+            closer = getattr(client, "disconnect", None)
+            if callable(closer):
+                try:
+                    outcome = closer()
+                    if hasattr(outcome, "__await__"):
+                        self._run(outcome)
+                except Exception as exc:  # noqa: BLE001 - recovery must continue
+                    _log.warning("telegram invalid-session disconnect skipped: %s", type(exc).__name__)
+        self.ctx.auth.clear_telegram()
+        self.client = None
+        self._phone = None
+        self._phone_code_hash = None
+        self._last_code_sent_at = None
+        self.account_label = ""
+        self.last_error_key = "msg.session_restore_needs_login"
+        try:
+            Path(TELEGRAM_SESSION).unlink(missing_ok=True)
+        except OSError as exc:
+            _log.warning("telegram invalid-session file cleanup skipped: %s", type(exc).__name__)
+        self._set_state(READY_FOR_PHONE, reason)
+
     # ---- actions ----
 
     def set_credentials(self, api_id: str | int, api_hash: str) -> TelegramStatus:
@@ -128,8 +165,16 @@ class TelegramAuth:
             self._api_id = parsed_id
             self._api_hash = str(api_hash).strip()
             self.client = self._client_factory(self._api_id, self._api_hash)
-            self._run(self.client.connect())
-            if self._run(self.client.is_authorized()):
+            try:
+                self._run(self.client.connect())
+                authorized = self._run(self.client.is_authorized())
+            except BaseException as exc:  # noqa: BLE001 - narrow reauth recovery below
+                name = _exc_name(exc)
+                if name in _REAUTH_SESSION_ERRORS:
+                    self._reset_invalid_saved_session(f"saved session rejected: {name}")
+                    return self.status()
+                raise
+            if authorized:
                 self.account_label = self._describe_account()
                 self.ctx.auth.set_telegram(self.client, self.account_label)
                 self._set_state(AUTHORIZED, "existing session")
