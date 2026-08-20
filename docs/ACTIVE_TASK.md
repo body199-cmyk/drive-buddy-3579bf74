@@ -1,33 +1,34 @@
-# ACTIVE_TASK — قفل معلوماتي لمهمة واحدة
+# Active Task
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M29-T01` |
-| العنوان | منع احتجاز مقاعد الطابور عند Pause وتبديل semaphore الحي، وحفظ حجم الصور الفعلي |
+| TASK ID | `M31` |
+| العنوان | إيقاف عاصفة التحديث العالمي وإصلاح استئناف drain من داخل runtime loop |
 | الحالة | **Code MERGED + CI-PASSED + live sandbox-verified؛ توثيق الإغلاق والنشر النهائي وColab pending** |
-| PR | [#67](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/67) — MERGED |
-| Merge SHA | `1ba3fd0bf80bfb84593ff7f13a52958de947cbf4` |
-| Base SHA | `cdbe86404a0a06bae951cd6629e5d736cde4ef70` |
+| PR | [#69](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/69) — MERGED |
+| Merge SHA | `397b97fa806a0d624f93d6f1afe839d9e5639577` |
 
-## النطاق المغلق
+## الإصلاحات المدمجة
 
 | المسار | السلوك المدمج | الدليل |
 |---|---|---|
-| انتظار Pause الفردي | ينتظر العنصر المؤقت قبل الاستحواذ على semaphore، فلا يمنع عنصرًا runnable لاحقًا عند `workers=1` | اختبار تنفيذ طابور من عنصرين |
-| تغيير workers | لا يستبدل `set_workers()` semaphore حيًا؛ القيمة الجديدة تطبق عند run لاحق فقط | اختبار هوية semaphore أثناء task حي وبعد انتهائه |
-| حجم الصور | يسجل `size_bytes` الفعلي بعد تنزيل صورة بتقدير مختلف قبل upload/verification | اختبار مسار صورة كامل يثبت قيمة SQLite النهائية |
+| نبض الواجهة | إزالة Timer Gradio العالمي الذي كان يحدّث queue وdashboard كل ثانية أثناء الخمول؛ heartbeat React المشروط بالنقل وأزرار التحديث اليدوية باقيان | عقد UI ناجح، `pnpm lint/build`، وفحص متصفح حي ثابت بلا console errors |
+| Resume | جدولة drain الاستئناف عبر `AsyncRuntime.schedule()` عند callback داخل الحلقة، مع إبقاء submit الآمن من خارجها | `34 passed` مستهدفة، واختبار حي استأنف من offset `8192` |
 
-## الأدلة
+## أدلة النقل الحي
 
-| البوابة | النتيجة |
+| الاختبار | النتيجة |
 |---|---|
-| اختبارات النقل الموجهة | `26 passed` |
-| Python | `743 passed`؛ launcher `51/51`؛ compileall/notebook/package ناجحة |
-| React/Frontend | contracts `26 passed`؛ `pnpm lint` و`pnpm build` ناجحان |
-| CI | أربع فحوص ناجحة: Python وFrontend لكل من push وpull_request على PR #67 |
-| اختبار حي معزول | Pause أبقى `.part` بلا ملف Drive؛ Resume استأنف من offset ووصل Uploaded؛ Stop بقي Stopped بلا ملف Drive |
-| تقرير المرحلة | `docs/PHASE_REPORTS/PHASE_M29_T01.md` |
+| Start | بدأ نقل عشرة ملفات حقيقية عبر Handler الإنتاج |
+| Pause | عنصران دخلا `Paused` والملفات الجزئية محفوظة |
+| Resume | عادت العناصر إلى المسار ووصلت المجموعة إلى `Uploaded` مع استئناف offset |
+| Stop | بقي العنصر `Stopped`، والملف الجزئي محفوظ، وعدد ملفات الوسائط الجديدة في Drive يساوي صفرًا |
+| Drive | [مجلد TeleDrive-M31-Resume-Controls-20260820](https://drive.google.com/drive/folders/10QE4oPbkQ6zNkmBYaRGPX19Icl1_mQQ8) |
 
-## الخطوة التالية
+## البوابات
 
-بعد دمج وثائق M29-T01، شغّل **Publish current TeleDrive package** من `main` لمرة واحدة فقط، ثم أعد تشغيل Runtime في **Colab الحقيقي** ليجلب manifest/archive النهائيين واختبر UI ونقل Telegram→Drive. وحتى نجاح ذلك، الحالة **ليست `Colab-ready` وليست `Complete`**.
+Python `743 passed`، وعقود React `26/26`، و`pnpm lint` و`pnpm build`، وlauncher `51/51`، وCI Python/Frontend ناجحان على push وpull request.
+
+## الخطوة المتبقية
+
+بعد دمج وثائق M31، شغّل **Publish current TeleDrive package** من `main` النهائي، ثم أعد تشغيل Runtime في Colab الحقيقي وشغّل الخلايا بالترتيب. تبقى الحالة غير `Colab-ready` وغير `Complete` حتى يثبت ذلك الاختبار المستقل.

@@ -1,5 +1,14 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M31] — 2026-08-20 — إيقاف عاصفة التحديث وإصلاح Resume من داخل runtime loop
+
+- **سبب تجمد الواجهة:** أزيل Timer Gradio العالمي الذي كان يرسل `queue.refresh` و`dashboard.refresh` كل ثانية حتى أثناء الخمول وبالتوازي مع heartbeat React؛ بقي heartbeat React المشروط بالنقل وأزرار التحديث اليدوية.
+- **Resume آمن:** أضيفت `AsyncRuntime.schedule()` لإنشاء Task داخل الحلقة عند callback الاستئناف، مع إبقاء `submit()` للمسار الخارجي؛ بذلك لا يعود Resume يستدعي submit من داخل loop.
+- **الاختبارات:** `743 passed`، عقود React `26/26`، `pnpm lint` و`pnpm build`، launcher `51/51`، وCI Python/Frontend ناجح على push وpull_request.
+- **الإثبات الحي:** عشرة ملفات حقيقية وصلت إلى Drive؛ Pause حفظ `.part`، Resume استأنف من offset `8192` ووصل Uploaded، وStop بقي Stopped بلا ملف وسائط بعيد. اختبار المتصفح أثناء الخمول بقي ثابتًا بلا console errors.
+- **الدمج:** PR [#69](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/69) مدمج في `main` عند `397b97f`.
+- **الحالة الصادقة:** لم تُعد حزمة Colab للنشر بعد؛ يجب تشغيل Publish من `main` ثم اختبار Colab الحقيقي قبل `Colab-ready` أو `Complete`.
+
 ## [M29-T01] — 2026-08-19 — سلامة مقاعد الطابور وحجم الصور
 
 - **مقعد العامل لا يُحتجز عند Pause:** ينتظر العنصر Pause الفردي قبل الاستحواذ على `semaphore`، فلا يستطيع صف Paused إيقاف صف runnable لاحق عند قيمة workers منخفضة.
