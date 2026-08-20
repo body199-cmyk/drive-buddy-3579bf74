@@ -51,3 +51,23 @@
 ## حالة GitHub
 
 تُسجَّل أرقام commit وPR والدمج وCI والنشر في التقرير النهائي بعد تنفيذها فعليًا. لا يثبت هذا التقرير أي عملية بعيدة لم تنفذ بعد.
+
+## إغلاق GitHub والنشر — 2026-08-20
+
+| العملية | النتيجة الفعلية |
+|---|---|
+| Commit المصدر | `b6cb717f643cc3e41579319249ab3d7c3eb41933` |
+| Push | SUCCESS إلى `fix/m32-t01-atomic-telegram-session` |
+| Pull Request | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — CREATED ثم MERGED |
+| Merge | `5255889c1e153f2188939b225dfbbb8a5865d261` في `main` عند `2026-08-20T03:16:52Z` |
+| CI | SUCCESS: Python وFrontend على push وpull request (`4/4`) |
+| Publish | [workflow #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
+| الحزمة العامة | `teledrive_v4.5.zip`، `560,271` بايت، SHA-256 `81bcd23629c87022c7e0c3b9f4f725d6b47654c9a13422a639f191fb5647cacf` |
+
+أكد التحميل العام أن manifest يشير إلى commit الدمج `5255889c1e153f2188939b225dfbbb8a5865d261` وإلى SHA المطابق تمامًا للحزمة. كما نجح `unzip -t` للأرشيف العام.
+
+> تظل حالة المنتج **MERGED + CI-PASSED + package-published**. لا يثبت هذا نشرًا أن مسار Colab الحي لجلسة تالفة ثم بديلة قد نُفذ؛ ذلك الاختبار ما زال شرطًا مستقلًا لـ`Colab-ready` أو `Complete`.
+
+## التراجع
+
+للتراجع البرمجي، أنشئ revert للـmerge `5255889` من `main` ثم أعد نشر الحزمة الحالية عبر workflow. لا تحذف أي جلسة Telegram أو Google Drive محفوظة كجزء من التراجع.
