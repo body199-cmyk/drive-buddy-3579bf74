@@ -4,9 +4,10 @@
 |---|---|
 | TASK ID | `M32-T01` |
 | العنوان | استبدال آمن وذري لجلسة Telegram التالفة |
-| الحالة | **Implemented + fake-tested + full-gated local candidate؛ عمليات GitHub والنشر pending** |
-| branch | `fix/m32-t01-atomic-telegram-session` |
-| Base SHA | `c1a379708cc2da697e67c3147b269d6a4a57120d` |
+| الحالة | **MERGED + CI-PASSED + package-published؛ Colab recovery verification pending** |
+| PR | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — MERGED |
+| Merge SHA | `5255889c1e153f2188939b225dfbbb8a5865d261` |
+| Publish | [run #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
 
 ## النطاق المنفذ
 
@@ -26,4 +27,4 @@
 
 ## الخطوة التالية
 
-مراجعة فرق وأسرار نهائية، ثم commit وpush وPR ودمج بعد CI. بعد الدمج فقط يُشغَّل Publish current TeleDrive package وتتحقق الحزمة العامة.
+الحزمة المنشورة تشير إلى `5255889` وSHA-256 `81bcd23629c87022c7e0c3b9f4f725d6b47654c9a13422a639f191fb5647cacf`. شغّل Cell 1 في Colab ثم Restart Runtime عند طلبه، وبعدها Cells 2–4. يظل اختبار الاستبدال الحي (جلسة مبطلة → دخول جديد → Restart → استعادة بلا OTP) مطلوبًا قبل `Colab-ready` أو `Complete`.

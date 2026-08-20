@@ -7,9 +7,10 @@
 | الحقل | القيمة |
 |---|---|
 | المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| فرع العمل | `fix/m32-t01-atomic-telegram-session` |
-| خط الأساس | `c1a379708cc2da697e67c3147b269d6a4a57120d` |
-| الحالة | **Implemented + fake-tested + full-gated local candidate؛ commit/PR/CI/merge/publish pending** |
+| PR | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — MERGED |
+| Merge SHA | `5255889c1e153f2188939b225dfbbb8a5865d261` |
+| الحالة | **MERGED + CI-PASSED + package-published؛ Colab recovery verification pending** |
+| النشر | [workflow #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M32_ATOMIC_SESSION_REPLACEMENT.md` |
 
 ## ما تغير
@@ -32,6 +33,8 @@
 
 لم تدخل أسرار أو ملفات جلسات أو OAuth إلى Git. لم يجر اختبار Colab جديد لهذه المرحلة؛ الجلسة الأصلية التي أُبلغ عن بطلان مفتاحها لم تُحذف أو يعاد استخدامها.
 
-## الخطوة التالية
+## الإصدار المنشور والخطوة التالية
 
-نفّذ مراجعة فرق وأسرار أخيرة، ثم commit وpush وPR إلى `main`، وادمج فقط بعد نجاح CI الفعلي. بعد الدمج شغّل **Publish current TeleDrive package**، وتحقق من manifest والحزمة المنشورة. حتى تجربة Colab حقيقية مستقلة على الحزمة الجديدة، لا توصف الحالة بأنها `Colab-ready` أو `Complete`.
+الحزمة العامة الحالية تشير إلى `5255889` وحجمها `560,271` بايت وSHA-256 الخاص بها هو `81bcd23629c87022c7e0c3b9f4f725d6b47654c9a13422a639f191fb5647cacf`. تحقق التنزيل العام و`unzip -t` من المطابقة بنجاح.
+
+في Colab، شغّل Cell 1 من النوتبوك ثم Restart Runtime كما تطلب الخلية عند تحديث الحزمة، وبعدها شغّل Cells 2–4 بالترتيب. لا تزال تجربة الاسترداد الحية المطلوبة منفصلة: جلسة قديمة مبطلة → دخول جديد → Restart → استعادة الجلسة الجديدة. حتى ذلك الاختبار لا توصف الحالة بأنها `Colab-ready` أو `Complete`.
