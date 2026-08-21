@@ -1,6 +1,6 @@
-# TeleDrive v4.5 — Telegram → Google Drive Transfer Manager
+# TeleDrive v5.0 — Telegram → Google Drive Transfer Manager
 
-> **المواصفة:** v4.5.0 (AI-OS Continuity Edition)
+> **المواصفة:** v5.0.0 (AI-OS Continuity Edition — الحوكمة) · موروث المنتج v4.5.0
 > **بيئة التشغيل:** Google Colab (Python 3.11 + Gradio + Telethon + Google Drive API)
 > **الموقع المرجعي للتوثيق:** [`docs/`](docs/) — راجع [`docs/BOOTSTRAP_PROMPT.md`](docs/BOOTSTRAP_PROMPT.md) و [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md)
 
@@ -16,7 +16,7 @@
 
 **كيف يعمل ببساطة؟** أنت تعطي الأداة "إذن" للدخول إلى حساب Telegram الخاص بك وإلى حساب Google Drive الخاص بك، ثم تختار رسالة/قناة/محادثة فيها ملفات تريد نقلها، وتضغط "نقل". الأداة تقوم بتنزيل الملفات من Telegram ورفعها إلى مجلد في Google Drive.
 
-> ⚠️ **ملاحظة أمانة قبل البدء:** الكود مكتمل التجهيز، لكنه لم يُختبر بعد على بيئة Colab حقيقية بالكامل (مهمة M15-T01 متبقية). الخطوات التالية هي طريقة التشغيل الصحيحة — اتبعها، وأي عطل واجهك سجّله كما هو موضح في [الروابط](#-جميع-الروابط-في-مكان-واحد).
+> ⚠️ **ملاحظة أمانة قبل البدء:** الكود مكتمل التجهيز ومختبر محليًا (M15-T01 مدموجة في `main`، لكن التحقق الحي على بيئة Colab بالكامل لا يزال بيد المالك — M15-T01 فعليًا). الخطوات التالية هي طريقة التشغيل الصحيحة — اتبعها، وأي عطل واجهك سجّله كما هو موضح في [الروابط](#-جميع-الروابط-في-مكان-واحد).
 
 ---
 
@@ -172,6 +172,6 @@ TeleDrive هو محرك لنقل الوسائط والملفات من Telegram �
 - **سجل التسليم الحي:** [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md)
 - **سجل التغييرات:** [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
 
-## التطوير والمزامنة مع Lovable
+## التطوير والحوكمة
 
-هذا المشروع متصل بـ Lovable. أي تغيير يُدفع إلى `main` يُزامن تلقائياً.
+هذا المشروع يحكمه [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) (v5.0.0) بصفته المرجع الأعلى. **Lovable خرج من المشروع نهائيًا** (§3) ولا يُذكر كمنفّذ؛ أي إشارة قديمة إليه تُصحَّح إلى **LM Arena Agent** بصفته المنفّذ الوحيد المتصل بـGitHub. المستودع القانوني الوحيد هو `body199-cmyk/drive-buddy-3579bf74` (انظر [`docs/REPOSITORY_REGISTRY.md`](docs/REPOSITORY_REGISTRY.md)).
