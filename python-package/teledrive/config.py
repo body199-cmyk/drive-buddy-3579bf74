@@ -23,7 +23,9 @@ class MountedRootError(RuntimeError):
 
 
 def is_mounted_drive(path: "str | Path") -> bool:
-    p = str(Path(path)).rstrip("/")
+    # Use as_posix(): str(Path) backslash-normalizes on Windows, which would
+    # defeat the mounted-Drive guard entirely outside POSIX systems.
+    p = Path(path).as_posix().rstrip("/")
     return any(p == pre or p.startswith(pre + "/") for pre in MOUNTED_PREFIXES)
 
 
