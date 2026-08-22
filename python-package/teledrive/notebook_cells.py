@@ -34,8 +34,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-NOTEBOOK_VERSION = "4.5.0"
-TITLE = "TeleDrive v4.5 — Telegram → Google Drive (native Colab)"
+NOTEBOOK_VERSION = "5.0.0"
+TITLE = "TeleDrive v5.0 — Telegram → Google Drive (native Colab)"
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent  # python-package/
 REPO_ROOT = PACKAGE_ROOT.parent
