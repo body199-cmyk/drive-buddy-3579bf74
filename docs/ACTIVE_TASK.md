@@ -2,33 +2,31 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M35-T01` |
-| العنوان | اعتماد هوية المنتج v5.0.0 في الكود والحزمة والنوتبوك (قرار مسجّل من المالك) |
-| الحالة | **CODE COMMITTED LOCALLY — بوابات خضراء على Windows؛ ينتظر push + PR + CI** |
-| Branch | `fix/m35-t01-version-identity-v5` |
-| Commit | `5f37814` |
-| Base | main `298b3b3d97` (بعد دمج PR#73 وPR#74) |
-| التنفيذ | وكيل مساعد بتكليف مباشر من المالك (2026-08-22) |
+| TASK ID | `M36-T01` |
+| العنوان | مواءمة إصدار المنتج في workflow النشر + أدلة النشر بهوية v5.0.0 |
+| الحالة | **MERGED + CI-PASSED + package-published؛ Colab live verification pending** |
+| PR | [#77](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/77) — MERGED |
+| Merge SHA | `cb6901f4bf` |
+| Publish | run #29 (id 32575076208) على main `cb6901f4bf` — SUCCESS |
 
 ## النطاق المنفذ
 
 | المسار | السلوك |
 |---|---|
-| `teledrive/__init__.py` | `__version__` / `__spec_version__` = 5.0.0 |
-| `teledrive/config.py` | `RuntimeConfig.version` / `spec_version` = 5.0.0 |
-| `teledrive/notebook_cells.py` | `NOTEBOOK_VERSION` = 5.0.0 و`TITLE` = TeleDrive v5.0؛ النوتبوكان أعيد توليدهما بالمولّد الرسمي (`--write`) وتحقق التطابق (`--check`) |
-| `tests/test_notebook.py` | عقد العنوان محدّث إلى TeleDrive v5.0 |
+| `.github/workflows/release-current.yml` | `PRODUCT_VERSION` 4.5.0 → 5.0.0 (حقل معلوماتي في الـ manifest المنشور فقط؛ بوابة Cell-1 تخزنه ولا تقارن به). اسم الأرتيفكت المثبّت والـ tag بقي كما هما عمدًا. |
 
-ما لم يُمسَّ عمدًا: اسم الأرتيفكت المثبّت `teledrive_v4.5.zip` — هو هوية أصل منشور تستخدمها بوابة Cell-1 والـ CI وrelease-current؛ تغييره قرار release مستقل يطال ملفات محمية.
+## أدلة النشر المستقلة
 
-## البوابات المنفذة (محليًا، Windows/Python 3.11)
+Release `pkg-2026.08.09-m15t07` أُعيد نشره من الشجرة الحالية: `teledrive_v4.5.zip` 560,483 بايت · SHA-256 `a0d7cc4d…b66f1` · `product_version=5.0.0`. تحقق مستقل خارج الـ workflow بتنزيل الأصول العامة ومطابقة commit/الحجم/SHA-256 — ناجحة.
 
-`746 passed` · compileall OK · launcher `51/51 ready actions resolve` · notebook check متطابق.
+## البوابات المنفذة
+
+بوابات الدستور داخل run #29: compileall + pytest كامل + launcher + notebook check + cmp — ناجحة. CI أخضر على PR#77 قبل الدمج.
 
 ## الحدود الصادقة
 
-CI الأخضر الرسمي يتأكد بعد فتح ودمج الـ PR. لم يُنفذ اختبار Colab جديد؛ لا ادعاء Colab-ready أو Complete.
+لم يُنفذ اختبار Colab حي جديد؛ لا تزال الحالة غير `Colab-ready` وغير `Complete`.
 
 ## الخطوة التالية
 
-Push الـ branch وفتح PR، ثم مراجعة CI، ثم الدمج. إعادة نشر الحزمة بقرار منفصل بيد المالك.
+الاختبار الحي بيد المالك: شغّل Cell 1 في Colab ثم Restart Runtime عند الطلب، وبعدها Cells 2–4. بوابة التحديث ستستقبل الحزمة الجديدة (`product_version=5.0.0`) بنفس اسم الأرتيفكت المثبّت.

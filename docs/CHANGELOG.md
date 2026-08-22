@@ -1,5 +1,17 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M36-T01] — 2026-08-22
+
+### Changed
+- `release-current.yml`: `PRODUCT_VERSION` 4.5.0 → **5.0.0** — حقل معلوماتي في `teledrive_manifest.json` المنشور فقط (بوابة Cell-1 تخزنه ولا تقارن به). اسم الأرتيفكت المثبّت `teledrive_v4.5.zip` والـ tag `pkg-2026.08.09-m15t07` بقي كما هما عمدًا.
+
+### Published
+- Publish workflow run #29 على main `cb6901f4bf` (بعد دمج PR#77) — **SUCCESS**؛ release `pkg-2026.08.09-m15t07` أُعيد نشره من الشجرة الحالية: `teledrive_v4.5.zip` 560,483 بايت · SHA-256 `a0d7cc4d…b66f1` · `product_version=5.0.0`.
+- تحقق مستقل خارج الـ workflow: تنزيل الأصول العامة ومطابقة commit/الحجم/SHA-256 — ناجحة.
+
+### Gates
+بوابات الدستور داخل run #29: compileall + pytest كامل + launcher + notebook check + cmp — ناجحة. لا اختبار Colab حي جديد (لا `Colab-ready` ولا `Complete`).
+
 ## [M35-T01] — 2026-08-22
 
 ### Changed
