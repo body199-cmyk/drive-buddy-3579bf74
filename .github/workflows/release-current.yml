@@ -18,7 +18,7 @@ jobs:
       TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
       TELEDRIVE_LANG: en
       RELEASE_TAG: pkg-2026.08.09-m15t07
-      PRODUCT_VERSION: 4.5.0
+      PRODUCT_VERSION: 5.0.0
       REPOSITORY: ${{ github.repository }}
 
     defaults:
