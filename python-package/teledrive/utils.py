@@ -107,9 +107,14 @@ def monotonic() -> float:
 
 
 def safe_disk_free(path: Path) -> int:
+    # shutil.disk_usage works on every platform (POSIX and Windows);
+    # os.statvfs is POSIX-only and silently reported 0 free bytes on Windows.
     try:
-        st = os.statvfs(path)
-        return st.f_bavail * st.f_frsize
+        if hasattr(os, "statvfs"):
+            st = os.statvfs(path)
+            return st.f_bavail * st.f_frsize
+        import shutil
+        return shutil.disk_usage(str(path)).free
     except Exception:
         return 0
 

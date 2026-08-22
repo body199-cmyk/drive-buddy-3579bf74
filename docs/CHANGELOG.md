@@ -1,5 +1,13 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
 
+## [M34-T01] — 2026-08-22
+
+### Fixed
+- `teledrive/utils.py`: `safe_disk_free()` تستخدم `shutil.disk_usage().free` عندما لا يوجد `os.statvfs` (Windows) — كانت تعيد 0 فتفشل كل عمليات النقل بـ`disk_full` وتبقى الصفوف `Pending` على Windows.
+- `teledrive/config.py`: `is_mounted_drive()` تستخدم `Path.as_posix()` — `str(Path)` كان يشوّه بادئات `/content/drive` على Windows فيعطل حارس `MountedRootError` (SQLite على FUSE).
+
+### Gates
+Windows/Python 3.11: `746 passed` (كان `19 failed, 727 passed`) · compileall OK · launcher `51/51` · notebook check + cmp متطابقان.
 ## [M33-T01] — 2026-08-22 — مواءمة README الجذر مع الدستور v5.0.0
 
 - **تحديث الهوية:** غُيِّر العنوان والمواصفة من "TeleDrive v4.5 / v4.5.0" إلى "TeleDrive v5.0.0 (AI-OS Continuity Edition — الحوكمة) · موروث المنتج v4.5.0" ليطابق `docs/CONSTITUTION.md` (v5.0.0).
