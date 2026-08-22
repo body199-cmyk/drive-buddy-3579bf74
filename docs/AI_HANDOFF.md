@@ -2,39 +2,67 @@
 
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
-## بطاقة الجلسة — M32-T01: استبدال ذري لجلسة Telegram التالفة
+## بطاقة الجلسة — M34-T01: إصلاح فحص القرص وحارس Drive المُركّب عبر المنصات
 
 | الحقل | القيمة |
 |---|---|
 | المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| PR | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — MERGED |
-| Merge SHA | `5255889c1e153f2188939b225dfbbb8a5865d261` |
-| الحالة | **MERGED + CI-PASSED + package-published؛ Colab recovery verification pending** |
-| النشر | [workflow #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M32_ATOMIC_SESSION_REPLACEMENT.md` |
+| PR | (يُسجَّل بعد الفتح) |
+| Base SHA | `ffadd2427d7b1ca9f3e9a93805419b4bf2b829c1` (main، مطابق لـorigin) |
+| Branch | `fix/m34-t01-cross-platform-disk-and-mount-guards` |
+| Result SHA | `c85ee9f` (يُحدَّث بعد أي تعديل توثيقي) |
+| الحالة | **CODE GATES PASSED LOCALLY (Windows/Python 3.11) — لا ادعاء Colab-ready** |
+| النطاق | `python-package/teledrive/utils.py` + `python-package/teledrive/config.py` فقط |
 
-## ما تغير
+## المشكلة الجذرية
 
-يعتمد `SessionVault` الآن زوج جلسة مُؤرشفًا بإصدار وملف بيان نشط. ترفع جلسة الإصدار وبياناتها أولًا، ولا يصبحان المصدر النشط إلا عند نشر البيان بعد اكتمال الرفع. إذا انقطع الحفظ أو فشل قبل البيان، تبقى الجلسة السابقة على Drive قابلة للاستعادة. ولا يزال Vault القديم مدعومًا للقراءة حتى يحل محله دخول ناجح.
+فحص محلي على Windows كشف عيبين حقيقيين عبر المنصات لم تظهرا في CI (Linux):
 
-تصنّف `TelegramAuth` أخطاء الجلسة المحفوظة مثل `AuthKeyDuplicatedError` كحاجة لتسجيل جديد: يفصل العميل ويرمي الملف المحلي الذي ثبت فساده فقط، ثم يعود إلى إدخال الهاتف. لا تحذف هذه الحالة زوج Drive القديم. ولا تزال أخطاء الاتصال العابر تحافظ على النسخ كي يعاد التحقق لاحقًا.
+1. **`safe_disk_free()` (`utils.py`)** كانت تستخدم `os.statvfs` — غير موجود على Windows. الـ`except` العمياء كانت تبتلع `AttributeError` وتعيد `0` ⇒ كل نقل يفشل في preflight القرص (`disk_full`) وتبقى الصفوف `Pending` إلى ما لا نهاية على أي بيئة Windows. الإصلاح: fallback إلى `shutil.disk_usage().free` الموجود على كل المنصات.
+
+2. **`is_mounted_drive()` (`config.py`)** كانت تستخدم `str(Path(path))` الذي يحوّل `/` إلى `\` على Windows ⇒ بادئات `/content/drive` لم تعد تتطابق أبدًا ⇒ حارس `MountedRootError` («ممنوع SQLite على Drive/FUSE» §1) كان ميتًا تمامًا خارج POSIX. الإصلاح: `Path(path).as_posix()`.
 
 ## الأدلة
 
-| الفحص | النتيجة |
+| الفحص | قبل | بعد |
+|---|---|---|
+| pytest كامل (Windows, Python 3.11) | `19 failed, 727 passed` | **`746 passed`** |
+| compileall | OK | OK |
+| launcher --check | 51/51 | 51/51 |
+| notebook check + cmp | متطابقان | متطابقان |
+
+- إعادة إنتاج مباشرة: `safe_disk_free('.')` أعادت `0` قبل الإصلاح و`~26 GB` بعده.
+- إعادة إنتاج مباشرة: `_process()` صنّفت الصف `disk_full` ورفضت آلة الحالات `Pending→Failed` صامتة (`try_transition → None`) فبقي الصف `Pending`.
+- لم يُعدَّل أي ملف محمي: لا دستور، لا اعتماديات، لا نوتبوك أو مولّده، لا تاريخ Git.
+- فحص أسرار: التغييران منطق بحت بلا أي قيم أو مفاتيح.
+
+## حدود صادقة
+
+الاختبارات نجحت على Windows محليًا؛ CI الأخضر الرسمي يتأكد بعد دمج الـPR. لا اختبار Colab جديد نُفذ. الحالة تبقى Code-complete candidate لهذا الإصلاح.
+
+---
+
+## بطاقة الجلسة — M33-T01: مواءمة README الجذر مع الدستور v5.0.0
+
+| الحقل | القيمة |
 |---|---|
-| اختبارات Vault/TelegramAuth/Telegram flow المركزة | `70 passed` |
-| Python كامل | `746 passed` |
-| Launcher | `51/51 ready actions resolve` |
-| مولد النوتبوك + التطابق | ناجحان |
-| Frontend lint/build | ناجحان عبر `pnpm` |
-| React contracts | `26/26` ناجح |
-| React bridge | `13 passed` |
+| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
+| PR | [#73](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/73) — MERGED |
+| Base SHA | `ffadd2427d7b1ca9f3e9a93805419b4bf2b829c1` |
+| الحالة | **MERGED + CI-PASSED — تعديل توثيقي فقط؛ لا ادعاء Colab-ready** |
+| النطاق | README.md + docs/ (KNOWN_ISSUES #67، TODO M33-T01، CHANGELOG) |
 
-لم تدخل أسرار أو ملفات جلسات أو OAuth إلى Git. لم يجر اختبار Colab جديد لهذه المرحلة؛ الجلسة الأصلية التي أُبلغ عن بطلان مفتاحها لم تُحذف أو يعاد استخدامها.
+## ما تغير
+حُدِّث README الجذر ليتطابق مع الدستور v5.0.0: (1) الهوية من v4.5 إلى v5.0.0 مع الإشارة لموروث المنتج v4.5.0؛ (2) تصحيح ادعاء M15-T01 «متبقية» (مدموجة فعليًا في main؛ التحقق الحي بيد المالك)؛ (3) استبدال قسم «المزامنة مع Lovable» بقسم «التطوير والحوكمة». لم تُمسَّ أسماء الـartifacts المنشورة.
 
-## الإصدار المنشور والخطوة التالية
+---
 
-الحزمة العامة الحالية تشير إلى `5255889` وحجمها `560,271` بايت وSHA-256 الخاص بها هو `81bcd23629c87022c7e0c3b9f4f725d6b47654c9a13422a639f191fb5647cacf`. تحقق التنزيل العام و`unzip -t` من المطابقة بنجاح.
+## بطاقة الجلسة — M32-T01: استبدال ذري لجلسة Telegram التالفة
 
-في Colab، شغّل Cell 1 من النوتبوك ثم Restart Runtime كما تطلب الخلية عند تحديث الحزمة، وبعدها شغّل Cells 2–4 بالترتيب. لا تزال تجربة الاسترداد الحية المطلوبة منفصلة: جلسة قديمة مبطلة → دخول جديد → Restart → استعادة الجلسة الجديدة. حتى ذلك الاختبار لا توصف الحالة بأنها `Colab-ready` أو `Complete`.
+| الحقل | القيمة |
+|---|---|
+| PR | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — MERGED عند `5255889c` |
+| النشر | [workflow #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
+| الحالة | MERGED + CI-PASSED + package-published؛ Colab recovery pending |
+
+زوج Vault بإصدار وmanifest نشط؛ `AuthKeyDuplicatedError` يعود لتسجيل جديد مع تنظيف محلي فقط وإبقاء زوج Drive القديم حتى نجاح دخول مصرح به.
