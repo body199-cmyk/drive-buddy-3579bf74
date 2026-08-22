@@ -2,6 +2,30 @@
 
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
+## بطاقة الجلسة — M36-T01: نشر الحزمة بهوية v5.0.0 (أدلة النشر)
+
+| الحقل | القيمة |
+|---|---|
+| PR | [#77](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/77) — MERGED (`cb6901f4bf`) |
+| Publish workflow | run #29 (id 32575076208) على main `cb6901f4bf` — SUCCESS |
+| Release | tag `pkg-2026.08.09-m15t07` — target commit `cb6901f4bf` |
+| الأصول | `teledrive_v4.5.zip` 560,483 بايت · `teledrive_manifest.json` 378 بايت |
+| SHA-256 | `a0d7cc4d9a3a7e998abc1d2075ea7814f8b38c84e92fd031242ecb2b9b1d66f1` |
+
+## التغيير الوحيد في الكود
+
+`release-current.yml`: `PRODUCT_VERSION` 4.5.0 → **5.0.0** (حقل معلوماتي في الـ manifest فقط؛ بوابة Cell-1 تخزنه ولا تقارن به — تحقق من `notebook_cells.py`). اسم الأرتيفكت والـ tag مثبتان عمدًا.
+
+## أدلة النشر المستقلة
+
+تحقق خارج الـworkflow بتنزيل الأصول من الـ release العام ومطابقتها: `product_version=5.0.0` · `commit=cb6901f4bf…` · تطابق الحجم (560,483) وتطابق SHA-256 كاملًا. بوابات الدستور داخل الـrun: compileall + pytest + launcher + notebook check ناجحة.
+
+## الحدود الصادقة
+
+لا اختبار Colab حي جديد — يبقى لا `Colab-ready` ولا `Complete`. الاختبار الحي المتبقي بيد المالك: Cell 1 → Restart → Cells 2–4.
+
+---
+
 ## بطاقة الجلسة — M35-T02: تنظيف إشارة Lovable من AGENTS.md
 
 | الحقل | القيمة |
