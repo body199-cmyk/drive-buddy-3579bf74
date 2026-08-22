@@ -1,4 +1,15 @@
-# CHANGELOG — آخر 20-30 تغيير (TeleDrive v4.5)
+# CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
+
+## [M35-T01] — 2026-08-22
+
+### Changed
+- اعتماد هوية المنتج **v5.0.0** في الكود (قرار مسجّل من المالك لمواءمة الكود مع الدستور v5.0.0): `teledrive/__init__.py` (`__version__`/`__spec_version__`) و`teledrive/config.py` (`RuntimeConfig.version`/`spec_version`).
+- `teledrive/notebook_cells.py`: `NOTEBOOK_VERSION` = 5.0.0 و`TITLE` = "TeleDrive v5.0 — Telegram → Google Drive (native Colab)"؛ أُعيد توليد النوتبوكين (`python-package/notebook/TeleDrive.ipynb` و`public/TeleDrive.ipynb`) و`colab_cells.json` بالمولّد الرسمي وتحقق التطابق.
+- `tests/test_notebook.py`: عقد العنوان محدّث إلى "TeleDrive v5.0".
+- **ما لم يُمسَّ عمدًا:** اسم الأرتيفكت المثبّت `teledrive_v4.5.zip` (هوية أصل منشور تستخدمها بوابة Cell-1 و`ci.yml` و`release-current.yml`) — تغييره قرار release مستقل يطال ملفات محمية.
+
+### Gates
+Windows/Python 3.11: `746 passed` · compileall OK · launcher `51/51 ready actions resolve` · notebook check متطابق.
 
 ## [M34-T01] — 2026-08-22
 
