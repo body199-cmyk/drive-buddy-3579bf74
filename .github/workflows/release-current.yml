@@ -145,13 +145,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
-          gh release create "$RELEASE_TAG" \
-            --target "$CURRENT_SHA" \
-            --title "TeleDrive package $RELEASE_TAG" \
-            --notes "Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate and is not Colab-ready until owner-run live proof." \
-            teledrive_v4.5.zip \
-            teledrive_manifest.json
+          # M37-T01 (§11/§17): idempotent republish WITHOUT ever deleting the
+          # published release or its tag. The tag is a Cell-1 updater
+          # reference; the previous blind `release delete --cleanup-tag || true`
+          # performed unverified cleanup, masked its own failure, and opened a
+          # window where the updater's public assets did not exist at all.
+          #
+          # Policy (fail-closed):
+          #   release absent                      -> create atomically with BOTH assets
+          #   release present, both assets match  -> refresh metadata only (edit)
+          #   release present, asset missing/diff -> FAIL the run; swapping
+          #                                            published assets stays an
+          #                                            explicit owner decision.
+          NOTES="Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate and is not Colab-ready until owner-run live proof."
+          if ! gh release view "$RELEASE_TAG" --json tagName > /tmp/release_view.json 2>/dev/null; then
+            echo "release absent -> creating atomically with both assets"
+            gh release create "$RELEASE_TAG" \
+              --target "$CURRENT_SHA" \
+              --title "TeleDrive package $RELEASE_TAG" \
+              --notes "$NOTES" \
+              teledrive_v4.5.zip \
+              teledrive_manifest.json
+          else
+            echo "release exists -> verifying published assets (fail-closed)"
+            for required in teledrive_v4.5.zip teledrive_manifest.json; do
+              gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -qx "$required" || {
+                echo "FAIL-CLOSED: release exists but asset missing: $required"
+                echo "(M37-T01) replacing published assets is an owner decision; refusing to delete or partially overwrite."
+                exit 1
+              }
+            done
+            PUBLISHED_ZIP_BYTES="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | select(.name=="teledrive_v4.5.zip") | .size')"
+            if [ "$PUBLISHED_ZIP_BYTES" != "$ARCHIVE_SIZE" ]; then
+              echo "FAIL-CLOSED: published zip size ($PUBLISHED_ZIP_BYTES bytes) != freshly built archive ($ARCHIVE_SIZE bytes)"
+              echo "(M37-T01) refusing to swap published assets automatically; the owner decides."
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" \
+              --target "$CURRENT_SHA" \
+              --title "TeleDrive package $RELEASE_TAG" \
+              --notes "$NOTES"
+            echo "metadata refreshed (target/title/notes); published assets untouched"
+          fi
 
       - name: Verify public manifest and archive
         env:

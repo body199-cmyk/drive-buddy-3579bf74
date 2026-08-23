@@ -2,31 +2,27 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M36-T01` |
-| العنوان | مواءمة إصدار المنتج في workflow النشر + أدلة النشر بهوية v5.0.0 |
-| الحالة | **MERGED + CI-PASSED + package-published؛ Colab live verification pending** |
-| PR | [#77](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/77) — MERGED |
-| Merge SHA | `cb6901f4bf` |
-| Publish | run #29 (id 32575076208) على main `cb6901f4bf` — SUCCESS |
+| TASK ID | `M37-T01` |
+| العنوان | تقوية نشر الحزمة الحالية — إزالة الحذف الأعمى للـRelease/tag (نتائج تدقيق خارجي Sol + تحقق تنفيذي) |
+| الحالة | **CODE COMMITTED LOCALLY — بوابات خضراء؛ ينتظر push + PR + CI** |
+| Branch | `fix/m37-t01-audit-release-hardening` |
+| Base | main `f820529` |
 
 ## النطاق المنفذ
 
 | المسار | السلوك |
 |---|---|
-| `.github/workflows/release-current.yml` | `PRODUCT_VERSION` 4.5.0 → 5.0.0 (حقل معلوماتي في الـ manifest المنشور فقط؛ بوابة Cell-1 تخزنه ولا تقارن به). اسم الأرتيفكت المثبّت والـ tag بقي كما هما عمدًا. |
+| `.github/workflows/release-current.yml` | خطوة النشر أصبحت idempotent fail-closed بدون أي حذف للـrelease أو الـtag: غياب → إنشاء ذري بأصلين؛ وجود بمطابقة → تحديث metadata فقط؛ نقص/اختلاف أصول → فشل صريح والقرار للمالك (§11/§17 — KNOWN_ISSUES #70) |
+| `.github/workflows/release.yml` | تعليق توثيقي: قيم v4.5 فيه وصف صادق للأرشيف التاريخي المثبّت بالبايت، ولا تُرفع لـ5.0.0 ما دامت بوابة البايتات تثبّتها (§17) |
 
-## أدلة النشر المستقلة
+## ملاحظات التدقيق الخارجي المرفوضة (بالأدلة)
 
-Release `pkg-2026.08.09-m15t07` أُعيد نشره من الشجرة الحالية: `teledrive_v4.5.zip` 560,483 بايت · SHA-256 `a0d7cc4d…b66f1` · `product_version=5.0.0`. تحقق مستقل خارج الـ workflow بتنزيل الأصول العامة ومطابقة commit/الحجم/SHA-256 — ناجحة.
+T-1 (رفع product_version في release.yml إلى 5.0.0) وD-1 (تغيير عنوان النشر المثبّت): تنفيذهما كان يجعل الـmanifest يصف أرشيف v4.5 مثبّتًا بالبايت بقيمة 5.0.0 — كذب توثيقي يخالف §17. التفصيل في `docs/PHASE_REPORTS/PHASE_M37_T01.md`.
 
 ## البوابات المنفذة
 
-بوابات الدستور داخل run #29: compileall + pytest كامل + launcher + notebook check + cmp — ناجحة. CI أخضر على PR#77 قبل الدمج.
+compileall OK · pytest كامل **746 passed** · launcher `51/51` · notebook check + cmp متطابقة.
 
 ## الحدود الصادقة
 
-لم يُنفذ اختبار Colab حي جديد؛ لا تزال الحالة غير `Colab-ready` وغير `Complete`.
-
-## الخطوة التالية
-
-الاختبار الحي بيد المالك: شغّل Cell 1 في Colab ثم Restart Runtime عند الطلب، وبعدها Cells 2–4. بوابة التحديث ستستقبل الحزمة الجديدة (`product_version=5.0.0`) بنفس اسم الأرتيفكت المثبّت.
+لم يُشغَّل الـworkflow على GitHub ضمن هذه المهمة (تشغيله قرار نشر بيد المالك). لا اختبار Colab حي جديد؛ لا `Colab-ready` ولا `Complete`.
