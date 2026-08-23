@@ -2,6 +2,53 @@
 
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
+## بطاقة الجلسة — M38-T01: إصلاح إعادة تركيب جسر React–Gradio في Colab
+
+| الحقل | القيمة |
+|---|---|
+| Branch | `fix/m38-t01-colab-bridge-remount` |
+| Base | `main` / `origin/main` عند `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` |
+| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED + PROXY-VERIFIED**؛ لا Colab-ready |
+| النطاق | `react_panel.py` + `panel.bundle.gz` + عقد React + وثائق M38؛ لا نوتبوك ولا اعتماديات ولا جلسات |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M38_T01_COLAB_BRIDGE_REMOUNT.md` |
+
+## السبب والإصلاح
+
+رسالة `Backend bridge unavailable` لا تعتمد على اتصال Telegram أو Drive؛ تظهر عندما يصبح `GradioTeleDriveBridge` في حالة `disposed`. كان `js_on_load` للوحة React ينشئ مثيلًا جديدًا عند إعادة تركيب Gradio من دون تنظيف مضبوط للمثيل السابق، ما يسمح ببقاء شجرة React مرتبطة بجسر مغلق في lifecycle الخاص بـColab.
+
+أصبح الغلاف يملك مثيلًا واحدًا على عنصر Gradio، يفك السابق قبل إعادة التركيب، ويعيد cleanup لا يفك إلا المثيل الذي يملكه. بقي transport الرسمي كما هو: `props.value` و`trigger('submit')` فقط، بلا endpoint إضافي أو WebSocket أو تخزين أسرار.
+
+## الأدلة الحالية
+
+| الفحص | النتيجة |
+|---|---|
+| Python suite | `746 passed` |
+| launcher | `51/51 ready actions resolve` |
+| notebook check + cmp | PASS |
+| React contract | `27/27` PASS؛ يتضمن remount lifecycle contract جديد |
+| lint/build | PASS؛ تحذير eslint baseline واحد فقط |
+| Gradio 6.20 + external proxy/root_path | لوحة حية بلا blocked banner |
+
+## حدود صادقة
+
+تم فتح runtime Colab حقيقي وتشغيل Cell 1 وCell 2، لكن Cell 3 توقف عند fallback إدخال Telegram لعدم وجود Session Vault لهذا Drive account، فلم تُختبر Cell 4 بعد الإصلاح في Colab الحقيقي. لا ادعاء `Colab-ready` أو نجاح Telegram/Drive transfer حتى يكتمل ذلك بعد النشر.
+
+## حالة GitHub
+
+| العملية | الحالة |
+|---|---|
+| Commit | NOT ATTEMPTED |
+| Push | NOT ATTEMPTED |
+| Pull Request | NOT ATTEMPTED |
+| Merge | NOT ATTEMPTED |
+| Publish | NOT ATTEMPTED |
+
+## الخطوة التالية
+
+إجراء `git diff --check` ومراجعة الفرق وفحص الأسرار، ثم commit وPR وCI والدمج والنشر ضمن تفويض المالك السابق للتنفيذ والنشر.
+
+---
+
 ## بطاقة الجلسة — M37-T02: تحقق حي من أزرار التحكم (طلب المالك)
 
 | الحقل | القيمة |

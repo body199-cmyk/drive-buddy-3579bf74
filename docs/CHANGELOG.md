@@ -1,5 +1,15 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M38-T01] — 2026-08-23
+
+### Fixed
+- `python-package/teledrive/react_panel.py`: صار `js_on_load` يحتفظ بمثيل `TeleDriveGradioPanel` واحد فقط على عنصر Gradio، يفك المثيل السابق قبل إعادة التركيب، ويعيد cleanup مملوكًا للمثيل الحالي. يمنع هذا بقاء شجرة React متصلة بجسر `disposed` بعد lifecycle إعادة التركيب في Colab، وهو الشرط الذي يظهر معه `Backend bridge unavailable`.
+- أعيد بناء `python-package/teledrive/react_panel_assets/panel.bundle.gz` من المصدر، وأضيف عقد React `18b` لحماية ملكية المثيل عبر remount. لا تغيير لواجهات النقل (`props.value`/`trigger('submit')`)، أو النوتبوك، أو الاعتماديات، أو جلسات Telegram/Drive.
+
+### Gates
+- `746 passed` · compileall OK · launcher `51/51` · notebook check + cmp متطابقان · React contracts `27/27` · lint/build PASS (تحذير eslint baseline واحد فقط).
+- محاكاة Gradio 6.20 خلف proxy مع `root_path` أعادت لوحة حية بلا banner blocked. لا يمثل ذلك إثبات Colab حي: Cell 3 في runtime Colab الحقيقي توقف عند fallback بيانات Telegram قبل Cell 4. لذلك لا `Colab-ready` أو `Complete` حتى دمج/نشر الحزمة وإعادة اختبار Colab.
+
 ## [M37-T02] — 2026-08-23
 
 ### Verified

@@ -19,13 +19,25 @@ _PANEL_CSS = gzip.decompress(
 ).decode("utf-8")
 _PANEL_HTML = '<div data-teledrive-react-root="true"></div>'
 _PANEL_ON_LOAD = _PANEL_JS + r"""
+const tdPanelKey = "__teledriveReactPanel";
+const previousPanel = element[tdPanelKey];
+if (previousPanel && typeof previousPanel.dispose === "function") {
+  previousPanel.dispose();
+}
 const tdPanel = TeleDriveGradioPanel.mount({
   element,
   readValue: () => props.value,
   writeValue: (value) => { props.value = value; },
   submit: () => trigger('submit'),
 });
+element[tdPanelKey] = tdPanel;
 watch('value', () => tdPanel.receive(props.value));
+return () => {
+  if (element[tdPanelKey] === tdPanel) {
+    tdPanel.dispose();
+    delete element[tdPanelKey];
+  }
+};
 """
 
 try:  # Gradio remains optional for non-UI import checks.
