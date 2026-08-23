@@ -10,6 +10,7 @@ type MountOptions = GradioComponentHost & {
 
 export type MountedTeleDrivePanel = {
   receive(value: unknown): void;
+  isLive(): boolean;
   dispose(): void;
 };
 
@@ -32,6 +33,9 @@ export function mount(options: MountOptions): MountedTeleDrivePanel {
     receive(value: unknown) {
       ensureMounted();
       bridge.receive(value);
+    },
+    isLive() {
+      return bridge.isLive();
     },
     dispose() {
       bridge.dispose();

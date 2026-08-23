@@ -292,13 +292,14 @@ test("18 — bundled React panel uses Gradio value/submit transport only", async
   assert.deepEqual([...asset.subarray(0, 2)], [0x1f, 0x8b]);
 });
 
-test("18b — panel lifecycle owns exactly one live bridge across Gradio remounts", async () => {
+test("18b — repeated Gradio on-load reuses one live bridge and leases the current watcher", async () => {
   const panel = await readFile(paths.panel, "utf8");
   const onLoad = panel.match(/_PANEL_ON_LOAD = _PANEL_JS \+ r\"\"\"([\s\S]*?)\"\"\"/);
   assert.ok(onLoad, "expected the executable js_on_load body");
 
   const element = {};
   const mounted = [];
+  const watchers = [];
   const runOnLoad = new Function(
     "element",
     "props",
@@ -311,7 +312,13 @@ test("18b — panel lifecycle owns exactly one live bridge across Gradio remount
     mount: () => {
       const instance = {
         disposed: false,
-        receive: () => {},
+        received: 0,
+        receive() {
+          this.received += 1;
+        },
+        isLive() {
+          return !this.disposed;
+        },
         dispose() {
           this.disposed = true;
         },
@@ -323,23 +330,32 @@ test("18b — panel lifecycle owns exactly one live bridge across Gradio remount
   const run = () =>
     runOnLoad(
       element,
-      { value: "" },
+      { value: "snapshot" },
       () => {},
-      () => {},
+      (_property, callback) => watchers.push(callback),
       panelFactory,
     );
 
   const firstCleanup = run();
   const secondCleanup = run();
-  assert.equal(mounted.length, 2);
-  assert.equal(mounted[0].disposed, true, "remount disposes the prior bridge");
-  assert.equal(mounted[1].disposed, false);
+  assert.equal(mounted.length, 1, "same host must retain its live bridge");
+  assert.equal(mounted[0].disposed, false);
+
+  watchers[0]();
+  watchers[1]();
+  assert.equal(mounted[0].received, 1, "the stale watcher must not deliver to the reused bridge");
 
   firstCleanup();
-  assert.equal(mounted[1].disposed, false, "stale cleanup cannot dispose the new bridge");
+  assert.equal(mounted[0].disposed, false, "stale cleanup cannot dispose the current lease");
   secondCleanup();
-  assert.equal(mounted[1].disposed, true, "current cleanup disposes its own bridge");
+  assert.equal(mounted[0].disposed, true, "current cleanup disposes its own bridge");
   assert.equal(element.__teledriveReactPanel, undefined);
+  assert.equal(element.__teledriveReactPanelLease, undefined);
+
+  const thirdCleanup = run();
+  assert.equal(mounted.length, 2, "a disposed owner mounts a replacement only after cleanup");
+  assert.equal(mounted[1].disposed, false);
+  thirdCleanup();
 });
 
 test("19 — nested LiveUiState fields use optional chaining (null safety)", async () => {

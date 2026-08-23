@@ -20,22 +20,36 @@ _PANEL_CSS = gzip.decompress(
 _PANEL_HTML = '<div data-teledrive-react-root="true"></div>'
 _PANEL_ON_LOAD = _PANEL_JS + r"""
 const tdPanelKey = "__teledriveReactPanel";
+const tdPanelLeaseKey = "__teledriveReactPanelLease";
 const previousPanel = element[tdPanelKey];
-if (previousPanel && typeof previousPanel.dispose === "function") {
-  previousPanel.dispose();
-}
-const tdPanel = TeleDriveGradioPanel.mount({
-  element,
-  readValue: () => props.value,
-  writeValue: (value) => { props.value = value; },
-  submit: () => trigger('submit'),
-});
+// Gradio can invoke js_on_load repeatedly for the SAME host while the rendered
+// React root remains visible. Recreating the bridge there can leave that root
+// holding the just-disposed bridge. Reuse the healthy owner; a per-run lease
+// makes every superseded cleanup harmless.
+const tdPanel = previousPanel && typeof previousPanel.receive === "function"
+  && typeof previousPanel.dispose === "function"
+  && typeof previousPanel.isLive === "function"
+  && previousPanel.isLive()
+  ? previousPanel
+  : TeleDriveGradioPanel.mount({
+      element,
+      readValue: () => props.value,
+      writeValue: (value) => { props.value = value; },
+      submit: () => trigger('submit'),
+    });
+const tdPanelLease = {};
 element[tdPanelKey] = tdPanel;
-watch('value', () => tdPanel.receive(props.value));
+element[tdPanelLeaseKey] = tdPanelLease;
+watch('value', () => {
+  if (element[tdPanelKey] === tdPanel && element[tdPanelLeaseKey] === tdPanelLease) {
+    tdPanel.receive(props.value);
+  }
+});
 return () => {
-  if (element[tdPanelKey] === tdPanel) {
+  if (element[tdPanelKey] === tdPanel && element[tdPanelLeaseKey] === tdPanelLease) {
     tdPanel.dispose();
     delete element[tdPanelKey];
+    delete element[tdPanelLeaseKey];
   }
 };
 """
