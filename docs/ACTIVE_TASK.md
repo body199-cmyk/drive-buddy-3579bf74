@@ -2,27 +2,24 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M37-T01` |
-| العنوان | تقوية نشر الحزمة الحالية — إزالة الحذف الأعمى للـRelease/tag (نتائج تدقيق خارجي Sol + تحقق تنفيذي) |
-| الحالة | **CODE COMMITTED LOCALLY — بوابات خضراء؛ ينتظر push + PR + CI** |
-| Branch | `fix/m37-t01-audit-release-hardening` |
-| Base | main `f820529` |
+| TASK ID | `M37-T02` |
+| العنوان | تحقق حي من أزرار التحكم في الواجهة (طلب المالك: «جاهز للاستعمال وبالأذات أزرار التحكم») |
+| الحالة | **LIVE-VERIFIED (local Windows) — توثيق فقط؛ ينتظر push + PR + CI** |
+| Branch | `fix/m37-t02-ui-controls-verification` (base: main `60f8246`) |
 
-## النطاق المنفذ
+## الإثبات المنفذ
 
-| المسار | السلوك |
-|---|---|
-| `.github/workflows/release-current.yml` | خطوة النشر أصبحت idempotent fail-closed بدون أي حذف للـrelease أو الـtag: غياب → إنشاء ذري بأصلين؛ وجود بمطابقة → تحديث metadata فقط؛ نقص/اختلاف أصول → فشل صريح والقرار للمالك (§11/§17 — KNOWN_ISSUES #70) |
-| `.github/workflows/release.yml` | تعليق توثيقي: قيم v4.5 فيه وصف صادق للأرشيف التاريخي المثبّت بالبايت، ولا تُرفع لـ5.0.0 ما دامت بوابة البايتات تثبّتها (§17) |
+1. **سيرفر حي محليًا** (`teledrive_launcher.py` بلا `--share`): bootstrap سليم · HTTP 200 · binder أكمل: **51 action kinds wired (242 controls) — صفر معطلة/مخفية**.
+2. **نقرات حية موثقة في سجل السيرفر** (من متصفح فعلي): `settings.set_concurrency`، `settings.set_theme` ×2، `settings.toggle_language` ×2 — كلها انتهت بـ`ok`.
+3. **استدعاء مباشر للأكشنات الـ51 الجاهزة بنفس مسار الزرار** (`Handlers.call`):
+   - 30 PASS بدون وسائط + 7 PASS بوسائطها الحقيقية (بما فيها رفض concurrency=999 خارج المدى — حارس يعمل).
+   - 14 خطأ حالة **صحيح بالتصميم** أثناء عدم الاتصال (`telegram is not authorized` / `drive is not connected` / `nothing selected`…) — حراس آلة الحالات ترد نظيفًا ولا تنهار.
+   - 2 خاصّان بـColab عمدًا: `drive.connect/reconnect` عبر `google.colab.auth` الأصلية (بوابة Drive الحية منذ PHASE_16).
 
-## ملاحظات التدقيق الخارجي المرفوضة (بالأدلة)
+## الخلاصة الصادقة
 
-T-1 (رفع product_version في release.yml إلى 5.0.0) وD-1 (تغيير عنوان النشر المثبّت): تنفيذهما كان يجعل الـmanifest يصف أرشيف v4.5 مثبّتًا بالبايت بقيمة 5.0.0 — كذب توثيقي يخالف §17. التفصيل في `docs/PHASE_REPORTS/PHASE_M37_T01.md`.
+لا زرار ميت ولا غير موصول؛ كل «فشل» مرصود هو حارس حالة صحيح أو بوابة Colab-by-design. انجماد عابر واحد لتاب الإعدادات على port 7861 لم يتكرر وليس له دليل سجل → لا يُسجل (لا شكوك نظرية).
 
-## البوابات المنفذة
+## الحدود الصادقة (§17)
 
-compileall OK · pytest كامل **746 passed** · launcher `51/51` · notebook check + cmp متطابقة.
-
-## الحدود الصادقة
-
-لم يُشغَّل الـworkflow على GitHub ضمن هذه المهمة (تشغيله قرار نشر بيد المالك). لا اختبار Colab حي جديد؛ لا `Colab-ready` ولا `Complete`.
+ليس إثبات `Colab-ready`: النقل الفعلي Telegram→Drive يحتاج جلسة Colab حية بيد المالك (M15-T01/M24-T06 مفتوحة). التفصيل: `docs/PHASE_REPORTS/PHASE_M37_T02.md`.
