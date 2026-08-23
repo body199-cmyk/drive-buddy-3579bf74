@@ -1144,3 +1144,138 @@
     transform: rotate(360deg);
   }
 }
+
+/* M39: keep each transfer row fully actionable on wide screens, then use an explicit
+   labeled card on narrow screens instead of requiring horizontal table scrolling. */
+.td-secure-auth-button {
+  width: 100%;
+}
+
+@media (min-width: 621px) {
+  .td-session .td-table-wrap {
+    overflow-x: hidden;
+  }
+
+  .td-session .td-table {
+    table-layout: fixed;
+  }
+
+  .td-session .td-table th,
+  .td-session .td-table td {
+    padding: 12px 10px;
+  }
+
+  .td-session .td-table th:nth-child(1),
+  .td-session .td-table td:nth-child(1) {
+    width: 35%;
+  }
+
+  .td-session .td-table th:nth-child(2),
+  .td-session .td-table td:nth-child(2) {
+    width: 12%;
+  }
+
+  .td-session .td-table th:nth-child(3),
+  .td-session .td-table td:nth-child(3) {
+    width: 22%;
+  }
+
+  .td-session .td-table th:nth-child(4),
+  .td-session .td-table td:nth-child(4) {
+    width: 10%;
+  }
+
+  .td-session .td-table th:nth-child(5),
+  .td-session .td-table td:nth-child(5) {
+    width: 21%;
+  }
+
+  .td-session .td-table td:first-child {
+    overflow-wrap: anywhere;
+  }
+
+  .td-session .td-table td:nth-child(3) .td-progress {
+    width: 100%;
+    max-width: none;
+  }
+
+  .td-session .td-table td:last-child .td-button-row {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .td-session .td-table td:last-child .td-link-button {
+    min-height: 36px;
+    padding: 0 5px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 620px) {
+  .td-session .td-table-wrap {
+    overflow: visible;
+  }
+
+  .td-session .td-queue-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 14px;
+  }
+
+  .td-session .td-queue-row td {
+    display: grid;
+    grid-template-columns: minmax(5.8rem, 34%) minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
+    padding: 7px 0;
+  }
+
+  .td-session .td-queue-row td:first-child {
+    display: block;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--td-line);
+    overflow-wrap: anywhere;
+  }
+
+  .td-session .td-queue-row td:first-child::before {
+    display: none;
+  }
+
+  .td-session .td-queue-row td::before {
+    min-width: 0;
+  }
+
+  .td-session .td-queue-row td:nth-child(3) .td-progress {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .td-session .td-queue-row td:last-child {
+    grid-template-columns: 1fr;
+    padding-top: 10px;
+    border-top: 1px solid var(--td-line);
+  }
+
+  .td-session .td-queue-row td:last-child::before {
+    margin-bottom: 2px;
+  }
+
+  .td-session .td-queue-row td:last-child .td-button-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .td-session .td-queue-row td:last-child .td-link-button {
+    min-height: var(--td-touch);
+    padding: 0 4px;
+    border: 1px solid var(--td-line);
+    border-radius: var(--radius-sm);
+    background: var(--td-surface-2);
+    text-decoration: none;
+  }
+}

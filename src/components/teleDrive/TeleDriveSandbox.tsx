@@ -116,6 +116,22 @@ function StateChip({ label, status, icon }: { label: string; status: string; ico
   );
 }
 
+function openSecureTelegramAuth(documentRef: Pick<Document, "getElementById"> = document): boolean {
+  const panel = documentRef.getElementById("td-secure-telegram-auth");
+  if (!panel) return false;
+
+  const details = panel.querySelector<HTMLDetailsElement>("details");
+  if (details && !details.open) {
+    details.querySelector<HTMLElement>("summary")?.click();
+  } else {
+    panel
+      .querySelector<HTMLElement>('button.label-wrap, [aria-expanded="false"], summary')
+      ?.click();
+  }
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  return true;
+}
+
 function ActionButton({
   actionId,
   busyAction,
@@ -258,8 +274,14 @@ function ConnectionSection({
                 "API hash, phone, code, and 2FA are entered only in the secure Gradio controls below React.",
               )}
             </div>
-            <button type="button" className="td-button td-button-secondary" disabled>
-              {localize(language, "استخدم لوحة مصادقة Gradio", "Use secure Gradio authentication")}
+            <button
+              type="button"
+              className="td-button td-button-secondary td-secure-auth-button"
+              aria-controls="td-secure-telegram-auth"
+              onClick={() => openSecureTelegramAuth()}
+            >
+              <ShieldCheck size={16} aria-hidden="true" />
+              {localize(language, "فتح تسجيل Telegram الآمن", "Open secure Telegram sign-in")}
             </button>
             <div className="td-button-row">
               <ActionButton
@@ -980,19 +1002,19 @@ function QueueSection({
                   </thead>
                   <tbody>
                     {session.rows.map((row) => (
-                      <tr key={row.id}>
-                        <td data-label="File">
+                      <tr key={row.id} className="td-queue-row">
+                        <td data-label={localize(language, "الملف", "File")}>
                           <strong>{row.name}</strong>
                           <small>{row.id}</small>
                         </td>
-                        <td data-label="Status">
+                        <td data-label={localize(language, "الحالة", "Status")}>
                           <span
                             className={`td-status td-status-${(row.status ?? "").toLowerCase()}`}
                           >
                             {row.status ?? "—"}
                           </span>
                         </td>
-                        <td data-label="Progress">
+                        <td data-label={localize(language, "التقدم", "Progress")}>
                           <div className="td-progress">
                             <span
                               style={{
@@ -1002,9 +1024,14 @@ function QueueSection({
                           </div>
                           <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
                         </td>
-                        <td data-label="Size">{formatBytes(row.sizeBytes)}</td>
-                        <td data-label="Controls">
-                          <div className="td-button-row">
+                        <td data-label={localize(language, "الحجم", "Size")}>
+                          {formatBytes(row.sizeBytes)}
+                        </td>
+                        <td data-label={localize(language, "تحكم", "Controls")}>
+                          <div
+                            className="td-button-row"
+                            aria-label={localize(language, "تحكم الملف", "File controls")}
+                          >
                             <ActionButton
                               actionId="queue.pause_item"
                               busyAction={busyAction}

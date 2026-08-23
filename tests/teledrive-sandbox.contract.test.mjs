@@ -27,6 +27,7 @@ const paths = {
     import.meta.url,
   ),
   registry: new URL("../python-package/teledrive/action_registry.py", import.meta.url),
+  ui: new URL("../python-package/teledrive/ui.py", import.meta.url),
 };
 
 const emptyState = {
@@ -483,4 +484,33 @@ test("26 — transfer toolbar and row controls preserve every real action ID", a
     "queue.start_selected",
     "queue.stop",
   ]);
+});
+
+test("27 — React exposes the existing secure Gradio Telegram panel without carrying secrets", async () => {
+  const [component, ui] = await Promise.all([
+    readFile(paths.component, "utf8"),
+    readFile(paths.ui, "utf8"),
+  ]);
+
+  assert.match(component, /function openSecureTelegramAuth/);
+  assert.match(component, /getElementById\("td-secure-telegram-auth"\)/);
+  assert.match(component, /button\.label-wrap/);
+  assert.match(component, /aria-controls="td-secure-telegram-auth"/);
+  assert.match(component, /onClick=\{\(\) => openSecureTelegramAuth\(\)\}/);
+  assert.match(ui, /elem_id="td-secure-telegram-auth"/);
+  assert.doesNotMatch(component, /localStorage|sessionStorage|api_hash|phone_code|two_factor/i);
+});
+
+test("28 — queue layout keeps desktop controls visible and becomes a labeled mobile card", async () => {
+  const [component, css] = await Promise.all([
+    readFile(paths.component, "utf8"),
+    readFile(paths.css, "utf8"),
+  ]);
+
+  assert.match(component, /className="td-queue-row"/);
+  assert.match(component, /aria-label=\{localize\(language, "تحكم الملف", "File controls"\)\}/);
+  assert.match(css, /@media \(min-width: 621px\)[\s\S]*?table-layout: fixed/);
+  assert.match(css, /@media \(min-width: 621px\)[\s\S]*?overflow-x: hidden/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*?\.td-session \.td-queue-row \{/);
+  assert.match(css, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 });
