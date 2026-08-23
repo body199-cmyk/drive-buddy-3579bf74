@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -124,6 +125,12 @@ def validate_snapshot(snap: Any) -> dict[str, Any]:
         raise InvalidCheckpointError("checkpoint must be a JSON object")
     if "items" not in snap or not isinstance(snap["items"], list):
         raise InvalidCheckpointError("checkpoint missing 'items' list")
+    for index, row in enumerate(snap["items"]):
+        if not isinstance(row, dict):
+            raise InvalidCheckpointError(f"checkpoint item {index} must be an object")
+        item_id = str(row.get("id") or "")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", item_id):
+            raise InvalidCheckpointError(f"checkpoint item {index} has an unsafe id")
     if "generated" not in snap:
         raise InvalidCheckpointError("checkpoint missing 'generated' timestamp")
     payload = json.dumps(snap, ensure_ascii=False)
@@ -168,7 +175,12 @@ def restore_from_drive(drive) -> Optional[dict[str, Any]]:
 
 
 def apply_snapshot(snap: dict[str, Any]) -> int:
-    """Import checkpoint items into SQLite (if not present)."""
+    """Import checkpoint items into SQLite (if not present).
+
+    The WHOLE snapshot is validated first: one unsafe row rejects the entire
+    snapshot (fail-closed) instead of being silently skipped row-by-row.
+    """
+    snap = validate_snapshot(snap)
     n = 0
     for row in snap.get("items", []):
         try:

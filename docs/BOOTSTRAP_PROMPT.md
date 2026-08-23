@@ -81,7 +81,7 @@ bun run build
 - لا بيانات وهمية: صفوف، سجلات، حصص، معرفات، تقدم، أو حالات اتصال.
 - لا زر بلا handler مسمّى + مسار خدمة + اختبار. لا lambda في layout.
 - لا أسرار في أي ملف أو سجل أو ZIP أو handoff: API ID/hash، توكنات، أرقام، رموز، session strings.
-- لا SQLite على FUSE. لا concurrency فوق 4. لا streaming بدل disk-first.
+- لا SQLite على FUSE. لا concurrency فوق 100؛ القيم خارج 1–100 تُرفض، وتحذير واجهة إجباري فوق 8 (ADR-0001). لا streaming بدل disk-first.
 - لا حذف من Drive عند cancel/stop. لا auto-resume بعد restart.
 - لا force-push ولا rebase ولا amend على تاريخ منشور.
 - لا ترقية اعتماديات بلا دليل توافق.

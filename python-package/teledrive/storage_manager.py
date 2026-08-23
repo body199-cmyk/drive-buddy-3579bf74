@@ -1,6 +1,7 @@
 """Local disk management: preflight, temp path, orphan quarantine, cleanup."""
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -11,6 +12,18 @@ from .utils import safe_disk_free
 _log = get_logger("teledrive.storage")
 
 RESERVE_BYTES = 200 * 1024 * 1024  # keep 200 MB headroom
+
+# Item ids come from untrusted checkpoints; confine every path they touch to
+# the temp root (defense at the filesystem boundary, independent of validation
+# at the trust boundary in checkpoint_manager.validate_snapshot).
+_SAFE_ITEM_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+
+
+def _item_dir(item_id: str) -> Path:
+    value = str(item_id or "")
+    if not _SAFE_ITEM_ID.fullmatch(value):
+        raise ValueError("unsafe transfer item id")
+    return temp_root() / value
 
 
 def temp_root() -> Path:
@@ -37,13 +50,13 @@ def preflight(required_bytes: int) -> tuple[bool, int]:
 
 
 def temp_path_for(item_id: str, safe_name: str) -> Path:
-    d = temp_root() / item_id
+    d = _item_dir(item_id)
     d.mkdir(parents=True, exist_ok=True)
     return d / f"{safe_name}.part"
 
 
 def cleanup_item(item_id: str) -> None:
-    d = temp_root() / item_id
+    d = _item_dir(item_id)
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
 

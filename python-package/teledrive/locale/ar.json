@@ -108,6 +108,7 @@
   "err.scan_range_too_large": "المدى كبير جدًا. الحد الأقصى 1000 رسالة",
   "err.service_path": "الخدمة غير متاحة",
   "err.session_missing": "ملف جلسة Telegram المحلي غير موجود.",
+  "err.session_forget_failed": "تم تسجيل الخروج محليًا، لكن تعذّر إثبات حذف الجلسة المحفوظة من Drive.",
   "err.session_vault_invalid": "بيانات جلسة Telegram المحفوظة غير صالحة أو ناقصة.",
   "err.session_not_authorized": "يجب أن يكتمل اتصال Telegram أولًا قبل الحفظ على Drive.",
   "err.tests_failed": "فشلت الاختبارات، لم يتم إنشاء الحزمة",

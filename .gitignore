@@ -37,3 +37,4 @@ public/teledrive-package.zip
 /content/teledrive_runtime/
 *.session
 telegram_creds.json
+.audit/
