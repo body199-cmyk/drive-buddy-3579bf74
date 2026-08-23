@@ -1,5 +1,11 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M37-T02] — 2026-08-23
+
+### Verified
+- تحقق حي من أزرار التحكم بطلب المالك: سيرفر محلي (HTTP 200، binder **51/51 wired · 242 controls · 0 disabled**) + نقرات حية موثقة في سجل السيرفر (`set_concurrency`/`set_theme`/`toggle_language` — كلها `ok`) + استدعاء مباشر لكل الأكشنات الـ51 بنفس مسار الزرار: 37 PASS فعلي، 14 خطأ حالة صحيح بالتصميم أثناء عدم الاتصال، 2 خاصّان بـColab عمدًا (`drive.connect/reconnect`).
+- لا زرار ميت أو غير موصول. ليس إثبات Colab-ready (§17). التفصيل: `docs/PHASE_REPORTS/PHASE_M37_T02.md`.
+
 ## [M37-T01] — 2026-08-23
 
 ### Changed
