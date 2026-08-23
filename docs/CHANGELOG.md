@@ -1,5 +1,21 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M42] — 2026-08-23 — استعادة Vault المشفّر في Colab
+
+### Fixed locally (remote integration and publish pending)
+- تحقق قراءة فقط من Google Drive التجريبي أثبت أن زوج Vault format 2 النشط ما زال موجودًا (`td_telegram.active.json` مع زوج versioned `.creds`/`.session`)؛ لم يُنزّل أو يُعدّل أو يُحذف أي ملف.
+- السبب الجذري كان مسارين متصلين: Cell 3 يتخطى تحميل/طلب API Hash عند وجود Vault، و`restore_from_context(ctx, secret=api_hash)` كان يهمل secret ثم يستدعي الاستعادة بلا مفتاح فك. لذلك يعجز runtime جديد عن فك blob format 2، الذي لا يخزن API Hash في Drive عمدًا، ثم يسلك login اليدوي مع إبقاء Vault البعيد.
+- `restore_from_context` و`autorestore_once` و`autorestore` باتت تمرر secret اختياريًا داخل العملية فقط. لا يسجل أو يحفظ في Drive. ويعيد `probe()` API ID غير السري من metadata كي لا يطلبه Cell 3 عند وجود Vault.
+- Cell 3 يقرأ Colab Secrets قبل قرار Vault. إذا كانت غائبة وVault موجودًا، يطلب API ID/Hash مخفيين فقط، لا هاتفًا أو OTP. Cell 4 لا يعيد `set_credentials` إذا نجحت الاستعادة.
+
+### Gates and local verification
+- Regression قبل التصحيح: RED (`restore_from_context(..., secret=...)` عاد `False` مع Vault format 2 صالح). بعد التصحيح: GREEN ويثبت أن bytes زوج Drive لا تتغير.
+- `770 passed` · compileall PASS · launcher `51/51` · notebook check + cmp PASS · React contracts `33/33` · `pnpm run build` PASS · lint exit 0 مع 9 تحذيرات baseline · package build وZIP integrity PASS.
+- لا تغيير في React/bridge في M42. تحقق الأصل العام الحالي أثبت manifest على `bc9fc5f…` ووجود `__teledriveReactPanelLease` في ZIP، لكن Cell 4 الحقيقي لا يزال غير مثبت؛ لا `Colab-ready` أو `Complete`.
+
+### Pending
+- لا PR أو merge أو publish في هذا المدخل. بعد CI فقط يُبنى ZIP وmanifest من SHA main النهائي. لا يحذف release/tag؛ إذا تطلب اختلاف archive استبدالًا، يستبدل الأصلين المتطابقين معًا ثم يعاد workflow للتحقق العام.
+
 ## [M41-T01] — 2026-08-23
 
 ### Fixed

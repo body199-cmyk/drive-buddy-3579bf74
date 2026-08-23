@@ -233,10 +233,11 @@ def persist_from_context(ctx: Any, secret: str = "") -> Optional[str]:
 
 
 def restore_from_context(ctx: Any, secret: str = "") -> bool:
+    """Restore with an optional process-local unwrap secret from Colab Cell 4."""
     vault = getattr(ctx, "session_vault", None)
     if vault is None:  # pragma: no cover - compatibility fallback
         return restore_session(_drive_from_ctx(ctx), secret=secret)
-    return bool(vault.autorestore_once().restored)
+    return bool(vault.autorestore_once(secret=secret).restored)
 
 
 def wipe_from_context(ctx: Any) -> None:
@@ -610,6 +611,7 @@ class SessionVault:
         return {
             "has_session": has_session,
             "has_creds": has_creds,
+            "api_id": str((payload or {}).get("api_id") or "").strip(),
             "phone": str((payload or {}).get("phone") or ""),
             "phone_label": mask_phone(str((payload or {}).get("phone") or "")),
         }
@@ -721,7 +723,7 @@ class SessionVault:
             _log.warning("stale local telegram session cleanup skipped: %s", type(exc).__name__)
         self._last_fingerprint = ""
 
-    def autorestore(self) -> VaultResult:
+    def autorestore(self, secret: str = "") -> VaultResult:
         if self.ctx.telegram_auth.authorized:
             return self._emit(VaultResult(True, "msg.session_already_authorized", restored=True))
         if not self.ctx.drive_auth.connected:
@@ -744,7 +746,11 @@ class SessionVault:
         api_id = str(payload.get("api_id") or "").strip()
         phone = str(payload.get("phone") or "").strip()
         label = mask_phone(phone)
-        api_hash = str(payload.get("api_hash") or "").strip() or self._vault_secret()
+        api_hash = (
+            str(payload.get("api_hash") or "").strip()
+            or str(secret or "").strip()
+            or self._vault_secret()
+        )
         if not api_id.isdigit() or not api_hash:
             return self._emit(
                 VaultResult(False, "msg.session_restore_needs_login", phone_label=label),
@@ -850,7 +856,7 @@ class SessionVault:
 
     # ---- quiet lifecycle helpers (M24-T03) ----
 
-    def autorestore_once(self) -> VaultResult:
+    def autorestore_once(self, secret: str = "") -> VaultResult:
         """Restore the saved sign-in BEFORE the first UI paint. Never raises.
 
         ui.build() calls this so shell_seed() reads a real AUTHORIZED state
@@ -867,6 +873,8 @@ class SessionVault:
             ))
         self._autorestore_done = True
         try:
+            if secret:
+                return self.autorestore(secret=secret)
             return self.autorestore()
         except Exception as exc:  # noqa: BLE001 - the UI build must never die here
             _log.warning("session autorestore skipped: %s", type(exc).__name__)
