@@ -282,6 +282,7 @@ def test_probe_works_from_external_service_before_adopt(ctx):
     probe = ctx.session_vault.probe(drive)
     assert probe["has_session"] is True
     assert probe["has_creds"] is True
+    assert probe["api_id"] == "1"
     assert probe["phone"] == "+201234567890"
     assert "+201234567890" not in probe["phone_label"]
     assert ctx.drive_auth.connected is False
@@ -693,3 +694,38 @@ def test_status_is_redacted_and_reports_vault_metadata(ctx):
     assert VAULT_MANIFEST_NAME in names
     assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".session") for name in names)
     assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)
+
+
+def test_restore_from_context_uses_explicit_secret_for_format_two_vault(ctx, monkeypatch):
+    """Cell 4 supplies the unwrap secret before TelegramAuth has live memory."""
+    from teledrive import config
+
+    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"context-secret")
+    ctx.telegram_auth.state = ta.AUTHORIZED
+    ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
+    ctx.telegram_auth._api_id = 1234567
+    ctx.telegram_auth._api_hash = "restore-hash"
+    ctx.telegram_auth._phone = "+201234567890"
+    drive = _connect_fake_drive(ctx)
+
+    saved = ctx.session_vault.save_after_login()
+    assert saved.saved is True
+    remote_before = {meta["name"]: meta["_bytes"] for meta in drive.files.values()}
+
+    # This mirrors a new Colab runtime: the Vault is present, but TelegramAuth
+    # has no in-memory API hash yet. Cell 4 passes the secret explicitly.
+    ctx.telegram_auth.state = ta.DISCONNECTED
+    ctx.telegram_auth.client = None
+    ctx.telegram_auth._api_hash = ""
+    captured = {}
+
+    def fake_set_credentials(api_id, api_hash):
+        captured.update(api_id=api_id, api_hash=api_hash)
+        ctx.telegram_auth.state = ta.AUTHORIZED
+        return type("S", (), {"authorized": True, "state": ta.AUTHORIZED, "account_label": ""})()
+
+    monkeypatch.setattr(ctx.telegram_auth, "set_credentials", fake_set_credentials)
+
+    assert session_vault.restore_from_context(ctx, secret="restore-hash") is True
+    assert captured == {"api_id": "1234567", "api_hash": "restore-hash"}
+    assert {meta["name"]: meta["_bytes"] for meta in drive.files.values()} == remote_before

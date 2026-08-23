@@ -563,10 +563,10 @@ print("journal mode:", ctx.db.journal_mode())
 '''
 
 CELL_3 = '''# ==== Cell 3: native Colab Drive auth + optional Telegram vault probe ====
-# Drive is connected FIRST. If this Drive account already has a saved
-# Telegram session (telegram.session + telegram_creds.json in TeleDrive_AppData),
-# manual API input is skipped. Otherwise Colab Secrets are preferred, then a
-# hidden prompt for THIS runtime only. Values are never printed or logged.
+# Drive is connected FIRST. A saved encrypted Telegram vault still needs the
+# app API hash to decrypt in a new runtime. Colab Secrets are read before the
+# vault decision; if absent, a saved vault asks only for the missing decrypt
+# credentials, never a phone / OTP. Values are never printed or logged.
 
 # Google Drive: native Colab credentials only. No desktop OAuth JSON upload,
 # no pasted authorization code, no persisted Drive token file.
@@ -586,42 +586,47 @@ print("drive verified for:", about["user"].get("emailAddress", "(hidden)"))
 from teledrive.session_vault import SessionVault
 
 probe = SessionVault(ctx).probe(drive_service)
-api_id = ""
+has_saved_vault = bool(probe.get("has_session") and probe.get("has_creds"))
+api_id = str(probe.get("api_id") or "").strip()
 api_hash = ""
 phone = probe.get("phone", "")
 cred_source = "hidden prompt"
 
-if probe.get("has_session") and probe.get("has_creds"):
+# A format-2 vault intentionally omits API Hash from Drive. Load the runtime
+# secret first even when a saved vault exists, so Cell 4 can unwrap it safely.
+try:
+    from google.colab import userdata as _td_userdata
+    try:
+        secret_api_id = str(_td_userdata.get("TELEGRAM_API_ID") or "").strip()
+    except Exception:
+        secret_api_id = ""
+    try:
+        api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
+    except Exception:
+        api_hash = ""
+    if secret_api_id.isdigit():
+        api_id = secret_api_id
+    if api_id.isdigit() and api_hash:
+        cred_source = "Colab Secrets"
+except Exception:
+    pass
+
+if has_saved_vault:
     print("saved Telegram session found for:", probe.get("phone_label") or "(hidden)")
-    print("manual Telegram API input skipped for this Drive account")
 else:
     print("no saved Telegram session found for this Drive account")
-    try:
-        from google.colab import userdata as _td_userdata
-        try:
-            api_id = str(_td_userdata.get("TELEGRAM_API_ID") or "").strip()
-        except Exception:
-            api_id = ""
-        try:
-            api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
-        except Exception:
-            api_hash = ""
-        if api_id.isdigit() and api_hash:
-            cred_source = "Colab Secrets"
-    except Exception:
-        pass
 
-    if not (api_id.isdigit() and api_hash):
-        import getpass
-        if not api_id.isdigit():
-            api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
-        if not api_hash:
-            api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
-        if not phone:
-            phone = getpass.getpass("Telegram phone (hidden, international format): ").strip()
+if not (api_id.isdigit() and api_hash):
+    import getpass
+    if not api_id.isdigit():
+        api_id = getpass.getpass("Telegram API ID (hidden): ").strip()
+    if not api_hash:
+        api_hash = getpass.getpass("Telegram API Hash (hidden): ").strip()
+    if not has_saved_vault and not phone:
+        phone = getpass.getpass("Telegram phone (hidden, international format): ").strip()
 
-    assert api_id.isdigit() and api_hash, "API ID must be numeric and API Hash non-empty"
-    print("telegram credentials: loaded from", cred_source)
+assert api_id.isdigit() and api_hash, "API ID must be numeric and API Hash non-empty"
+print("telegram credentials: loaded from", cred_source)
 '''
 
 CELL_4 = '''# ==== Cell 4: inject into the ONE context, attempt restore, launch the UI ====
@@ -637,8 +642,9 @@ print("drive status:", ctx.drive_auth.status().state)
 
 if api_id and api_hash:
     restored = session_vault.restore_from_context(ctx, secret=api_hash)
-    print("telegram session vault:", "restored" if restored else "empty (first login or new account)")
-    ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
+    print("telegram session vault:", "restored" if restored else "not restored; manual login remains available")
+    if not restored:
+        ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
     del api_id, api_hash
     print("telegram credentials loaded into runtime memory")
     print("telegram status:", ctx.telegram_auth.status().state)

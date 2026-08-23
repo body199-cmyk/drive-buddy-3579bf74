@@ -1,46 +1,47 @@
-# AI HANDOFF
-
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
-## بطاقة الجلسة — M41-T01: حماية bridge من watcher قديم في Colab
+## بطاقة الجلسة — M42: استعادة Vault المشفّر في Colab
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-08-23T14:55Z` |
-| code commit / merge | `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` → main `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` عبر PR [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ لا `Colab-ready` ولا `Complete` |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M41_T01_COLAB_BRIDGE_WATCHER_LEASE.md` |
+| Updated (UTC) | `2026-08-23T15:18Z` |
+| baseline | `main` / `origin/main` = `b7a2dac217376a9dbc322aa307a105a37d372491` |
+| branch | `fix/m42-colab-session-vault-restore` — محلي فقط |
+| الحالة | **LOCAL VERIFICATION COMPLETE — remote integration and publish pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M42_COLAB_SESSION_VAULT_RESTORE.md` |
 
-## ما تغير
+## السبب الجذري المثبت
 
-لقطة المالك أثبتت عودة `Backend bridge unavailable`: React كان ظاهرًا لكنه يملك bridge دخل `dispose()`، وليس مجرد Telegram أو Drive في حالة غير متصلة. عالج M41 دورة `js_on_load` المتكررة لنفس Gradio host. صار الغلاف يعيد استخدام panel الحي بدل إنشاء مثيل جديد ثم التخلص من bridge قد تكون شجرة React المعروضة ما زالت تستخدمه.
+وُجد زوج Vault نشط بصيغة versioned format 2 في `TeleDrive_AppData` بحساب الاختبار: manifest، وملف `.creds`، وملف `.session`. لم يُنزّل أي ملف ولم يُحذف أو يُعدّل شيء في Drive. لذلك لا يفسر اختفاء الملفات طلب تسجيل Telegram من جديد.
 
-يحمل كل on-load الآن **lease** مستقلًا؛ watcher وcleanup من run قديم لا يسلّمان قيمة ولا ينفذان `dispose()` للمالك الحالي. يُنشأ مثيل بديل فقط إذا لم يوجد مالك حي. دالة `isLive()` أضيفت إلى مثيل panel لاستخدام قرار lifecycle فقط. لا أسرار أو action IDs أو payloads أو transport أو handlers أو notebook تغيرت.
+المسار الخاطئ كان مزدوجًا. كان Cell 3 يكتشف وجود Vault ثم يتخطى تحميل `TELEGRAM_API_HASH` من Colab Secrets أو طلبه بصورة مخفية. وحتى إذا توفر hash لخلية 4، كانت `restore_from_context(ctx, secret=api_hash)` تمرر السر إلى دالة تتجاهله ثم تستدعي `autorestore_once()` بلا secret. Vault format 2 لا يخزن API Hash على Drive عمدًا، لذلك يفشل فكّه في runtime جديد ويعود لمسار تسجيل الدخول، بينما تبقى نسخة Drive كما هي.
 
-## الأدلة
+## إصلاح M42 المحلي
+
+1. `restore_from_context` و`autorestore_once` و`autorestore` صارت تقبل secret اختياريًا محليًا داخل العملية فقط؛ له أولوية بعد API Hash المقروء من payload legacy وقبل fallback Colab Secrets. لا يُكتب أو يُسجّل أو يُرسل إلى Drive.
+2. `probe()` يعيد API ID غير السري الموجود في metadata كي لا يطلب Cell 3 API ID عند وجود Vault.
+3. Cell 3 يقرأ Colab Secrets قبل فرع Vault. إذا لم تتوفر secrets وVault موجود، يطلب API ID/Hash المخفيين فقط ولا يطلب هاتفًا أو OTP؛ Cell 4 تستخدم hash نفسه لفك Vault ثم لا تعيد إنشاء عميل Telegram عند نجاح الاستعادة.
+4. لم تتغير صيغة format 2، ولا يحدث حفظ API Hash على Drive، ولا تتغير سياسة أن failure أو revocation ينظف النسخة المحلية فقط ويحتفظ بزوج Drive.
+
+## الأدلة المحلية
 
 | الفحص | النتيجة |
 |---|---|
-| Python suite | `769 passed` |
-| launcher | `51/51 ready actions resolve` |
-| notebook check + cmp | PASS |
-| lint/build | PASS؛ 0 errors و9 warnings baseline |
-| React contracts | `33/33 PASS`؛ عقد M41 يعيد on-load مرتين لنفس host ويثبت lease/watch/cleanup |
-| Gradio 6.20 محلي | `Gradio · Live bridge` ثم `telegram.status` = `Action completed` |
-| محاكاة Colab محلية | `is_colab=True` وproxy خارجي: bridge حي ثم `telegram.status` يعمل بعد إعادة تشغيل البندل |
-| CI الرسمي | PR #87: أربع فحوص SUCCESS |
-| نشر الحزمة | [Publish current TeleDrive package #32646821416](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646821416) SUCCESS؛ manifest وZIP العامان يطابقان merge SHA |
+| Regression قبل التصحيح | RED: `restore_from_context(..., secret=...)` أعاد `False` مع Vault format 2 صالح |
+| Regression بعد التصحيح | PASS: secret يُستخدم، تستدعي الاستعادة `set_credentials` الصحيح، وbytes ملفات Drive لا تتغير |
+| Python suite | `770 passed` |
+| compileall / launcher | PASS / `51/51 ready actions resolve` |
+| notebook check + cmp | PASS؛ نسختا Colab و`colab_cells.json` مولدة من المصدر ومتطابقة |
+| React contracts | `33/33 PASS` باستخدام TypeScript stripping في Node 22 |
+| lint / build | lint exit 0 مع 9 تحذيرات baseline؛ build PASS |
+| package build | PASS؛ archive مؤقت سليم (`/tmp/m42-teledrive_v4.5.zip`) |
 
-## النشر
+## حالة bridge والنشر
 
-أول تشغيل [#32646652723](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646652723) بنى كل البوابات ثم توقف fail-closed لاختلاف ZIP السابق (`567414`) عن archive M41 (`567611`). وبالإذن القائم من المالك استُبدل ZIP وmanifest المتطابقان معًا، مع الحفاظ على release/tag. بعد ذلك نجح تشغيل النشر الرسمي #32646821416 والتحقق العام.
+التحقق المباشر من الأصل العام الحالي يثبت أن manifest يشير إلى `bc9fc5f…` وأن ZIP يحتوي `__teledriveReactPanelLease` من M41. لذلك لا دليل أن release/tag حاليًا هو سبب عودة `Backend bridge unavailable`. ومع ذلك لم يُختبر Cell 4 بالحزمة الجديدة في Runtime Colab المرصود، فلا تستخدم `Colab-ready` أو `Complete` ولا تغلق KNOWN_ISSUES #71.
 
-الإصدار [`pkg-2026.08.09-m15t07`](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) يشير الآن إلى `bc9fc5f…`، SHA-256 `ab3d3db21f754546bb2e154be56faf0a0315fea7c9cc2a6df639d85db41d1529`، والحجم `567611` bytes.
-
-## الحدود
-
-المحاكاة المحلية ليست Runtime Colab الخاص بالمالك. لم يثبت bundle M41 في Cell 4 المنشور ولم يحدث نقل Telegram/Drive أو Pause/Resume/Stop حي في هذه المهمة؛ لذلك يبقى #71 مفتوحًا، ولا تستخدم `Colab-ready` أو `Complete`.
+لم يُشغّل `.github/scripts/cleanup-release.sh` ولم يُحذف release أو tag أو ملف Vault. لا يوجد PR أو merge أو نشر M42 حتى الآن.
 
 ## التراجع والخطوة التالية
 
-عكس merge `bc9fc5f…` للكود، ثم إعادة نشر archive/manifest مطابقين لـSHA سابق إذا لزم تراجع كامل. الخطوة التالية الأدنى: فتح Cell 4 من حزمة M41 المنشورة في Colab والتأكد من ظهور `Gradio · Live bridge` بدل الرسالة، ثم اختبار دورة request واحدة.
+نقطة التراجع المحلية هي عكس commit M42 على فرع `fix/m42-colab-session-vault-restore` قبل أي عملية بعيدة. بعد المراجعة النهائية والـCI: PR وmerge فقط وفق التفويض، ثم بناء ZIP وmanifest من SHA `main` المدمج. إذا رفض workflow اختلاف الأصول، يستبدل ZIP وmanifest المطابقين معًا فقط، من دون حذف release/tag، ثم يعاد تشغيل workflow للتحقق العام. بعد النشر يلزم تشغيل Cell 1–4 على Colab الحي وملاحظة `telegram session vault: restored` و`Gradio · Live bridge` قبل أي ادعاء نهائي.
