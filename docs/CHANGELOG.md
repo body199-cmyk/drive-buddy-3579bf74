@@ -1,5 +1,18 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M39-T01] — 2026-08-23 — محلي قبل commit/PR/merge
+
+### Changed
+- صفوف الطابور في React أصبحت كاملة على سطح المكتب: جدول session يثبت عرض الأعمدة، يلف اسم الملف، ويُبقي التقدم والحجم وأزرار `إيقاف`/`استئناف`/`إعادة` ضمن البطاقة بلا تمرير أفقي.
+- على أقل من 621px يتحول صف الملف نفسه إلى بطاقة معنونة مرتبة تعرض الملف والحالة والتقدم والحجم، ثم شبكة تحكم ثلاثية كاملة. لم تتغير `queue.pause_item` أو `queue.resume_item` أو `queue.retry_item` أو أي payload/handler.
+- أضيف زر **فتح تسجيل Telegram الآمن** في React. يستهدف Accordion Gradio الموجود فقط (`td-secure-telegram-auth`) ويفتحه محليًا في DOM؛ تبقى API hash ورقم الهاتف وOTP و2FA في عناصر Gradio الآمنة، بلا bridge action أو تخزين/نقل أسرار.
+- أعيد بناء `panel.bundle.gz` و`panel.css.gz`، وأضيف عقدا React 27–28 لحماية الوصول الآمن والتخطيط المتجاوب.
+
+### Gates and local verification
+- `746 passed` · launcher `51/51` · notebook check + cmp PASS · React contracts `29/29` · lint/build PASS (0 errors؛ 7 تحذيرات baseline فقط).
+- فحص بصري محلي من markup/CSS المنتج: سطح المكتب أظهر الصف كاملًا بلا تمرير أفقي، وإطار 390px أظهر البطاقة مع الأزرار كاملة. Gradio 6.20 محليًا: زر React فتح Accordion المصادقة الأصلي، ثم `telegram.status` أعاد `Action completed` بلا إدخال أي اعتماد.
+- لا نقل حي ولا اختبار Colab جديد؛ لا `Colab-ready` أو `Complete`. GitHub والنشر لم يبدأا وقت هذا السجل.
+
 ## [M38-T01] — 2026-08-23
 
 ### Fixed

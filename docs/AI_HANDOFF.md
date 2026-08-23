@@ -1,23 +1,22 @@
-# بطاقة تسليم AI
+# AI HANDOFF
 
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
-## بطاقة الجلسة — M38-T01: إصلاح إعادة تركيب جسر React–Gradio في Colab
+## بطاقة الجلسة — M39-T01: صفوف طابور متجاوبة ووصول آمن لمصادقة Telegram
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-08-23T04:56Z` |
-| Branch / code commit | `fix/m38-t01-colab-bridge-remount` · `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` |
-| Base / merge | `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` → main `0727eba4450bd95e4f269140745a43a219b63fcc` عبر PR [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ لا Colab-ready |
-| النطاق | `react_panel.py` + `panel.bundle.gz` + عقد React + وثائق M38؛ لا نوتبوك ولا اعتماديات ولا جلسات |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M38_T01_COLAB_BRIDGE_REMOUNT.md` |
+| Updated (UTC) | `2026-08-23T05:44Z` |
+| Branch | `fix/m39-t01-responsive-queue-auth-access` من main `879e3b8a87eb8792340c0c0da2ff36552adfd2e9` |
+| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED + LOCAL-GRADIO-VERIFIED**؛ لم يُنشأ commit أو push أو PR أو merge بعد |
+| النطاق | صفوف الطابور المتجاوبة + زر React للوصول إلى Accordion Telegram الآمن الموجود؛ لا منطق نقل/مصادقة/Bridge/نوتبوك/اعتماديات/جلسات |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M39_T01_RESPONSIVE_QUEUE_AUTH_ACCESS.md` |
 
-## السبب والإصلاح
+## ما تغير
 
-رسالة `Backend bridge unavailable` لا تعتمد على اتصال Telegram أو Drive؛ تظهر عندما يصبح `GradioTeleDriveBridge` في حالة `disposed`. كان `js_on_load` للوحة React ينشئ مثيلًا جديدًا عند إعادة تركيب Gradio من دون تنظيف مضبوط للمثيل السابق، ما يسمح ببقاء شجرة React مرتبطة بجسر مغلق في lifecycle الخاص بـColab.
+أصبح صف الملف في Session table كاملًا على سطح المكتب من دون شريط تمرير أفقي: اسم الملف يلتف، التقدم يبقى مرئيًا، وأزرار `إيقاف` و`استئناف` و`إعادة` تبقى داخل عمود التحكم. عند أقل من 621px يتحول نفس الصف إلى بطاقة معنونة تعرض الملف والحالة والتقدم والحجم، ثم شبكة الأزرار كاملة.
 
-أصبح الغلاف يملك مثيلًا واحدًا على عنصر Gradio، يفك السابق قبل إعادة التركيب، ويعيد cleanup لا يفك إلا المثيل الذي يملكه. بقي transport الرسمي كما هو: `props.value` و`trigger('submit')` فقط، بلا endpoint إضافي أو WebSocket أو تخزين أسرار.
+أضيف زر **فتح تسجيل Telegram الآمن** إلى React. لا يجمع هذا الزر أي قيمة حساسة ولا يرسل action عبر bridge؛ يفتح محليًا Accordion Gradio الأصلي (`td-secure-telegram-auth`) ويُمرر إليه. بقيت API hash ورقم الهاتف وOTP و2FA في حقول Gradio الآمنة فقط.
 
 ## الأدلة الحالية
 
@@ -25,241 +24,31 @@
 |---|---|
 | Python suite | `746 passed` |
 | launcher | `51/51 ready actions resolve` |
-| notebook check + cmp | PASS |
-| React contract | `27/27` PASS؛ يتضمن remount lifecycle contract جديد |
-| lint/build | PASS؛ تحذير eslint baseline واحد فقط |
-| Gradio 6.20 + external proxy/root_path | لوحة حية بلا blocked banner |
+| notebook check + cmp | PASS؛ لا تغيير للنوتبوك |
+| React contracts | `29/29 PASS`؛ عقدا M39 جديدان |
+| lint/build | PASS؛ 0 errors و7 warnings baseline فقط |
+| Surface desktop fixture | كل الأعمدة والتحكم ظهرت بلا تمرير أفقي |
+| Surface phone fixture (390px) | بطاقة معنونة وأزرار كاملة بلا تمرير أفقي |
+| Gradio 6.20 محلي حي | زر React فتح Accordion Telegram الأصلي؛ `telegram.status` بعده أعاد `Action completed` |
 
 ## حدود صادقة
 
-تم فتح runtime Colab حقيقي وتشغيل Cell 1 وCell 2، لكن Cell 3 توقف عند fallback إدخال Telegram لعدم وجود Session Vault لهذا Drive account، فلم تُختبر Cell 4 بعد الإصلاح في Colab الحقيقي. بعد النشر #31 أُعيد تشغيل Runtime جديد، لكن سطح Colab المتاح للوكيل لم يعرض عداد/مخرج Cell 1 رغم إقرار تحذير المصدر؛ لذلك لا ادعاء `Colab-ready` أو نجاح Telegram/Drive transfer.
+لم تُدخل أي بيانات اعتماد ولم يبدأ نقل أو Pause/Resume في M39. الفحص الحي يثبت فتح لوحة المصادقة وبقاء action status عاملًا فقط. لا اختبار Colab جديد ولا تغيير لحالة M38: تحقق Cell 4 بالحزمة المنشورة ما زال غير مثبت؛ لذلك لا `Colab-ready` ولا `Complete`.
 
 ## حالة GitHub
 
 | العملية | الحالة |
 |---|---|
-| Commit | SUCCESS — `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` |
-| Push | SUCCESS — فرع M38 دُفع ثم حُذف بعد الدمج |
-| Pull Request | MERGED — [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81)؛ فحوص CI الأربعة SUCCESS |
-| Merge | MERGED — `0727eba4450bd95e4f269140745a43a219b63fcc` |
-| Publish | SUCCESS — [Publish #31](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32618829803)؛ manifest/ZIP العامان يشيران إلى merge SHA |
+| Commit | NOT ATTEMPTED |
+| Push | NOT ATTEMPTED |
+| Pull Request | NOT ATTEMPTED |
+| Merge | NOT ATTEMPTED |
+| Publish | NOT APPLICABLE؛ لا تغيير للحزمة المنشورة قبل دمج الكود |
+
+## نقطة التراجع
+
+قبل الدمج: حذف فرع M39 المحلي. بعد الدمج: عكس commit M39 وحده. لا توجد أسرار أو جلسات أو ملفات Drive أو عمليات حذف ضمن النطاق.
 
 ## الخطوة التالية
 
-الخطوة التالية الوحيدة: اختبار Colab حقيقي قابل للرصد يصل إلى Cell 4 ويفتح الواجهة المنشورة؛ لا يلزم تعديل كود إضافي ما لم يظهر عيب حي متكرر.
-
----
-
-## بطاقة الجلسة — M37-T02: تحقق حي من أزرار التحكم (طلب المالك)
-
-| الحقل | القيمة |
-|---|---|
-| Branch | `fix/m37-t02-ui-controls-verification` |
-| Base | main `60f8246` (بعد دمج PR#79) |
-| الحالة | **LIVE-VERIFIED (local Windows) — توثيق فقط؛ لا تغيير كود** |
-| التنفيذ | وكيل مساعد بتكليف مباشر من المالك؛ المنفّذ الرسمي يبقى LM Arena Agent (§3) |
-
-## ما اتعمل
-
-1. سيرفر حي محليًا (`teledrive_launcher.py` بلا `--share`) — bootstrap سليم، HTTP 200، الـbinder: **51/51 أكشن موصولة (242 control)، صفر معطلة/مخفية**.
-2. تنقّل حي بالمتصفح عبر التابات الخمسة + نقرات حقيقية موثقة في سجل السيرفر: `set_concurrency`، `set_theme` ×2، `toggle_language` ×2 — كلها `ok`.
-3. استدعاء مباشر للأكشنات الـ51 بنفس مسار الزرار (`Handlers.call`): 30 PASS بدون وسائط + 7 PASS بوسائطها الحقيقية (ورفض 999 خارج المدى رفضًا صحيحًا) + 14 خطأ حالة **صحيح بالتصميم** أثناء عدم الاتصال (حراس آلة الحالات ترد برسائل نظيفة) + 2 خاصّان بـColab عمدًا (`drive.connect/reconnect` عبر `google.colab.auth`).
-
-## الخلاصة الصادقة
-
-لا زرار ميت ولا غير موصول. كل «فشل» مرصود هو حارس حالة صحيح أو بوابة Colab-by-design الموثقة منذ PHASE_16. انجماد عابر واحد لتاب الإعدادات على port 7861 لم يتكرر وليس له دليل سجل → لا يُسجل (لا شكوك نظرية).
-
-## حدود صادقة
-
-هذا ليس إثبات `Colab-ready`: النقل الفعلي Telegram→Drive يحتاج جلسة Colab حية بيد المالك (M15-T01/M24-T06 مفتوحة). التفاصيل الكاملة: `docs/PHASE_REPORTS/PHASE_M37_T02.md`.
-
----
-
-## بطاقة الجلسة — M37-T01: تقوية نشر الحزمة الحالية (نتائج تدقيق خارجي Sol)
-
-| الحقل | القيمة |
-|---|---|
-| Branch | `fix/m37-t01-audit-release-hardening` |
-| Base | main `f820529` (بعد دمج PR#78) |
-| الحالة | **CODE COMMITTED LOCALLY — بوابات خضراء؛ ينتظر push + PR + CI** |
-| التنفيذ | وكيل مساعد بتكليف مباشر من المالك (2026-08-23)؛ المنفّذ الرسمي يبقى LM Arena Agent (§3) |
-| المصدر | تدقيق خارجي `gpt-5.6-sol` (تقرير خارج الشجرة) + تحقق تنفيذي مستقل لكل ملاحظة |
-
-## ما تغير
-
-1. `release-current.yml` (خطوة النشر): حذف `gh release delete --yes --cleanup-tag \|\| true` واستبداله بمسار **idempotent fail-closed لا يحذف الـrelease أو الـtag أبدًا** (§11/§17): غياب → إنشاء ذري بأصلين؛ وجود بمطابقة حجم zip المبني → تحديث metadata فقط؛ نقص/اختلاف → فشل صريح، واستبدال أصول منشورة يبقى قرار مالك يدوي. (KNOWN_ISSUES #70)
-2. `release.yml`: تعليق توضيحي يوثق أن `product_version: 4.5.0` والعنوان v4.5 فيه **وصف صادق** للأرشيف التاريخي المثبّت بالبايت (بوابة SHA/حجم صارمة) وليسا بقايا هوية قديمة — رفض تنفيذ ملاحظتي T-1/D-1 من التدقيق لأن تنفيذهما كان سيناقض §17.
-
-## الأدلة
-
-| الفحص | النتيجة |
-|---|---|
-| pytest كامل (Windows/Python 3.11) | `746 passed` (مطابق baseline) |
-| compileall | OK |
-| launcher --check | `51/51 ready actions resolve` |
-| notebook check + cmp | متطابقة |
-| فحص أسرار | لا أسرار في التغييرات |
-
-## حدود صادقة
-
-لم يُشغَّل الـworkflow على GitHub ضمن المهمة (تشغيله قرار نشر بيد المالك). لا اختبار Colab جديد؛ لا ادعاء `Colab-ready` أو `Complete`.
-
----
-
-## بطاقة الجلسة — M36-T01: نشر الحزمة بهوية v5.0.0 (أدلة النشر)
-
-| الحقل | القيمة |
-|---|---|
-| PR | [#77](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/77) — MERGED (`cb6901f4bf`) |
-| Publish workflow | run #29 (id 32575076208) على main `cb6901f4bf` — SUCCESS |
-| Release | tag `pkg-2026.08.09-m15t07` — target commit `cb6901f4bf` |
-| الأصول | `teledrive_v4.5.zip` 560,483 بايت · `teledrive_manifest.json` 378 بايت |
-| SHA-256 | `a0d7cc4d9a3a7e998abc1d2075ea7814f8b38c84e92fd031242ecb2b9b1d66f1` |
-
-## التغيير الوحيد في الكود
-
-`release-current.yml`: `PRODUCT_VERSION` 4.5.0 → **5.0.0** (حقل معلوماتي في الـ manifest فقط؛ بوابة Cell-1 تخزنه ولا تقارن به — تحقق من `notebook_cells.py`). اسم الأرتيفكت والـ tag مثبتان عمدًا.
-
-## أدلة النشر المستقلة
-
-تحقق خارج الـworkflow بتنزيل الأصول من الـ release العام ومطابقتها: `product_version=5.0.0` · `commit=cb6901f4bf…` · تطابق الحجم (560,483) وتطابق SHA-256 كاملًا. بوابات الدستور داخل الـrun: compileall + pytest + launcher + notebook check ناجحة.
-
-## الحدود الصادقة
-
-لا اختبار Colab حي جديد — يبقى لا `Colab-ready` ولا `Complete`. الاختبار الحي المتبقي بيد المالك: Cell 1 → Restart → Cells 2–4.
-
----
-
-## بطاقة الجلسة — M35-T02: تنظيف إشارة Lovable من AGENTS.md
-
-| الحقل | القيمة |
-|---|---|
-| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch | `fix/m35-t02-agents-lovable-cleanup` |
-| Commit | `6299221` |
-| Base | main `a97d4bd3cd` (بعد دمج PR#75) |
-| الحالة | **COMMITTED LOCALLY — ينتظر push + PR + CI** |
-| التنفيذ | وكيل مساعد بموافقة صريحة من المالك (2026-08-22) |
-
-## ما تغير
-
-استبدال بلوك `LOVABLE:BEGIN/END` القديم في `AGENTS.md` بملاحظة حوكمة محايدة تقرّ بخروج Lovable نهائيًا (§3)، وأن المنفّذ الوحيد المتصل بـ GitHub هو LM Arena Agent، مع الحفاظ على قاعدة عدم إعادة كتابة التاريخ المنشور (§10). تعديل توثيقي بحت؛ لا يمس الكود أو النوت‌بوك أو الاعتماديات.
-
-## الأدلة
-
-| الفحص | النتيجة |
-|---|---|
-| نطاق التغيير | ملف واحد (`AGENTS.md`)، 4 أسطر إضافة / 10 حذفًا |
-| أسرار | لا يوجد |
-
----
-
-## بطاقة الجلسة — M35-T01: اعتماد هوية المنتج v5.0.0 (قرار مسجّل من المالك)
-
-| الحقل | القيمة |
-|---|---|
-| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| Branch | `fix/m35-t01-version-identity-v5` |
-| Code commit | `5f37814` |
-| Base | main `298b3b3d97` (بعد دمج PR#73 وPR#74) |
-| الحالة | **CODE COMMITTED LOCALLY — بوابات خضراء؛ ينتظر push + PR + CI** |
-| التنفيذ | وكيل مساعد بتكليف مباشر من المالك (2026-08-22)؛ دور المنفّذ الرسمي يبقى لـ LM Arena Agent (§3) |
-
-## ما تغير
-
-اعتماد الهوية 5.0.0 في `__init__.py` و`config.py`، وعنوان النوتبوك v5.0 عبر `notebook_cells.py` مع إعادة توليد النسختين و`colab_cells.json` بالمولّد الرسمي، وتحديث عقد العنوان في `test_notebook.py`. تثبيت اسم الأرتيفكت `teledrive_v4.5.zip` كما هو عمدًا (أصل منشور تستخدمه بوابة Cell-1 والـ CI؛ قرار release منفصل). صُحّحت كذلك حالة M34-T01 في الذاكرة إلى MERGED بعد دمج PR#74.
-
-## الأدلة
-
-| الفحص | النتيجة |
-|---|---|
-| pytest كامل | `746 passed` (مطابق للـ baseline) |
-| compileall | OK |
-| launcher | `51/51 ready actions resolve` |
-| notebook check | متطابق بعد إعادة التوليد |
-
-لم تدخل أسرار. لم يُنفذ اختبار Colab جديد؛ لا ادعاء Colab-ready أو Complete.
-
-## الخطوة التالية
-
-Push الـ branch، فتح PR، مراجعة CI، الدمج. إعادة نشر الحزمة بقرار منفصل بيد المالك.
-
----
-
-## بطاقة الجلسة — M34-T01: إصلاح فحص القرص وحارس Drive المُركّب عبر المنصات
-
-| الحقل | القيمة |
-|---|---|
-| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| PR | (يُسجَّل بعد الفتح) |
-| Base SHA | `ffadd2427d7b1ca9f3e9a93805419b4bf2b829c1` (main، مطابق لـorigin) |
-| Branch | `fix/m34-t01-cross-platform-disk-and-mount-guards` |
-| Result SHA | `c85ee9f` (يُحدَّث بعد أي تعديل توثيقي) |
-| الحالة | **CODE GATES PASSED LOCALLY (Windows/Python 3.11) — لا ادعاء Colab-ready** |
-| النطاق | `python-package/teledrive/utils.py` + `python-package/teledrive/config.py` فقط |
-
-## المشكلة الجذرية
-
-فحص محلي على Windows كشف عيبين حقيقيين عبر المنصات لم تظهرا في CI (Linux):
-
-1. **`safe_disk_free()` (`utils.py`)** كانت تستخدم `os.statvfs` — غير موجود على Windows. الـ`except` العمياء كانت تبتلع `AttributeError` وتعيد `0` ⇒ كل نقل يفشل في preflight القرص (`disk_full`) وتبقى الصفوف `Pending` إلى ما لا نهاية على أي بيئة Windows. الإصلاح: fallback إلى `shutil.disk_usage().free` الموجود على كل المنصات.
-
-2. **`is_mounted_drive()` (`config.py`)** كانت تستخدم `str(Path(path))` الذي يحوّل `/` إلى `\` على Windows ⇒ بادئات `/content/drive` لم تعد تتطابق أبدًا ⇒ حارس `MountedRootError` («ممنوع SQLite على Drive/FUSE» §1) كان ميتًا تمامًا خارج POSIX. الإصلاح: `Path(path).as_posix()`.
-
-## الأدلة
-
-| الفحص | قبل | بعد |
-|---|---|---|
-| pytest كامل (Windows, Python 3.11) | `19 failed, 727 passed` | **`746 passed`** |
-| compileall | OK | OK |
-| launcher --check | 51/51 | 51/51 |
-| notebook check + cmp | متطابقان | متطابقان |
-
-- إعادة إنتاج مباشرة: `safe_disk_free('.')` أعادت `0` قبل الإصلاح و`~26 GB` بعده.
-- إعادة إنتاج مباشرة: `_process()` صنّفت الصف `disk_full` ورفضت آلة الحالات `Pending→Failed` صامتة (`try_transition → None`) فبقي الصف `Pending`.
-- لم يُعدَّل أي ملف محمي: لا دستور، لا اعتماديات، لا نوتبوك أو مولّده، لا تاريخ Git.
-- فحص أسرار: التغييران منطق بحت بلا أي قيم أو مفاتيح.
-
-## حدود صادقة
-
-الاختبارات نجحت على Windows محليًا؛ CI الأخضر الرسمي يتأكد بعد دمج الـPR. لا اختبار Colab جديد نُفذ. الحالة تبقى Code-complete candidate لهذا الإصلاح.
-
----
-
-## بطاقة الجلسة — M33-T01: مواءمة README الجذر مع الدستور v5.0.0
-
-| الحقل | القيمة |
-|---|---|
-| المستودع | `body199-cmyk/drive-buddy-3579bf74` |
-| PR | [#73](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/73) — MERGED |
-| Base SHA | `ffadd2427d7b1ca9f3e9a93805419b4bf2b829c1` |
-| Result SHA | (سجّل بعد الدمج) |
-| الحالة | **MERGED + CI-PASSED — تعديل توثيقي فقط؛ لا ادعاء Colab-ready** |
-| النطاق | README.md + docs/ (KNOWN_ISSUES #67، TODO M33-T01، CHANGELOG) |
-
-## ما تغير
-حُدِّث README الجذر ليتطابق مع الدستور v5.0.0: (1) الهوية من v4.5 إلى v5.0.0 مع الإشارة لموروث المنتج v4.5.0؛ (2) تصحيح ادعاء M15-T01 «متبقية» (مدموجة فعليًا في main؛ التحقق الحي بيد المالك)؛ (3) استبدال قسم «المزامنة مع Lovable» بقسم «التطوير والحوكمة». لم تُمسَّ أسماء الـartifacts المنشورة.
-حُدِّث README الجذر ليتطابق مع الدستور v5.0.0: (1) الهوية من v4.5 إلى v5.0.0 مع الإشارة لموروث المنتج v4.5.0؛ (2) تصحيح ادعاء M15-T01 «متبقية» (مدموجة فعليًا في main؛ التحقق الحي بيد المالك)؛ (3) استبدال قسم «المزامنة مع Lovable» بقسم «التطوير والحوكمة» يقرّ بخروج Lovable النهائي (§3) وأن المنفّذ الوحيد LM Arena Agent، ويحيل إلى REPOSITORY_REGISTRY. لم تُمسَّا أسماء الـartifacts المنشورة (`teledrive_v4.5.zip`، `pkg-2026.08.09-m15t07`).
-
-## الأدلة
-| الفحص | النتيجة |
-|---|---|
-| git diff --stat | `README.md | 10 +++++-----` + 3 ملفات docs |
-| عدم بقاء ذكر Lovable كمنفّذ في README | ✅ (يظهر فقط كإقرار بخروجه) |
-| بقاء أسماء الـartifacts دون مس | ✅ |
-| عدم تعديل الكود/النوت‌بوك/الاعتماديات | ✅ |
-| فحص أسرار | لا أسرار في التغييرات |
-
-لم تدخل أسرار أو ملفات جلسات أو OAuth إلى Git. التغيير توثيقي بحت ولا يمس سلوك المنتج.
-
----
-
-## بطاقة الجلسة — M32-T01: استبدال ذري لجلسة Telegram التالفة
-
-| الحقل | القيمة |
-|---|---|
-| PR | [#71](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/71) — MERGED عند `5255889c` |
-| النشر | [workflow #32327688915](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32327688915) — SUCCESS |
-| الحالة | MERGED + CI-PASSED + package-published؛ Colab recovery pending |
-
-زوج Vault بإصدار وmanifest نشط؛ `AuthKeyDuplicatedError` يعود لتسجيل جديد مع تنظيف محلي فقط وإبقاء زوج Drive القديم حتى نجاح دخول مصرح به.
+مراجعة نهائية للفرق والأسرار، ثم commit وpush وPR ودمج M39 وفق تفويض المالك الحالي، وبعد CI أخضر فقط. لا يلزم Publish current package لأن الإصلاح يقع داخل bundle React الذي تحتاجه Cell 1 لتحديث Colab؛ لذلك بعد الدمج يجب نشر الحزمة الحالية قبل استخدام Colab.

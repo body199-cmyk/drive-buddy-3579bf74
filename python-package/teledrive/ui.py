@@ -277,7 +277,11 @@ def _render_shell(
             if lang == "ar"
             else "Secure Telegram authentication and fallback controls"
         )
-        with gr.Accordion(fallback_label, open=False):
+        with gr.Accordion(
+            fallback_label,
+            open=False,
+            elem_id="td-secure-telegram-auth",
+        ):
             # ===== Top status bar (real chips from ctx, styled HTML) =====
             with gr.Row(elem_classes=["td-topbar"]):
                 gr.HTML(
