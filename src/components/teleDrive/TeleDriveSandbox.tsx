@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
@@ -50,6 +50,13 @@ import {
 
 /** Quiet auto-refresh heartbeat: how often the live snapshot is polled while a transfer is moving. */
 const AUTO_REFRESH_INTERVAL_MS = 1000;
+
+/**
+ * Quiet window after a control-action round-trip completes before the
+ * heartbeat polls again — gives Python time to persist the action's effect so
+ * the next snapshot cannot be older than what the user just did.
+ */
+const HEARTBEAT_SETTLE_MS = 300;
 
 type Notice = { kind: "info" | "success" | "warning" | "error"; text: string } | null;
 type RunAction = <T = unknown>(
@@ -134,7 +141,7 @@ function openSecureTelegramAuth(documentRef: Pick<Document, "getElementById"> = 
 
 function ActionButton({
   actionId,
-  busyAction,
+  pendingActions,
   live,
   className = "td-button td-button-secondary",
   disabled = false,
@@ -142,14 +149,16 @@ function ActionButton({
   children,
 }: {
   actionId: string;
-  busyAction: string | null;
+  /** In-flight action ids: only the button that owns a pending action blocks itself. */
+  pendingActions: ReadonlySet<string>;
   live: boolean;
   className?: string;
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
-  const blocked = !live || disabled || busyAction !== null;
+  const pending = pendingActions.has(actionId);
+  const blocked = !live || disabled || pending;
   return (
     <button
       type="button"
@@ -159,9 +168,7 @@ function ActionButton({
       title={!live ? "Backend bridge unavailable" : undefined}
       onClick={onClick}
     >
-      {busyAction === actionId ? (
-        <RefreshCw className="td-spin" size={15} aria-hidden="true" />
-      ) : null}
+      {pending ? <RefreshCw className="td-spin" size={15} aria-hidden="true" /> : null}
       {children}
     </button>
   );
@@ -224,13 +231,13 @@ function ConnectionSection({
   state,
   language,
   live,
-  busyAction,
+  pendingActions,
   run,
 }: {
   state: LiveUiState | null;
   language: BridgeLanguage;
   live: boolean;
-  busyAction: string | null;
+  pendingActions: ReadonlySet<string>;
   run: RunAction;
 }) {
   const [parentId, setParentId] = useState("root");
@@ -286,7 +293,7 @@ function ConnectionSection({
             <div className="td-button-row">
               <ActionButton
                 actionId="telegram.status"
-                busyAction={busyAction}
+                pendingActions={pendingActions}
                 live={live}
                 onClick={() => void run("telegram.status")}
               >
@@ -295,7 +302,7 @@ function ConnectionSection({
               </ActionButton>
               <ActionButton
                 actionId="telegram.logout"
-                busyAction={busyAction}
+                pendingActions={pendingActions}
                 live={live}
                 className="td-button td-button-danger"
                 onClick={() => void run("telegram.logout")}
@@ -320,7 +327,7 @@ function ConnectionSection({
             <div className="td-button-row">
               <ActionButton
                 actionId="drive.connect"
-                busyAction={busyAction}
+                pendingActions={pendingActions}
                 live={live}
                 className="td-button td-button-primary"
                 onClick={() => void run("drive.connect")}
@@ -329,7 +336,7 @@ function ConnectionSection({
               </ActionButton>
               <ActionButton
                 actionId="drive.reconnect"
-                busyAction={busyAction}
+                pendingActions={pendingActions}
                 live={live}
                 onClick={() => void run("drive.reconnect")}
               >
@@ -337,7 +344,7 @@ function ConnectionSection({
               </ActionButton>
               <ActionButton
                 actionId="drive.refresh_quota"
-                busyAction={busyAction}
+                pendingActions={pendingActions}
                 live={live}
                 onClick={() => void run("drive.refresh_quota")}
               >
@@ -365,7 +372,7 @@ function ConnectionSection({
             </label>
             <ActionButton
               actionId="drive.list_folders"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               disabled={(state?.drive?.status?.toLowerCase?.() ?? "") !== "connected"}
               onClick={() => void listFolders()}
@@ -391,7 +398,7 @@ function ConnectionSection({
             </label>
             <ActionButton
               actionId="drive.select_folder"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               disabled={!folderId}
               onClick={() => void run("drive.select_folder", { folderId })}
@@ -410,7 +417,7 @@ function ConnectionSection({
             </label>
             <ActionButton
               actionId="drive.create_folder"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               disabled={!folderName.trim()}
               onClick={() => void run("drive.create_folder", { name: folderName, parentId })}
@@ -428,7 +435,7 @@ function AnalyzeSection({
   state,
   language,
   live,
-  busyAction,
+  pendingActions,
   run,
   onNavigate,
   onValidationError,
@@ -436,7 +443,7 @@ function AnalyzeSection({
   state: LiveUiState | null;
   language: BridgeLanguage;
   live: boolean;
-  busyAction: string | null;
+  pendingActions: ReadonlySet<string>;
   run: RunAction;
   onNavigate(page: Page): void;
   onValidationError(message: string): void;
@@ -564,7 +571,7 @@ function AnalyzeSection({
         </label>
         <ActionButton
           actionId="analyze.run"
-          busyAction={busyAction}
+          pendingActions={pendingActions}
           live={live}
           className="td-button td-button-primary td-align-end"
           onClick={() => void analyze()}
@@ -655,7 +662,7 @@ function AnalyzeSection({
         <div className="td-button-row">
           <ActionButton
             actionId="analyze.select_all"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("analyze.select_all")}
           >
@@ -663,7 +670,7 @@ function AnalyzeSection({
           </ActionButton>
           <ActionButton
             actionId="analyze.clear_selection"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("analyze.clear_selection")}
           >
@@ -671,7 +678,7 @@ function AnalyzeSection({
           </ActionButton>
           <ActionButton
             actionId="analyze.enqueue_selected"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             disabled={blockReason !== null}
             className="td-button td-button-primary"
@@ -706,7 +713,7 @@ function AnalyzeSection({
         </label>
         <ActionButton
           actionId="analyze.select_range"
-          busyAction={busyAction}
+          pendingActions={pendingActions}
           live={live}
           disabled={!selectionFrom || !selectionTo}
           onClick={() =>
@@ -742,7 +749,7 @@ function AnalyzeSection({
                     <td data-label="Select">
                       <ActionButton
                         actionId="analyze.toggle_row"
-                        busyAction={busyAction}
+                        pendingActions={pendingActions}
                         live={live}
                         disabled={!selectable}
                         className="td-link-button"
@@ -784,19 +791,22 @@ function QueueSection({
   state,
   language,
   live,
-  busyAction,
+  pendingActions,
   run,
 }: {
   state: LiveUiState | null;
   language: BridgeLanguage;
   live: boolean;
-  busyAction: string | null;
+  pendingActions: ReadonlySet<string>;
   run: RunAction;
 }) {
   const [stopConfirm, setStopConfirm] = useState(false);
   const rows = state?.queue ?? [];
-  const metrics = queueMetrics(rows);
-  const sessions = groupQueueSessions(rows);
+  // Memoized derivations: re-renders that don't change the queue (notices,
+  // confirm dialogs, per-button pending flips) reuse the same row objects and
+  // session groups instead of rebuilding them each render.
+  const metrics = useMemo(() => queueMetrics(rows), [rows]);
+  const sessions = useMemo(() => groupQueueSessions(rows), [rows]);
   const stopOnly = () => {
     setStopConfirm(false);
     void run("queue.stop");
@@ -851,7 +861,7 @@ function QueueSection({
         <div className="td-button-row td-transfer-actions-primary">
           <ActionButton
             actionId="queue.start_selected"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             className="td-button td-button-primary"
             onClick={() => void run("queue.start_selected")}
@@ -861,7 +871,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.pause"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("queue.pause")}
           >
@@ -870,7 +880,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.resume"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("queue.resume")}
           >
@@ -879,7 +889,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.stop"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             className="td-button td-button-danger"
             onClick={() => setStopConfirm(true)}
@@ -891,7 +901,7 @@ function QueueSection({
         <div className="td-button-row td-transfer-actions-secondary">
           <ActionButton
             actionId="queue.retry_failed"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("queue.retry_failed")}
           >
@@ -900,7 +910,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.refresh"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("queue.refresh")}
           >
@@ -909,7 +919,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.clear_completed"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             onClick={() => void run("queue.clear_completed")}
           >
@@ -917,7 +927,7 @@ function QueueSection({
           </ActionButton>
           <ActionButton
             actionId="queue.clear_incomplete"
-            busyAction={busyAction}
+            pendingActions={pendingActions}
             live={live}
             className="td-button td-button-danger"
             onClick={() => void run("queue.clear_incomplete")}
@@ -938,7 +948,7 @@ function QueueSection({
           <div className="td-button-row">
             <ActionButton
               actionId="queue.stop"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={stopOnly}
             >
@@ -946,7 +956,7 @@ function QueueSection({
             </ActionButton>
             <ActionButton
               actionId="queue.clear_incomplete"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               className="td-button td-button-danger"
               onClick={() => void stopAndClear()}
@@ -1034,7 +1044,7 @@ function QueueSection({
                           >
                             <ActionButton
                               actionId="queue.pause_item"
-                              busyAction={busyAction}
+                              pendingActions={pendingActions}
                               live={live}
                               className="td-link-button"
                               onClick={() => void run("queue.pause_item", { itemId: row.id })}
@@ -1043,7 +1053,7 @@ function QueueSection({
                             </ActionButton>
                             <ActionButton
                               actionId="queue.resume_item"
-                              busyAction={busyAction}
+                              pendingActions={pendingActions}
                               live={live}
                               className="td-link-button"
                               onClick={() => void run("queue.resume_item", { itemId: row.id })}
@@ -1052,7 +1062,7 @@ function QueueSection({
                             </ActionButton>
                             <ActionButton
                               actionId="queue.retry_item"
-                              busyAction={busyAction}
+                              pendingActions={pendingActions}
                               live={live}
                               className="td-link-button"
                               onClick={() => void run("queue.retry_item", { itemId: row.id })}
@@ -1077,12 +1087,12 @@ function QueueSection({
 function LogsSection({
   language,
   live,
-  busyAction,
+  pendingActions,
   run,
 }: {
   language: BridgeLanguage;
   live: boolean;
-  busyAction: string | null;
+  pendingActions: ReadonlySet<string>;
   run: RunAction;
 }) {
   const [query, setQuery] = useState("");
@@ -1127,7 +1137,7 @@ function LogsSection({
         </label>
         <ActionButton
           actionId="logs.search"
-          busyAction={busyAction}
+          pendingActions={pendingActions}
           live={live}
           onClick={() => void load("logs.search")}
         >
@@ -1136,7 +1146,7 @@ function LogsSection({
         </ActionButton>
         <ActionButton
           actionId="logs.refresh"
-          busyAction={busyAction}
+          pendingActions={pendingActions}
           live={live}
           onClick={() => void load("logs.refresh")}
         >
@@ -1169,13 +1179,13 @@ function SettingsSection({
   state,
   language,
   live,
-  busyAction,
+  pendingActions,
   run,
 }: {
   state: LiveUiState | null;
   language: BridgeLanguage;
   live: boolean;
-  busyAction: string | null;
+  pendingActions: ReadonlySet<string>;
   run: RunAction;
 }) {
   const [concurrency, setConcurrency] = useState(state?.concurrency ?? 2);
@@ -1217,7 +1227,7 @@ function SettingsSection({
             />
             <ActionButton
               actionId="settings.set_concurrency"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("settings.set_concurrency", { value: concurrency })}
             >
@@ -1242,7 +1252,7 @@ function SettingsSection({
           <div className="td-segment">
             <ActionButton
               actionId="settings.toggle_language"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               className="td-link-button"
               onClick={() => void run("settings.toggle_language")}
@@ -1265,7 +1275,7 @@ function SettingsSection({
           <div className="td-button-row">
             <ActionButton
               actionId="settings.set_theme"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("settings.set_theme", { theme: "light" })}
             >
@@ -1283,7 +1293,7 @@ function SettingsSection({
           <div className="td-button-row">
             <ActionButton
               actionId="recovery.restore"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("recovery.restore")}
             >
@@ -1292,7 +1302,7 @@ function SettingsSection({
             </ActionButton>
             <ActionButton
               actionId="maintenance.checkpoint"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("maintenance.checkpoint")}
             >
@@ -1308,7 +1318,7 @@ function SettingsSection({
           <div className="td-button-row">
             <ActionButton
               actionId="export.build_zip"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("export.build_zip")}
             >
@@ -1317,7 +1327,7 @@ function SettingsSection({
             </ActionButton>
             <ActionButton
               actionId="export.colab_cells"
-              busyAction={busyAction}
+              pendingActions={pendingActions}
               live={live}
               onClick={() => void run("export.colab_cells")}
             >
@@ -1337,7 +1347,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<Page>("connection");
-  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
   const latestRequest = useRef(new Map<string, string>());
   const live = bridge.isLive();
@@ -1350,37 +1360,87 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   // exactly like pressing Refresh, but without flashing notices or busy states.
   const liveStateRef = useRef<LiveUiState | null>(null);
   const pollInFlight = useRef(false);
+  /** Mirror of pendingActions for interval callbacks (never a stale closure). */
+  const pendingRef = useRef<ReadonlySet<string>>(pendingActions);
+  /** Timestamp of the last completed control round-trip; gates the next tick. */
+  const lastControlSettledAt = useRef(0);
+  const postRefreshScheduled = useRef(false);
+  const postRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     liveStateRef.current = liveState;
   }, [liveState]);
+  useEffect(() => {
+    pendingRef.current = pendingActions;
+  }, [pendingActions]);
+
+  /**
+   * One silent verification poll — shared by the heartbeat tick and the
+   * post-action refresh. Silent: never surfaces notices or busy spinners.
+   */
+  const issueSilentRefresh = useCallback(() => {
+    // Background tab: skip; the next visible tick catches up.
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (pollInFlight.current) return;
+    const snapshot = liveStateRef.current;
+    if (!snapshot) return;
+    pollInFlight.current = true;
+    void bridge
+      .request({
+        requestId: newRequestId(),
+        actionId: "queue.refresh",
+        payload: {},
+        language: snapshot.language,
+      })
+      .then((response) => {
+        if (response.state) setLiveState(response.state);
+      })
+      .catch(() => {
+        // Silent heartbeat: a transient bridge failure must not surface as a
+        // user-facing notice or block the next tick.
+      })
+      .finally(() => {
+        pollInFlight.current = false;
+      });
+  }, [bridge]);
+
+  /**
+   * After a successful control action, schedule exactly ONE silent refresh
+   * after the settle window so the panel confirms the action's server-side
+   * effect without waiting for the next tick. Debounced: at most one trailing
+   * poll no matter how many actions complete back-to-back.
+   */
+  const schedulePostActionRefresh = useCallback(() => {
+    if (postRefreshScheduled.current) return;
+    postRefreshScheduled.current = true;
+    postRefreshTimer.current = setTimeout(() => {
+      postRefreshScheduled.current = false;
+      issueSilentRefresh();
+    }, HEARTBEAT_SETTLE_MS);
+  }, [issueSilentRefresh]);
+
+  useEffect(
+    () => () => {
+      if (postRefreshTimer.current !== null) clearTimeout(postRefreshTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!live) return;
     const interval = setInterval(() => {
+      // Background tab: skip this tick entirely.
+      if (typeof document !== "undefined" && document.hidden) return;
+      // Never race a control: while any button awaits its real response,
+      // polling would only invite out-of-order snapshots.
+      if (pendingRef.current.size > 0) return;
+      // Let the backend settle right after a control round-trip finished.
+      if (Date.now() - lastControlSettledAt.current < HEARTBEAT_SETTLE_MS) return;
       const snapshot = liveStateRef.current;
       if (!snapshot || !hasActiveTransfer(snapshot)) return;
-      if (pollInFlight.current) return;
-      pollInFlight.current = true;
-      void bridge
-        .request({
-          requestId: newRequestId(),
-          actionId: "queue.refresh",
-          payload: {},
-          language: snapshot.language,
-        })
-        .then((response) => {
-          if (response.state) setLiveState(response.state);
-        })
-        .catch(() => {
-          // Silent heartbeat: a transient bridge failure must not surface as a
-          // user-facing notice or block the next tick.
-        })
-        .finally(() => {
-          pollInFlight.current = false;
-        });
+      issueSilentRefresh();
     }, AUTO_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [bridge, live]);
+  }, [live, issueSilentRefresh]);
 
   const run: RunAction = async <T,>(actionId: string, payload: Record<string, unknown> = {}) => {
     if (!bridge.isLive()) {
@@ -1389,7 +1449,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     }
     const requestId = newRequestId();
     latestRequest.current.set(actionId, requestId);
-    setBusyAction(actionId);
+    setPendingActions((current) => new Set(current).add(actionId));
     try {
       const response = await bridge.request<T>({
         requestId,
@@ -1423,6 +1483,10 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
                 "Action completed through Python.",
               )),
       });
+      // Success: schedule exactly one silent verification refresh so the UI
+      // confirms the action's persisted effect (never an optimistic invented
+      // success — this poll only replaces state with real server truth).
+      schedulePostActionRefresh();
       return response;
     } catch (error) {
       if (latestRequest.current.get(actionId) !== requestId) return null;
@@ -1436,7 +1500,13 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       return null;
     } finally {
       if (latestRequest.current.get(actionId) === requestId) {
-        setBusyAction(null);
+        setPendingActions((current) => {
+          if (!current.has(actionId)) return current;
+          const next = new Set(current);
+          next.delete(actionId);
+          return next;
+        });
+        lastControlSettledAt.current = Date.now();
       }
     }
   };
@@ -1447,7 +1517,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         state={liveState}
         language={language}
         live={live}
-        busyAction={busyAction}
+        pendingActions={pendingActions}
         run={run}
       />
     ),
@@ -1456,7 +1526,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         state={liveState}
         language={language}
         live={live}
-        busyAction={busyAction}
+        pendingActions={pendingActions}
         run={run}
         onNavigate={setPage}
         onValidationError={(text) => setNotice({ kind: "error", text })}
@@ -1467,17 +1537,17 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         state={liveState}
         language={language}
         live={live}
-        busyAction={busyAction}
+        pendingActions={pendingActions}
         run={run}
       />
     ),
-    logs: <LogsSection language={language} live={live} busyAction={busyAction} run={run} />,
+    logs: <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />,
     settings: (
       <SettingsSection
         state={liveState}
         language={language}
         live={live}
-        busyAction={busyAction}
+        pendingActions={pendingActions}
         run={run}
       />
     ),

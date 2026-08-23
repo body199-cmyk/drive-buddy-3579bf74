@@ -514,3 +514,140 @@ test("28 — queue layout keeps desktop controls visible and becomes a labeled m
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*?\.td-session \.td-queue-row \{/);
   assert.match(css, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 });
+
+// ---------------------------------------------------------------------------
+// M40-T01 — heartbeat vs control race (out-of-order bridge resolution)
+// ---------------------------------------------------------------------------
+
+test("29 — stale heartbeat refresh cannot clobber a newer control response", async () => {
+  const host = hostWith(
+    JSON.stringify({
+      requestId: "initial",
+      actionId: "bridge.snapshot",
+      status: "ok",
+      state: emptyState,
+    }),
+  );
+  const bridge = new GradioTeleDriveBridge(host);
+  const engines = [];
+  bridge.subscribe((state) => engines.push(state.engine));
+
+  // Heartbeat poll leaves FIRST: its (older) snapshot is in flight.
+  const heartbeat = bridge.request({
+    requestId: "hb-1",
+    actionId: "queue.refresh",
+    payload: {},
+    language: "ar",
+  });
+  // Control action issued AFTER the poll started, yet resolves BEFORE it.
+  const control = bridge.request({
+    requestId: "ctrl-1",
+    actionId: "queue.pause",
+    payload: {},
+    language: "ar",
+  });
+  bridge.receive({
+    requestId: "ctrl-1",
+    actionId: "queue.pause",
+    status: "ok",
+    message: "Action completed",
+    state: { ...emptyState, engine: "paused" },
+  });
+  await control;
+
+  // The OLDER heartbeat response lands LAST — it must not regress the UI.
+  bridge.receive({
+    requestId: "hb-1",
+    actionId: "queue.refresh",
+    status: "ok",
+    state: { ...emptyState, engine: "running" },
+  });
+  const heartbeatResponse = await heartbeat;
+  bridge.dispose();
+
+  // Causal proof: the paused state issued later survives the late stale poll.
+  assert.deepEqual(engines, ["idle", "paused"]);
+  // The caller's promise still resolves ok — only the stale state is dropped.
+  assert.equal(heartbeatResponse.status, "ok");
+  assert.equal(heartbeatResponse.state, undefined);
+});
+
+test("30 — fresher responses still update state when arrival respects issue order", async () => {
+  const host = hostWith(
+    JSON.stringify({
+      requestId: "initial",
+      actionId: "bridge.snapshot",
+      status: "ok",
+      state: emptyState,
+    }),
+  );
+  const bridge = new GradioTeleDriveBridge(host);
+  const engines = [];
+  bridge.subscribe((state) => engines.push(state.engine));
+
+  const poll = bridge.request({
+    requestId: "hb-a",
+    actionId: "queue.refresh",
+    payload: {},
+    language: "ar",
+  });
+  bridge.receive({
+    requestId: "hb-a",
+    actionId: "queue.refresh",
+    status: "ok",
+    state: { ...emptyState, engine: "running" },
+  });
+  await poll;
+
+  const control = bridge.request({
+    requestId: "ctrl-a",
+    actionId: "queue.pause",
+    payload: {},
+    language: "ar",
+  });
+  bridge.receive({
+    requestId: "ctrl-a",
+    actionId: "queue.pause",
+    status: "ok",
+    message: "Action completed",
+    state: { ...emptyState, engine: "paused" },
+  });
+  await control;
+  bridge.dispose();
+
+  // In-order arrivals must keep applying — the gate drops only true stragglers.
+  assert.deepEqual(engines, ["idle", "running", "paused"]);
+});
+
+test("31 — heartbeat suppresses during controls, hidden tabs, settle window; one silent refresh follows success", async () => {
+  const component = await readFile(paths.component, "utf8");
+  // Settle window (~300ms) after any control round-trip before polling again.
+  assert.match(component, /HEARTBEAT_SETTLE_MS\s*=\s*300/);
+  // Hidden tabs never tick the heartbeat.
+  assert.match(component, /document\.hidden/);
+  // Never poll while any control action is still in flight.
+  assert.match(component, /pendingRef\.current\.size\s*>\s*0/);
+  // Automatic ticks honor the settle window since the last control completion.
+  assert.match(component, /lastControlSettledAt\.current[^;]*<\s*HEARTBEAT_SETTLE_MS/);
+  // Exactly ONE silent verification refresh is scheduled after a success.
+  assert.match(component, /schedulePostActionRefresh/);
+  assert.match(component, /postRefreshScheduled\.current\s*=\s*true/);
+  // The silent heartbeat still replaces the whole live snapshot (kept purpose).
+  assert.match(component, /if \(response\.state\) setLiveState\(response\.state\)/);
+});
+
+test("32 — per-button pending replaces the global disable; row keys stay stable", async () => {
+  const component = await readFile(paths.component, "utf8");
+  // Pending state is a set of in-flight action ids; only the busy button blocks.
+  assert.match(component, /useState<ReadonlySet<string>>/);
+  assert.match(component, /pendingActions\.has\(actionId\)/);
+  // The old global disable dropped clicks on unrelated buttons whenever ANY
+  // action was in flight — it must be gone.
+  assert.doesNotMatch(component, /busyAction !== null/);
+  // Mechanism (a) regression lock: domain-stable keys so re-renders never
+  // remount rows under the user's cursor.
+  assert.match(component, /key=\{row\.id\}/);
+  assert.match(component, /key=\{session\.key\}/);
+  assert.match(component, /key=\{candidate\.sourceId\}/);
+  assert.match(component, /key=\{folder\.id\}/);
+});
