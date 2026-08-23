@@ -286,8 +286,59 @@ test("18 — bundled React panel uses Gradio value/submit transport only", async
   assert.match(panel, /class ReactPanel\(gr\.HTML\)/);
   assert.match(panel, /trigger\('submit'\)/);
   assert.match(panel, /watch\('value'/);
+  assert.match(panel, /__teledriveReactPanel/);
   assert.ok(asset.length > 10_000);
   assert.deepEqual([...asset.subarray(0, 2)], [0x1f, 0x8b]);
+});
+
+test("18b — panel lifecycle owns exactly one live bridge across Gradio remounts", async () => {
+  const panel = await readFile(paths.panel, "utf8");
+  const onLoad = panel.match(/_PANEL_ON_LOAD = _PANEL_JS \+ r\"\"\"([\s\S]*?)\"\"\"/);
+  assert.ok(onLoad, "expected the executable js_on_load body");
+
+  const element = {};
+  const mounted = [];
+  const runOnLoad = new Function(
+    "element",
+    "props",
+    "trigger",
+    "watch",
+    "TeleDriveGradioPanel",
+    onLoad[1],
+  );
+  const panelFactory = {
+    mount: () => {
+      const instance = {
+        disposed: false,
+        receive: () => {},
+        dispose() {
+          this.disposed = true;
+        },
+      };
+      mounted.push(instance);
+      return instance;
+    },
+  };
+  const run = () =>
+    runOnLoad(
+      element,
+      { value: "" },
+      () => {},
+      () => {},
+      panelFactory,
+    );
+
+  const firstCleanup = run();
+  const secondCleanup = run();
+  assert.equal(mounted.length, 2);
+  assert.equal(mounted[0].disposed, true, "remount disposes the prior bridge");
+  assert.equal(mounted[1].disposed, false);
+
+  firstCleanup();
+  assert.equal(mounted[1].disposed, false, "stale cleanup cannot dispose the new bridge");
+  secondCleanup();
+  assert.equal(mounted[1].disposed, true, "current cleanup disposes its own bridge");
+  assert.equal(element.__teledriveReactPanel, undefined);
 });
 
 test("19 — nested LiveUiState fields use optional chaining (null safety)", async () => {

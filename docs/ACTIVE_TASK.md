@@ -2,24 +2,26 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M37-T02` |
-| العنوان | تحقق حي من أزرار التحكم في الواجهة (طلب المالك: «جاهز للاستعمال وبالأذات أزرار التحكم») |
-| الحالة | **LIVE-VERIFIED (local Windows) — توثيق فقط؛ ينتظر push + PR + CI** |
-| Branch | `fix/m37-t02-ui-controls-verification` (base: main `60f8246`) |
+| TASK ID | `M38-T01` |
+| العنوان | إصلاح إعادة تركيب جسر React–Gradio في Colab ومنع بقاء واجهة مرتبطة بجسر مغلق |
+| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED + PROXY-VERIFIED**؛ ينتظر commit/PR/CI/merge/publish |
+| Branch | `fix/m38-t01-colab-bridge-remount` (base: main `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9`) |
 
-## الإثبات المنفذ
+## النطاق المثبت
 
-1. **سيرفر حي محليًا** (`teledrive_launcher.py` بلا `--share`): bootstrap سليم · HTTP 200 · binder أكمل: **51 action kinds wired (242 controls) — صفر معطلة/مخفية**.
-2. **نقرات حية موثقة في سجل السيرفر** (من متصفح فعلي): `settings.set_concurrency`، `settings.set_theme` ×2، `settings.toggle_language` ×2 — كلها انتهت بـ`ok`.
-3. **استدعاء مباشر للأكشنات الـ51 الجاهزة بنفس مسار الزرار** (`Handlers.call`):
-   - 30 PASS بدون وسائط + 7 PASS بوسائطها الحقيقية (بما فيها رفض concurrency=999 خارج المدى — حارس يعمل).
-   - 14 خطأ حالة **صحيح بالتصميم** أثناء عدم الاتصال (`telegram is not authorized` / `drive is not connected` / `nothing selected`…) — حراس آلة الحالات ترد نظيفًا ولا تنهار.
-   - 2 خاصّان بـColab عمدًا: `drive.connect/reconnect` عبر `google.colab.auth` الأصلية (بوابة Drive الحية منذ PHASE_16).
+1. لا Telegram ولا Drive هما سبب banner `Backend bridge unavailable`: السجل ربط `react.bridge.request` خلفيًا، وحالة Telegram غير المصرح بها يجب أن تبقى حالة واجهة قابلة للاستعمال.
+2. `GradioTeleDriveBridge` لا يعلن unavailable إلا بعد `dispose()`. غلاف `ReactPanel` لم يكن يملك دورة حياة مثيل واحد عند إعادة تركيب Gradio في Colab.
+3. الإصلاح يخزن المثيل على عنصر Gradio، يفك السابق قبل mount، ويعيد cleanup مملوكًا للمثيل الحالي فقط. لم يتغير نقل القيمة الرسمي أو أي API أو جلسة أو نوتبوك.
+4. عقد React الجديد يثبت هذه الملكية والتنظيف؛ أُعيد بناء `panel.bundle.gz` من المصدر.
 
-## الخلاصة الصادقة
+## بوابات منفذة
 
-لا زرار ميت ولا غير موصول؛ كل «فشل» مرصود هو حارس حالة صحيح أو بوابة Colab-by-design. انجماد عابر واحد لتاب الإعدادات على port 7861 لم يتكرر وليس له دليل سجل → لا يُسجل (لا شكوك نظرية).
+`746 passed` · `51/51` launcher · notebook check + cmp PASS · React contracts `27/27` · lint/build PASS. تحقق Gradio 6.20 مع external proxy/root_path بدأ بلوحة حية من دون banner blocked.
 
-## الحدود الصادقة (§17)
+## حد حي صادق
 
-ليس إثبات `Colab-ready`: النقل الفعلي Telegram→Drive يحتاج جلسة Colab حية بيد المالك (M15-T01/M24-T06 مفتوحة). التفصيل: `docs/PHASE_REPORTS/PHASE_M37_T02.md`.
+Cell 1 وCell 2 نجحتا في Colab حقيقي، لكن Cell 3 توقف عند fallback إدخال Telegram لغياب Vault لهذا الحساب؛ لذلك لا يُدعى تحقق Cell 4 أو Colab-ready قبل النشر وإعادة الاختبار.
+
+## نقطة التراجع
+
+إزالة فرع `fix/m38-t01-colab-bridge-remount` أو عكس commit M38؛ لا توجد بيانات حساب أو ملف Drive أو Session ضمن التعديل.
