@@ -1,5 +1,17 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M37-T01] — 2026-08-23
+
+### Changed
+- `release-current.yml`: خطوة النشر لم تعد تحذف الـrelease أو الـtag المنشورين (`gh release delete --cleanup-tag \|\| true` أُزيلت) — مسار idempotent fail-closed: غياب → إنشاء ذري بأصلين؛ وجود بمطابقة → تحديث metadata فقط؛ نقص/اختلاف أصول → فشل صريح والقرار للمالك (§11/§17، KNOWN_ISSUES #70).
+- `release.yml`: تعليق توثيقي يثبت أن قيم v4.5 فيه وصف صادق للأرشيف المثبّت بالبايت ولا تُرفع لـ5.0.0 ما دامت بوابة البايتات نافذة.
+
+### Audit
+- تدقيق خارجي (`gpt-5.6-sol`) أصدر 3 ملاحظات؛ نُفِّذت واحدة بعد التحقق، ورُفضت اثنتان بالأدلة لحماية صدق الـmanifest (§17). التفصيل: `docs/PHASE_REPORTS/PHASE_M37_T01.md`.
+
+### Gates
+- `746 passed` · compileall OK · launcher `51/51` · نوتبوك متطابقة. لا تغيير في حالة Colab-ready/Complete.
+
 ## [M36-T01] — 2026-08-22
 
 ### Changed
