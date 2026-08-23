@@ -6,26 +6,16 @@
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-08-23T14:45Z` |
-| baseline | `main` و`origin/main` عند `5b5d1b219d4cc279b91ece699339bc48054c6ccf` |
-| الفرع | `fix/m41-t01-colab-stale-watcher-bridge` |
-| الحالة | **CODE-COMPLETE CANDIDATE + LOCAL-PROXY-VERIFIED**؛ لا `Colab-ready` أو `Complete` |
+| Updated (UTC) | `2026-08-23T14:55Z` |
+| code commit / merge | `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` → main `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` عبر PR [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87) |
+| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ لا `Colab-ready` ولا `Complete` |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M41_T01_COLAB_BRIDGE_WATCHER_LEASE.md` |
 
-## البلاغ والسبب
+## ما تغير
 
-لقطة المالك تثبت عودة `Backend bridge unavailable`: صفحة React محملة لكن `live=false` وكل الأفعال معطلة. لا تُنسب الرسالة إلى حالة Telegram أو Drive؛ مصدرها bridge disposed.
+لقطة المالك أثبتت عودة `Backend bridge unavailable`: React كان ظاهرًا لكنه يملك bridge دخل `dispose()`، وليس مجرد Telegram أو Drive في حالة غير متصلة. عالج M41 دورة `js_on_load` المتكررة لنفس Gradio host. صار الغلاف يعيد استخدام panel الحي بدل إنشاء مثيل جديد ثم التخلص من bridge قد تكون شجرة React المعروضة ما زالت تستخدمه.
 
-يعالج M41 فجوة lifecycle: يمكن لـGradio/Colab إعادة تنفيذ `js_on_load` لنفس host بينما تبقى شجرة React القديمة معروضة. كان التنفيذ السابق ينشئ bridge جديدًا ويتخلص من القديم؛ عند استمرار React على القديم تظهر الواجهة كاملة بجسر متخلص منه. صار host يعيد استخدام panel الحي، ويحمل lease لكل run، فلا يستطيع watcher أو cleanup قديم تسليم قيمة أو التخلص من bridge الحالي.
-
-## التغيير المحصور
-
-1. `MountedTeleDrivePanel` يكشف `isLive()` فقط؛ لا يغير transport أو action IDs أو payloads.
-2. `react_panel.py` يعيد استخدام owner الحي لنفس عنصر Gradio، ويضيف lease للـwatch والـcleanup.
-3. العقد السلوكي يعيد on-load مرتين لنفس host ويثبت: مثيل واحد، watcher قديم صامت، cleanup قديم غير مؤذٍ، واستبدال فقط بعد dispose فعلي.
-4. أعيد توليد `panel.bundle.gz` و`panel.css.gz` من المصدر.
-
-لا انتقال لأسرار API hash/الهاتف/OTP/2FA أو session إلى React؛ لا تعديل للنوتبوك أو Python handlers أو Drive/Telegram أو session vault.
+يحمل كل on-load الآن **lease** مستقلًا؛ watcher وcleanup من run قديم لا يسلّمان قيمة ولا ينفذان `dispose()` للمالك الحالي. يُنشأ مثيل بديل فقط إذا لم يوجد مالك حي. دالة `isLive()` أضيفت إلى مثيل panel لاستخدام قرار lifecycle فقط. لا أسرار أو action IDs أو payloads أو transport أو handlers أو notebook تغيرت.
 
 ## الأدلة
 
@@ -35,14 +25,22 @@
 | launcher | `51/51 ready actions resolve` |
 | notebook check + cmp | PASS |
 | lint/build | PASS؛ 0 errors و9 warnings baseline |
-| React contracts | `33/33 PASS` |
-| Gradio 6.20 محلي | بدأ `Gradio · Live bridge`، ثم `telegram.status` → `Action completed` |
-| محاكاة Colab محلية | `is_colab=True` وproxy خارجي: bridge حي ثم `telegram.status` عمل بعد restart للبندل |
+| React contracts | `33/33 PASS`؛ عقد M41 يعيد on-load مرتين لنفس host ويثبت lease/watch/cleanup |
+| Gradio 6.20 محلي | `Gradio · Live bridge` ثم `telegram.status` = `Action completed` |
+| محاكاة Colab محلية | `is_colab=True` وproxy خارجي: bridge حي ثم `telegram.status` يعمل بعد إعادة تشغيل البندل |
+| CI الرسمي | PR #87: أربع فحوص SUCCESS |
+| نشر الحزمة | [Publish current TeleDrive package #32646821416](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646821416) SUCCESS؛ manifest وZIP العامان يطابقان merge SHA |
 
-## الحدود وحالة GitHub
+## النشر
 
-لا نملك بعد إعادة إنتاج في Runtime Colab الخاص بالمالك على bundle M41؛ proxy المحلي دليل أقرب وليس إثبات Colab حيًا. لم يحدث Telegram/Drive transfer أو Pause/Resume/Stop حي. لا commit/push/PR/merge/publish حتى الآن لهذه المهمة.
+أول تشغيل [#32646652723](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646652723) بنى كل البوابات ثم توقف fail-closed لاختلاف ZIP السابق (`567414`) عن archive M41 (`567611`). وبالإذن القائم من المالك استُبدل ZIP وmanifest المتطابقان معًا، مع الحفاظ على release/tag. بعد ذلك نجح تشغيل النشر الرسمي #32646821416 والتحقق العام.
+
+الإصدار [`pkg-2026.08.09-m15t07`](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) يشير الآن إلى `bc9fc5f…`، SHA-256 `ab3d3db21f754546bb2e154be56faf0a0315fea7c9cc2a6df639d85db41d1529`، والحجم `567611` bytes.
+
+## الحدود
+
+المحاكاة المحلية ليست Runtime Colab الخاص بالمالك. لم يثبت bundle M41 في Cell 4 المنشور ولم يحدث نقل Telegram/Drive أو Pause/Resume/Stop حي في هذه المهمة؛ لذلك يبقى #71 مفتوحًا، ولا تستخدم `Colab-ready` أو `Complete`.
 
 ## التراجع والخطوة التالية
 
-عكس commit M41 ثم إعادة نشر archive/manifest المطابقين فقط إذا نُشرت الحزمة. الخطوة التالية: تدقيق فرق M41، ثم commit/push/PR/CI/merge والنشر بإذن المالك المسجل، وبعدها اختبار Cell 4 في Colab المنشور إن أمكن.
+عكس merge `bc9fc5f…` للكود، ثم إعادة نشر archive/manifest مطابقين لـSHA سابق إذا لزم تراجع كامل. الخطوة التالية الأدنى: فتح Cell 4 من حزمة M41 المنشورة في Colab والتأكد من ظهور `Gradio · Live bridge` بدل الرسالة، ثم اختبار دورة request واحدة.
