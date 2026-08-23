@@ -2,54 +2,47 @@
 
 > آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
 
-## بطاقة الجلسة — M39-T01: صفوف طابور متجاوبة ووصول آمن لمصادقة Telegram
+## بطاقة الجلسة — M41-T01: حماية bridge من watcher قديم في Colab
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-08-23T05:56Z` |
-| code commit / merge | `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e` → main `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` عبر PR [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ لا `Colab-ready` ولا `Complete` |
-| النطاق | صفوف الطابور المتجاوبة + زر React يفتح Accordion Telegram الآمن الموجود؛ لا منطق نقل/مصادقة/Bridge/نوتبوك/اعتماديات/جلسات |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M39_T01_RESPONSIVE_QUEUE_AUTH_ACCESS.md` |
+| Updated (UTC) | `2026-08-23T14:45Z` |
+| baseline | `main` و`origin/main` عند `5b5d1b219d4cc279b91ece699339bc48054c6ccf` |
+| الفرع | `fix/m41-t01-colab-stale-watcher-bridge` |
+| الحالة | **CODE-COMPLETE CANDIDATE + LOCAL-PROXY-VERIFIED**؛ لا `Colab-ready` أو `Complete` |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M41_T01_COLAB_BRIDGE_WATCHER_LEASE.md` |
 
-## ما تغير
+## البلاغ والسبب
 
-صف الملف على سطح المكتب يظهر الآن كاملًا داخل بطاقة الجلسة: اسم الملف والحالة والتقدم والحجم والتحكم من دون سحب شريط أفقي. عند الهاتف يتحول الصف نفسه إلى بطاقة معنونة مع شبكة أزرار كاملة، من دون تغيير action IDs أو payloads أو handlers.
+لقطة المالك تثبت عودة `Backend bridge unavailable`: صفحة React محملة لكن `live=false` وكل الأفعال معطلة. لا تُنسب الرسالة إلى حالة Telegram أو Drive؛ مصدرها bridge disposed.
 
-أضيف زر **فتح تسجيل Telegram الآمن** إلى React. الزر يستهدف Accordion Gradio الموجود بمعرف `td-secure-telegram-auth` محليًا في DOM فقط؛ لا يرسل bridge action ولا يجمع API hash أو الهاتف أو OTP أو 2FA أو session. هذه القيم تبقى في حقول Gradio الآمنة الأصلية.
+يعالج M41 فجوة lifecycle: يمكن لـGradio/Colab إعادة تنفيذ `js_on_load` لنفس host بينما تبقى شجرة React القديمة معروضة. كان التنفيذ السابق ينشئ bridge جديدًا ويتخلص من القديم؛ عند استمرار React على القديم تظهر الواجهة كاملة بجسر متخلص منه. صار host يعيد استخدام panel الحي، ويحمل lease لكل run، فلا يستطيع watcher أو cleanup قديم تسليم قيمة أو التخلص من bridge الحالي.
+
+## التغيير المحصور
+
+1. `MountedTeleDrivePanel` يكشف `isLive()` فقط؛ لا يغير transport أو action IDs أو payloads.
+2. `react_panel.py` يعيد استخدام owner الحي لنفس عنصر Gradio، ويضيف lease للـwatch والـcleanup.
+3. العقد السلوكي يعيد on-load مرتين لنفس host ويثبت: مثيل واحد، watcher قديم صامت، cleanup قديم غير مؤذٍ، واستبدال فقط بعد dispose فعلي.
+4. أعيد توليد `panel.bundle.gz` و`panel.css.gz` من المصدر.
+
+لا انتقال لأسرار API hash/الهاتف/OTP/2FA أو session إلى React؛ لا تعديل للنوتبوك أو Python handlers أو Drive/Telegram أو session vault.
 
 ## الأدلة
 
 | الفحص | النتيجة |
 |---|---|
-| Python suite | `746 passed` |
+| Python suite | `769 passed` |
 | launcher | `51/51 ready actions resolve` |
-| notebook check + cmp | PASS؛ لا تغيير للنوتبوك |
-| React contracts | `29/29 PASS`؛ عقدا M39 جديدان |
-| lint/build | PASS؛ 0 errors و7 warnings baseline فقط |
-| Surface desktop + phone | عرض كامل بلا تمرير أفقي، وبطاقة 390px مع الأزرار كاملة |
-| Gradio 6.20 محلي حي | زر React فتح Accordion Telegram الأصلي؛ `telegram.status` بعده أعاد `Action completed` |
-| CI الرسمي | PR #83: أربع فحوص SUCCESS |
-| الحزمة العامة | release `pkg-2026.08.09-m15t07` يستهدف `4b490a0`؛ manifest/ZIP العامان SHA `dfc1f133…051ee9` وحجم `561162` bytes |
+| notebook check + cmp | PASS |
+| lint/build | PASS؛ 0 errors و9 warnings baseline |
+| React contracts | `33/33 PASS` |
+| Gradio 6.20 محلي | بدأ `Gradio · Live bridge`، ثم `telegram.status` → `Action completed` |
+| محاكاة Colab محلية | `is_colab=True` وproxy خارجي: bridge حي ثم `telegram.status` عمل بعد restart للبندل |
 
-## النشر
+## الحدود وحالة GitHub
 
-شغّل [Publish current TeleDrive package #32621429061](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32621429061) بوابات البناء بنجاح، ثم رفض حارس M37-T01 استبدال أصل ZIP القائم لاختلاف الحجم؛ هذا فشل fail-closed مقصود وليس فشل بناء. وبالإذن القائم من المالك استُبدل archive وmanifest المتطابقان يدويًا مع تحديث target إلى SHA الدمج، ثم تحقق التنزيل العام من الحجم وSHA وcommit.
+لا نملك بعد إعادة إنتاج في Runtime Colab الخاص بالمالك على bundle M41؛ proxy المحلي دليل أقرب وليس إثبات Colab حيًا. لم يحدث Telegram/Drive transfer أو Pause/Resume/Stop حي. لا commit/push/PR/merge/publish حتى الآن لهذه المهمة.
 
-## حدود صادقة
+## التراجع والخطوة التالية
 
-لم يُدخل أي اعتماد Telegram أو Drive ولم يبدأ نقل أو Pause/Resume في M39. لم يُشغَّل Runtime Colab جديد؛ حد M38 الخاص بإثبات Cell 4 للحزمة المنشورة ما زال قائمًا. كذلك يظل بلاغ المالك عن احتمال تعارض نبض React كل ثانية مع قابلية استعمال Pause/Resume/Stop قضية منفصلة مفتوحة في `KNOWN_ISSUES.md` #72؛ M39 لم يغير heartbeat.
-
-## حالة GitHub
-
-| العملية | الحالة |
-|---|---|
-| Commit | SUCCESS — `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e` |
-| Push | SUCCESS |
-| Pull Request | MERGED — [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83)؛ CI 4/4 SUCCESS |
-| Merge | MERGED — `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` |
-| Publish | SUCCESS يدويًا؛ الأصلان العامان تحققا بايتًا بعد fail-closed workflow |
-
-## نقطة التراجع والخطوة التالية
-
-عكس merge `4b490a0…` فقط يعيد الكود، لكن لا يعيد أصل الحزمة المنشور تلقائيًا؛ إن لزم تراجع كامل يجب إعادة نشر archive/manifest مطابقين لـSHA سابق. الخطوة التالية الصغرى هي اختبار Colab حي قابل للرصد يصل إلى Cell 4 مع الحزمة الحالية، ثم repro نقل حي لمسار Pause/Resume/Stop أثناء نبض الثانية الواحدة قبل أي إصلاح لذلك العيب.
+عكس commit M41 ثم إعادة نشر archive/manifest المطابقين فقط إذا نُشرت الحزمة. الخطوة التالية: تدقيق فرق M41، ثم commit/push/PR/CI/merge والنشر بإذن المالك المسجل، وبعدها اختبار Cell 4 في Colab المنشور إن أمكن.

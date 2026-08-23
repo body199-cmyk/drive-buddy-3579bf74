@@ -1,5 +1,17 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M41-T01] — 2026-08-23 — محلي قبل commit/PR/merge
+
+### Fixed
+- عادت رسالة `Backend bridge unavailable` في لقطة Colab رغم تحميل React كاملًا؛ عولج مسار lifecycle الذي يعيد `js_on_load` لنفس host ثم يترك شجرة React مرتبطة بـbridge دخل `dispose()`.
+- صار الغلاف يعيد استخدام panel الحي بدل التخلص منه، ويضع lease مستقلًا لكل on-load؛ watcher وcleanup من run قديم لا يسلّمان state ولا يقتلان المالك الحالي.
+- `MountedTeleDrivePanel.isLive()` يكشف حالة bridge فقط. لا تغيير في action IDs أو `props.value`/`trigger('submit')` أو Python handlers أو أسرار Telegram/Drive.
+
+### Gates and local verification
+- `769 passed` · launcher `51/51` · notebook check + cmp PASS · React contracts `33/33` · lint/build PASS (0 errors؛ 9 warnings baseline).
+- Gradio 6.20 المحلي ومحاكاة `is_colab=True` خلف proxy: `Gradio · Live bridge` ثم `telegram.status` = `Action completed` بعد إعادة تشغيل البندل الجديد.
+- لم يحدث بعد إثبات في Runtime Colab الخاص بالمالك أو نقل حي؛ لا `Colab-ready` ولا `Complete`.
+
 ## [M40-T01] — 2026-08-23
 
 ### Fixed
