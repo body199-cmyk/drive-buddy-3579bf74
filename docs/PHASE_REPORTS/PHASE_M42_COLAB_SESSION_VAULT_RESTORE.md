@@ -4,7 +4,7 @@
 
 يعالج M42 طلب تسجيل Telegram من جديد بعد Restart رغم وجود Session Vault على حساب Google Drive نفسه. خط الأساس هو `main` عند `b7a2dac217376a9dbc322aa307a105a37d372491`، والعمل موجود محليًا فقط على فرع `fix/m42-colab-session-vault-restore`.
 
-> **الحالة الصادقة:** التحقق المحلي للإصلاح مكتمل؛ تبقى عمليات PR وCI والدمج والنشر معلقة. لا يوجد اختبار Cell 1–4 حي للحزمة الجديدة؛ لذلك لا `Colab-ready` ولا `Complete`.
+> **الحالة الصادقة:** M42 دُمج واجتاز CI ونُشرت حزمته المتطابقة، لكن لا يوجد اختبار Cell 1–4 حي للحزمة الجديدة؛ لذلك لا `Colab-ready` ولا `Complete`.
 
 | البند | النتيجة |
 |---|---|
@@ -12,7 +12,7 @@
 | حذف أو تعديل ملفات Drive | لم يحدث |
 | إعادة إنتاج العيب | مثبتة باختبار RED قبل التصحيح |
 | إصلاح المصدر | مطبق ومثبت محليًا |
-| CI / PR / merge / publish | معلق بعد التحقق المحلي |
+| CI / PR / merge / publish | PR #89 MERGED؛ CI Python/Frontend PASS؛ publish #32648838713 SUCCESS |
 | اختبار Colab الحي | معلق |
 
 ## الدليل وسبب المشكلة
@@ -73,14 +73,10 @@ session_vault.restore_from_context(ctx, secret=api_hash)
 
 ## ما لم يثبت وما لم ينفذ
 
-لم يتم تشغيل Cells 1–4 للحزمة المعدلة داخل Colab، ولم يحدث login أو نقل Telegram أو اختبار Drive حي ضمن M42. لا يوجد PR أو merge أو تعديل release/tag أو publish workflow حتى هذه المرحلة. لا تُفسر نتيجة الاختبارات الوهمية على أنها تجربة Telegram حية.
+لم يتم تشغيل Cells 1–4 للحزمة المعدلة داخل Colab، ولم يحدث login أو نقل Telegram أو اختبار Drive حي ضمن M42. دُمج PR #89 ونُشر الزوج العام المتطابق، لكنه لا يحول الاختبارات الوهمية إلى تجربة Telegram حية.
 
 ## التراجع وخطة النشر الآمنة
 
-التراجع قبل أي عملية بعيدة هو عكس commit M42 على الفرع المحلي. بعد مراجعة diff وفحص الأسرار ونجاح CI، يكون المسار التالي:
+التراجع هو عكس merge `d54b010…` ثم إعادة نشر ZIP وmanifest مطابقين لـSHA سابق؛ لا حذف release أو tag أو Session Vault. توقف workflow الأول fail-closed عند اختلاف الحجم، ثم استُبدل الزوج المطابق معًا وتحقق [workflow #32648838713](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648838713) من bytes العامة بنجاح.
 
-1. الالتزام وفتح PR ودمجه وفق التفويض المناسب.
-2. بناء ZIP وmanifest من SHA `main` المدمج نفسه.
-3. تشغيل workflow النشر. إذا توقف fail-closed لاختلاف الأصل العام، فلا يحذف release أو tag ولا يشغّل `cleanup-release.sh`.
-4. فقط عند الحاجة وتحت التفويض: استبدال ZIP وmanifest المتطابقين معًا، ثم إعادة تشغيل workflow للتحقق من bytes العامة.
-5. تشغيل Runtime Colab جديد على نفس Drive واختبار Cell 1–4. معيار النجاح المرئي هو `telegram session vault: restored` ثم `Gradio · Live bridge`؛ عند فشل الاستعادة تسجل `telegram restore:` المنقحة فقط للتمييز بين missing secret وrevocation وtransport.
+الخطوة التالية هي Runtime Colab جديد على نفس Drive واختبار Cell 1–4. معيار النجاح المرئي هو `telegram session vault: restored` ثم `Gradio · Live bridge`؛ عند فشل الاستعادة تسجل `telegram restore:` المنقحة فقط للتمييز بين missing secret وrevocation وtransport.
