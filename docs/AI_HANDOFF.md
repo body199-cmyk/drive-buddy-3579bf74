@@ -6,9 +6,10 @@
 
 | الحقل | القيمة |
 |---|---|
-| Branch | `fix/m38-t01-colab-bridge-remount` |
-| Base | `main` / `origin/main` عند `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` |
-| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED + PROXY-VERIFIED**؛ لا Colab-ready |
+| Updated (UTC) | `2026-08-23T04:56Z` |
+| Branch / code commit | `fix/m38-t01-colab-bridge-remount` · `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` |
+| Base / merge | `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` → main `0727eba4450bd95e4f269140745a43a219b63fcc` عبر PR [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81) |
+| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ لا Colab-ready |
 | النطاق | `react_panel.py` + `panel.bundle.gz` + عقد React + وثائق M38؛ لا نوتبوك ولا اعتماديات ولا جلسات |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M38_T01_COLAB_BRIDGE_REMOUNT.md` |
 
@@ -31,21 +32,21 @@
 
 ## حدود صادقة
 
-تم فتح runtime Colab حقيقي وتشغيل Cell 1 وCell 2، لكن Cell 3 توقف عند fallback إدخال Telegram لعدم وجود Session Vault لهذا Drive account، فلم تُختبر Cell 4 بعد الإصلاح في Colab الحقيقي. لا ادعاء `Colab-ready` أو نجاح Telegram/Drive transfer حتى يكتمل ذلك بعد النشر.
+تم فتح runtime Colab حقيقي وتشغيل Cell 1 وCell 2، لكن Cell 3 توقف عند fallback إدخال Telegram لعدم وجود Session Vault لهذا Drive account، فلم تُختبر Cell 4 بعد الإصلاح في Colab الحقيقي. بعد النشر #31 أُعيد تشغيل Runtime جديد، لكن سطح Colab المتاح للوكيل لم يعرض عداد/مخرج Cell 1 رغم إقرار تحذير المصدر؛ لذلك لا ادعاء `Colab-ready` أو نجاح Telegram/Drive transfer.
 
 ## حالة GitHub
 
 | العملية | الحالة |
 |---|---|
-| Commit | NOT ATTEMPTED |
-| Push | NOT ATTEMPTED |
-| Pull Request | NOT ATTEMPTED |
-| Merge | NOT ATTEMPTED |
-| Publish | NOT ATTEMPTED |
+| Commit | SUCCESS — `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` |
+| Push | SUCCESS — فرع M38 دُفع ثم حُذف بعد الدمج |
+| Pull Request | MERGED — [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81)؛ فحوص CI الأربعة SUCCESS |
+| Merge | MERGED — `0727eba4450bd95e4f269140745a43a219b63fcc` |
+| Publish | SUCCESS — [Publish #31](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32618829803)؛ manifest/ZIP العامان يشيران إلى merge SHA |
 
 ## الخطوة التالية
 
-إجراء `git diff --check` ومراجعة الفرق وفحص الأسرار، ثم commit وPR وCI والدمج والنشر ضمن تفويض المالك السابق للتنفيذ والنشر.
+الخطوة التالية الوحيدة: اختبار Colab حقيقي قابل للرصد يصل إلى Cell 4 ويفتح الواجهة المنشورة؛ لا يلزم تعديل كود إضافي ما لم يظهر عيب حي متكرر.
 
 ---
 
