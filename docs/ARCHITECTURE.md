@@ -1,4 +1,4 @@
-# ARCHITECTURE — TeleDrive v4.5 Current Map
+# ARCHITECTURE — TeleDrive v5.0 Current Map
 
 > **Authority:** `docs/CONSTITUTION.md` §5 — هذه الخريطة للحالة الحالية فقط، لا تستبدل الدستور.
 
@@ -17,9 +17,10 @@ TeleDrive محرك نقل داخل Google Colab — واجهة Gradio في نف�
    - `resolve(service_path)` يفشل بصوت عالٍ على typo / None / non-callable — يمنع الأزرار الميتة.
 
 3. **UI Binding** (`action_registry.py` + `ui_binder.py` + `handlers.py` + `ui.py` + `theme.py` + `i18n.py`):
-   - `ACTION_SPECS` = 41 إجراء معلن — كل زر له `action_id`, `handler_name`, `service_path`, `label_key`, `section`, `implemented`, `tested`, `proof_test`.
+   - `ACTION_SPECS` = 51 إجراء معلن — كل زر له `action_id`, `handler_name`, `service_path`, `label_key`, `section`, `implemented`, `tested`, `proof_test`.
    - `ready = implemented and tested` + proof_test مطلوب (القاعدة تمنع helper يقلب الاثنين معًا).
-   - `binder.button(gr, action_id)` ينشئ زر عادي لو ready، أو مخفي+معطل بـ `common.unavailable` لو ليس ready — لا زر ميت يصل للمستخدم.
+   - كل الإجراءات الـ51 حاليًا ready (`binding check ok: 51/51`).
+   - إجراء غير جاهز لو وُجد يُرسم visible-disabled مع سبب مترجم (`blocked_reason_key`) — لا أزرار مخفية صامتة ولا أزرار ميتة (M17-T02/T03).
    - `binder.wire_if_ready()` يربط click/change بـ handler مسمى فقط، لا `.click(` ولا `lambda` في `ui.py`.
    - `binder.assert_complete()` يفشل البناء إذا وجد ready غير موصول أو مرسوم غير موصول.
 
@@ -47,7 +48,7 @@ validate connections → bounded scan → MediaItem → dedupe (source_key+size)
 → verify Drive file id + appProperties + parent + size → durable checkpoint → Uploaded → targeted cleanup
 ```
 
-- Concurrency: Safe=1, Balanced=2, Fast=3, Manual≤4 — hard cap 4، Semaphore-bound worker pool حقيقي.
+- Concurrency: Default=2، manual 1..100، hard cap 100، وتحذير واجهة إجباري فوق 8 (ADR-0001)، Semaphore-bound worker pool حقيقي.
 - Cancel/stop/clear-completed لا تحذف ملف Drive أبدًا.
 - Size mismatch يبقي `.part`، ملفات مجهولة → quarantine لا حذف أعمى.
 
@@ -85,12 +86,13 @@ bun run build
 
 لا `continue-on-error`. `package_service.build_tested_archive()` يرفض البناء إذا فشلت الاختبارات.
 
-## Current Counts (2026-08-08)
+## الحالة الحالية
 
-- `teledrive/`: 44 وحدة (تحقق بـ `ls`)
-- `ACTION_SPECS`: 41 — ready 22، unready 19 (Drive 6، Analyze 3، Dashboard 1، Logs 3، Settings 2، Export 2، Recovery 2)
-- Tests: مؤرشف 177 passed في PHASE_9.md لكن يحتاج إعادة إثبات بمثبتات الحالية.
+- الهوية الرسمية للمنتج: **v5.0.0** (قرار M35-T01 / KNOWN_ISSUES #69؛ اسم أرتيفكت النشر المثبّت `teledrive_v4.5.zip` قرار release منفصل مقصود).
+- `ACTION_SPECS`: **51/51 ready actions resolve** (بوابة launcher عند آخر دمج موثق).
+- الاختبارات الكاملة: **746 passed** محليًا وفي CI (آخر handoff)، مع compileall وlauncher وnotebook cmp وReact contracts.
+- جسر React–Gradio: مثيل واحد بملكية دورة حياة كاملة (M38-T01، PR #81).
 
-## ما لم يتحقق
+## ما لم يتحقق بعد (حد حي صادق)
 
-- Real Telegram login, real Drive `about().get()`, بناء Gradio 6.20.0 حقيقي `prevent_thread_lock`، تشغيل Colab حقيقي 1→7 (بيد المالك PHASE_10).
+- **إثبات Colab الحي حتى Cell 4** وما بعدها (KNOWN_ISSUES #71 و#4/#5/#7 — بيد المالك): لوجين Telegram حقيقي، Drive `about().get()` حقيقي على الحزمة المنشورة، ونقل ملف فعلي. لا يُعلن `Colab-ready` قبل هذا الإثبات.

@@ -329,8 +329,13 @@ class Handlers:
         # M24-T03: the Drive vault must die WITH the account. This runs BEFORE
         # the logout while Drive and the session are still live, and it is
         # quiet so a Drive hiccup can never block signing out.
-        self.ctx.session_vault.forget_quiet()
-        return self._telegram_view(self.call("telegram.logout"))
+        vault_result = self.ctx.session_vault.forget_quiet()
+        view = list(self._telegram_view(self.call("telegram.logout")))
+        # C-02 (§17): never fake success. If the Drive-side deletion is unproven,
+        # say so plainly — local sign-out happened, the saved copy may remain.
+        if vault_result is not None and not getattr(vault_result, "ok", False):
+            view[0] += f" · {t('err.session_forget_failed')}"
+        return tuple(view)
 
     @action("telegram.status")
     def h_telegram_status(self):

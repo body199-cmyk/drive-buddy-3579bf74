@@ -794,24 +794,57 @@ class SessionVault:
         )
 
     def forget(self) -> VaultResult:
+        """Delete every vault artifact from Drive — honestly.
+
+        §17: a failure here must SURFACE, never be swallowed into a fake
+        success. Deletion failures are collected, then the folder is RE-READ;
+        only when nothing sensitive remains does this report ``forgotten``.
+        """
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
         files = self._children_by_name(drive, folder_id)
+
+        sensitive = {
+            VAULT_SESSION_NAME,
+            VAULT_CREDS_NAME,
+            SESSION_VAULT_NAME,
+            VAULT_MANIFEST_NAME,
+        }
+
+        def _is_sensitive(name: str) -> bool:
+            return name in sensitive or name.startswith(VAULT_VERSION_PREFIX)
+
+        failed: list[str] = []
         for name, meta in files.items():
-            if (
-                name not in (VAULT_SESSION_NAME, VAULT_CREDS_NAME, SESSION_VAULT_NAME, VAULT_MANIFEST_NAME)
-                and not name.startswith(VAULT_VERSION_PREFIX)
-            ):
+            if not _is_sensitive(name):
                 continue
             try:
                 drive.delete_file(meta["id"])
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 - collected, reported below
+                failed.append(f"{name}:{type(exc).__name__}")
         try:
             self._creds_path().unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
             pass
         self._last_fingerprint = ""
+
+        remaining: Optional[list[str]] = None
+        try:
+            remaining = [
+                name
+                for name in self._children_by_name(drive, folder_id)
+                if _is_sensitive(name)
+            ]
+        except Exception as exc:  # noqa: BLE001 - an unreadable folder is unproven
+            _log.warning("vault post-delete verification skipped: %s", type(exc).__name__)
+
+        if failed or remaining is None or remaining:
+            _log.warning(
+                "telegram vault forget incomplete: delete_failed=%d remaining=%s",
+                len(failed),
+                "unknown" if remaining is None else len(remaining),
+            )
+            return self._emit(VaultResult(False, "err.session_forget_failed"))
         _log.info("telegram vault forgotten")
         return self._emit(VaultResult(True, "msg.session_forgotten", forgotten=True))
 

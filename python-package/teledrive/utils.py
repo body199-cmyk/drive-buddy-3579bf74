@@ -72,8 +72,13 @@ def human_duration(seconds: float | None) -> str:
     return f"{s}s"
 
 
-def source_key(chat_id: int | str, message_id: int | str, file_unique_id: str) -> str:
-    return f"tg:{chat_id}:{message_id}:{file_unique_id}"
+def source_key(chat_id: int | str, message_id: int | str) -> str:
+    """Canonical MTProto message identity: marked peer id + message id (§15).
+
+    ``file_unique_id`` is deliberately NOT part of the key: §11 forbids using
+    it for dedupe, and one Telegram message has exactly one stable identity.
+    """
+    return f"tg:{int(chat_id)}:{int(message_id)}"
 
 
 def sha256_file(path: Path, chunk: int = 1024 * 1024) -> str:

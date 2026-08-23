@@ -191,7 +191,7 @@ async def scan_link(
             original or f"{slugify(chat_title)}_{message.id}_{media_type}.{extension}"
         )
         items.append(MediaItem(
-            source_key=source_key(chat_id, message.id, unique),
+            source_key=source_key(chat_id, message.id),
             chat_id=chat_id,
             chat_title=str(chat_title),
             message_id=int(message.id),

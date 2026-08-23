@@ -108,6 +108,7 @@
   "err.scan_range_too_large": "Range too large. The maximum is 1000 messages",
   "err.service_path": "Service not available",
   "err.session_missing": "Local Telegram session file is missing.",
+  "err.session_forget_failed": "Signed out locally, but deleting the saved session from Drive could not be confirmed.",
   "err.session_vault_invalid": "Saved Telegram session data is invalid or incomplete.",
   "err.session_not_authorized": "Telegram must finish signing in before saving to Drive.",
   "err.tests_failed": "Tests failed, package not produced",
