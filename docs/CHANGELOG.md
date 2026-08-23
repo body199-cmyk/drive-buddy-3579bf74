@@ -1,6 +1,6 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
-## [M39-T01] — 2026-08-23 — محلي قبل commit/PR/merge
+## [M39-T01] — 2026-08-23
 
 ### Changed
 - صفوف الطابور في React أصبحت كاملة على سطح المكتب: جدول session يثبت عرض الأعمدة، يلف اسم الملف، ويُبقي التقدم والحجم وأزرار `إيقاف`/`استئناف`/`إعادة` ضمن البطاقة بلا تمرير أفقي.
@@ -11,7 +11,11 @@
 ### Gates and local verification
 - `746 passed` · launcher `51/51` · notebook check + cmp PASS · React contracts `29/29` · lint/build PASS (0 errors؛ 7 تحذيرات baseline فقط).
 - فحص بصري محلي من markup/CSS المنتج: سطح المكتب أظهر الصف كاملًا بلا تمرير أفقي، وإطار 390px أظهر البطاقة مع الأزرار كاملة. Gradio 6.20 محليًا: زر React فتح Accordion المصادقة الأصلي، ثم `telegram.status` أعاد `Action completed` بلا إدخال أي اعتماد.
-- لا نقل حي ولا اختبار Colab جديد؛ لا `Colab-ready` أو `Complete`. GitHub والنشر لم يبدأا وقت هذا السجل.
+- لا نقل حي ولا اختبار Colab جديد؛ لا `Colab-ready` أو `Complete`.
+
+### Merged and published
+- PR [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83) دُمج إلى `main` عند `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` بعد نجاح فحوص CI الأربعة؛ commit المصدر `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e`.
+- [Publish current TeleDrive package #32621429061](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32621429061) بنى كل البوابات ثم رفض استبدال أصل ZIP المختلف حجمًا fail-closed وفق M37-T01. وبإذن المالك استُبدل الأصلان يدويًا من archive M39 المطابق؛ التحقق العام أثبت `commit=4b490a0…`، `sha256=dfc1f133…051ee9`، و`size=561162` بايت.
 
 ## [M38-T01] — 2026-08-23
 

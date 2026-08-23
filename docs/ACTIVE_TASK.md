@@ -4,29 +4,30 @@
 |---|---|
 | TASK ID | `M39-T01` |
 | العنوان | صفوف التحويل المتجاوبة ووصول React الآمن إلى لوحة Telegram الأصلية |
-| الحالة | **CODE-COMPLETE CANDIDATE + FAKE-TESTED + LOCAL-GRADIO-VERIFIED**؛ GitHub لم يبدأ بعد |
-| Branch / baseline | `fix/m39-t01-responsive-queue-auth-access` من main `879e3b8a87eb8792340c0c0da2ff36552adfd2e9` |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M39_T01_RESPONSIVE_QUEUE_AUTH_ACCESS.md` |
+| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ اختبار Colab والنقل الحي خارج نطاق M39 وغير مثبتين |
+| code commit / merge | `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e` → main `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` عبر PR [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83) |
+| Publish | release `pkg-2026.08.09-m15t07` محدث يدويًا؛ manifest/ZIP العامان commit `4b490a0` وSHA `dfc1f133…051ee9` وحجم `561162` bytes |
 
 ## النطاق المثبت
 
-1. صف التحويل المكتمل على سطح المكتب لا يسمح بتمرير أفقي يخفي الأزرار: تبقى معلومات الملف والحالة والتقدم والحجم والتحكم معًا.
-2. عند الهاتف يتحول الصف نفسه إلى بطاقة معنونة، مع صف أزرار كامل؛ لا تتغير action IDs أو payloads أو حالة الطابور.
-3. زر React الجديد يفتح Accordion Gradio الموجود بمعرف `td-secure-telegram-auth` محليًا فقط. لا يرسل طلب bridge ولا ينقل API hash أو الهاتف أو OTP أو 2FA أو session.
-4. لم تمس المهمة محرك النقل أو المصادقة الخلفية أو `react_bridge.py` أو النوتبوك أو الاعتماديات أو جلسات Telegram/Drive.
+1. عرض صف الطابور بالكامل على سطح المكتب، ثم تحويله إلى بطاقة هاتف عند أقل من 621px، من دون حذف عمود أو زر أو تغيير action ID أو payload.
+2. زر React ظاهر يفتح `td-secure-telegram-auth`، أي Accordion Gradio الآمن الموجود فقط. لا يمرر أسرارًا عبر bridge ولا يضيف endpoint أو storage أو transport.
+3. تحقق Gradio 6.20 الحي المحلي: الزر فتح Accordion الأصلي ثم ظل `telegram.status` عاملاً (`Action completed`) بلا إدخال بيانات اعتماد.
+4. لم تُمس ملفات النقل أو المصادقة الخلفية أو `react_bridge.py` أو النوتبوك أو الاعتماديات أو جلسات Telegram/Drive.
 
 ## الأدلة المنفذة
 
-`746 passed` · compileall OK · launcher `51/51` · notebook check + cmp PASS · React contracts `29/29` · lint/build PASS (0 errors، 7 warnings baseline) · تحقق CSS/markup لسطح المكتب والهاتف · Gradio 6.20 محلي حي: الزر فتح Accordion الآمن و`telegram.status` أعاد `Action completed`.
+`746 passed` · `51/51` launcher · notebook check + cmp PASS · React contracts `29/29` · lint/build PASS (0 errors، 7 warnings baseline) · معاينة CSS/markup لسطح المكتب والهاتف · CI 4/4 لــPR #83 SUCCESS · manifest وZIP عامان تطابقا بايتًا بعد النشر.
 
-## الحد الحي الصادق
+## حدان باقيان
 
-لم يحدث تسجيل Telegram أو ربط Drive أو نقل أو Pause/Resume في M39. لا يمثل الاختبار المحلي إثباتًا لـColab أو نقل حي. حد M38 المستقل ما زال قائمًا: Cell 4 للحزمة المنشورة لم يثبت داخل Colab؛ لا `Colab-ready` أو `Complete`.
+1. لم يحدث Colab Cell 4 أو Telegram/Drive transfer حي في M39؛ لا `Colab-ready` أو `Complete`.
+2. نبض React كل ثانية أثناء النقل لا يزال موضوع تشخيص منفصل (#72): يحتاج repro حي يتحقق من Pause/Resume/Stop خلال النبض؛ M39 لا يغيره.
 
 ## نقطة التراجع
 
-قبل الدمج: حذف الفرع المحلي. بعد الدمج: عكس commit M39 فقط. لا توجد بيانات حساب أو session أو ملف Drive ضمن التغيير.
+عكس merge `4b490a0…` للكود. وللتراجع الكامل في Colab، يلزم إعادة رفع archive/manifest مطابقين لـSHA سابق؛ لا توجد بيانات حساب أو مسح ضمن التغيير.
 
 ## الخطوة التالية
 
-إنهاء فحص الفرق والأسرار وتحديث سجل الحالة، ثم commit وpush وPR ودمج بعد CI أخضر، ثم نشر الحزمة الحالية لأن بندل React جزء من حزمة Colab.
+اختبار Colab حي قابل للرصد للحزمة المنشورة، ثم repro نقل حي لمسار التحكم مع نبض الثانية الواحدة قبل تنفيذ أي إصلاح منفصل له.
