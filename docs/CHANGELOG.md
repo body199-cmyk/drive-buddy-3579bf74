@@ -1,6 +1,6 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
-## [M41-T01] — 2026-08-23 — محلي قبل commit/PR/merge
+## [M41-T01] — 2026-08-23
 
 ### Fixed
 - عادت رسالة `Backend bridge unavailable` في لقطة Colab رغم تحميل React كاملًا؛ عولج مسار lifecycle الذي يعيد `js_on_load` لنفس host ثم يترك شجرة React مرتبطة بـbridge دخل `dispose()`.
@@ -11,6 +11,10 @@
 - `769 passed` · launcher `51/51` · notebook check + cmp PASS · React contracts `33/33` · lint/build PASS (0 errors؛ 9 warnings baseline).
 - Gradio 6.20 المحلي ومحاكاة `is_colab=True` خلف proxy: `Gradio · Live bridge` ثم `telegram.status` = `Action completed` بعد إعادة تشغيل البندل الجديد.
 - لم يحدث بعد إثبات في Runtime Colab الخاص بالمالك أو نقل حي؛ لا `Colab-ready` ولا `Complete`.
+
+### Merged and published
+- PR [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87) دُمج إلى `main` عند `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` بعد نجاح فحوص CI الأربعة؛ commit المصدر `4fca8e6b1c899c1b54a1adfbb38c65e247472b96`.
+- [Publish #32646821416](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646821416) نجح بعد استبدال ZIP وmanifest المتطابقين يدويًا إثر توقف التشغيل الأول fail-closed لاختلاف الحجم. التحقق العام: `commit=bc9fc5f…`، `sha256=ab3d3db2…d1529`، `size=567611` bytes.
 
 ## [M40-T01] — 2026-08-23
 

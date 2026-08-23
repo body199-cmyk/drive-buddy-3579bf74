@@ -1,7 +1,7 @@
 # PHASE M41-T01 — حماية جسر React–Gradio من watcher قديم في Colab
 
-> **الحالة عند إعداد التقرير:** `CODE-COMPLETE CANDIDATE + LOCAL-PROXY-VERIFIED`.
-> لم يبدأ commit أو push أو PR أو merge أو نشر لهذه المهمة وقت كتابة التقرير.
+> **الحالة النهائية للكود:** `MERGED + CI-PASSED + PACKAGE-PUBLISHED`؛ يظل تحقق Colab المنشور والنقل الحي خارج نطاق الدليل الحالي.
+> التزام المصدر `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` دُمج إلى main عند `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` عبر PR [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87).
 
 ## البلاغ وسبب التعامل العاجل
 
@@ -51,14 +51,14 @@
 
 ## التراجع
 
-قبل الدمج: حذف فرع `fix/m41-t01-colab-stale-watcher-bridge`. بعد الدمج: عكس commit M41 ثم إعادة نشر archive/manifest مطابقين لـSHA سابق إذا نُشرت الحزمة. لا توجد عملية بيانات أو مسح أو حذف release في حدود المهمة.
+عكس merge `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` أو commit المصدر `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` للكود. وللتراجع الكامل في Colab، أعد نشر archive/manifest مطابقين لـSHA سابق؛ release/tag لم يحذفا في M41. لا توجد عملية بيانات أو مسح ضمن المهمة.
 
-## حالة GitHub عند إعداد التقرير
+## حالة GitHub والنشر
 
 | العملية | الحالة |
 |---|---|
-| Commit | NOT ATTEMPTED |
-| Push | NOT ATTEMPTED |
-| Pull Request | NOT ATTEMPTED |
-| Merge | NOT ATTEMPTED |
-| Publish | NOT ATTEMPTED |
+| Commit | SUCCESS — `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` |
+| Push | SUCCESS — فرع M41 دُفع ثم حذف بعد الدمج |
+| Pull Request | MERGED — [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87)؛ فحوص CI الأربعة SUCCESS |
+| Merge | MERGED — `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` |
+| Publish | SUCCESS — [#32646821416](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646821416)؛ ZIP/manifest العامان commit `bc9fc5f…`، SHA `ab3d3db2…d1529`، حجم `567611` bytes. التشغيل الأول [#32646652723](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646652723) توقف fail-closed فقط لاختلاف الأصل السابق، ثم استبدلت الأصول المتطابقة معًا بإذن المالك. |

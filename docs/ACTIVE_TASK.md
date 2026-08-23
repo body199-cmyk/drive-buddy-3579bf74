@@ -4,26 +4,26 @@
 |---|---|
 | TASK ID | `M41-T01` |
 | العنوان | حماية bridge React–Gradio من watcher/cleanup قديم في Colab |
-| baseline | `5b5d1b219d4cc279b91ece699339bc48054c6ccf` |
-| الفرع | `fix/m41-t01-colab-stale-watcher-bridge` |
-| الحالة | **CODE-COMPLETE CANDIDATE + LOCAL-PROXY-VERIFIED**؛ commit/PR/merge/publish pending |
+| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED**؛ تحقق Colab المنشور والنقل الحي غير مثبتين |
+| code commit / merge | `4fca8e6b1c899c1b54a1adfbb38c65e247472b96` → main `bc9fc5f42bcec51d2f7f6566021cf0f2433de9d1` عبر PR [#87](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/87) |
+| Publish | [#32646821416](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32646821416) SUCCESS؛ manifest/ZIP العامان commit `bc9fc5f…`، SHA `ab3d3db2…d1529`، حجم `567611` bytes |
 
 ## النطاق المثبت
 
-1. عند تكرار `js_on_load` لنفس host، يعاد استخدام panel/bridge الحي بدل إنشاء مثيل جديد ثم التخلص من bridge الذي قد تملكه شجرة React المعروضة.
-2. كل on-load يملك lease؛ watch أو cleanup من run قديم لا يسلّم state ولا ينفذ `dispose()` للمالك الحالي.
-3. لا يمس هذا action IDs أو bridge transport أو Python handlers أو Telegram/Drive/session vault أو النوتبوك أو الاعتماديات.
-4. أعيد بناء الأصول المشحونة من المصدر (`panel.bundle.gz` و`panel.css.gz`).
+1. on-load المتكرر لنفس Gradio host يعيد استخدام panel/bridge الحي بدل إنشاء bridge جديد والتخلص من bridge الذي قد تملكه React المعروضة.
+2. لكل on-load lease؛ watcher وcleanup من run قديم لا يسلّمان state ولا ينفذان dispose للمالك الحالي.
+3. `isLive()` مضافة إلى panel المركب فقط. لم تتغير action IDs أو transport أو Python handlers أو Telegram/Drive/session vault أو notebook أو الاعتماديات.
+4. أعيد بناء الأصول المشحونة من المصدر.
 
 ## الأدلة
 
-`769 passed` · launcher `51/51` · notebook check + cmp PASS · lint/build PASS (0 errors، 9 warnings baseline) · React contracts `33/33` · Gradio 6.20 محلي وproxy `is_colab=True`: حالة `Gradio · Live bridge` ثم `telegram.status` = `Action completed`.
+`769 passed` · `51/51` launcher · notebook check + cmp PASS · lint/build PASS (0 errors، 9 warnings baseline) · React contracts `33/33` · CI 4/4 · Gradio 6.20 وproxy `is_colab=True`: `Gradio · Live bridge` ثم `telegram.status` = `Action completed` · public manifest/ZIP verified.
 
 ## حدان باقيان
 
-1. لقطة المالك هي دليل انحدار حي قبل M41، لكن لم يُختبر bundle M41 في Runtime Colab الخاص به بعد؛ لا `Colab-ready` أو `Complete`.
+1. لقطة المالك أثبتت انحدارًا قبل M41، لكن لم يُفتح Cell 4 بالحزمة المنشورة M41 بعد؛ لا `Colab-ready` أو `Complete`.
 2. لا نقل حي ولا Pause/Resume/Stop حقيقي في نطاق M41.
 
 ## نقطة التراجع والخطوة التالية
 
-عكس commit M41 ثم إعادة نشر archive/manifest مطابقين إذا نُشرت الحزمة. بعد المراجعة النهائية: commit/push/PR/CI/merge والنشر، ثم Cell 4 Colab إن أمكن.
+عكس merge `bc9fc5f…` للكود، ثم إعادة نشر archive/manifest مطابقين لـSHA سابق إن لزم تراجع كامل. الخطوة التالية: فحص Cell 4 في Colab بالحزمة المنشورة ثم إجراء طلب React واحد قبل وصف الإصلاح بأنه مثبت حيًا.
