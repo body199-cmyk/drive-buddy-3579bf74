@@ -2,7 +2,7 @@
 
 ## [M42] — 2026-08-23 — استعادة Vault المشفّر في Colab
 
-### Fixed locally (remote integration and publish pending)
+### Fixed
 - تحقق قراءة فقط من Google Drive التجريبي أثبت أن زوج Vault format 2 النشط ما زال موجودًا (`td_telegram.active.json` مع زوج versioned `.creds`/`.session`)؛ لم يُنزّل أو يُعدّل أو يُحذف أي ملف.
 - السبب الجذري كان مسارين متصلين: Cell 3 يتخطى تحميل/طلب API Hash عند وجود Vault، و`restore_from_context(ctx, secret=api_hash)` كان يهمل secret ثم يستدعي الاستعادة بلا مفتاح فك. لذلك يعجز runtime جديد عن فك blob format 2، الذي لا يخزن API Hash في Drive عمدًا، ثم يسلك login اليدوي مع إبقاء Vault البعيد.
 - `restore_from_context` و`autorestore_once` و`autorestore` باتت تمرر secret اختياريًا داخل العملية فقط. لا يسجل أو يحفظ في Drive. ويعيد `probe()` API ID غير السري من metadata كي لا يطلبه Cell 3 عند وجود Vault.
@@ -13,8 +13,10 @@
 - `770 passed` · compileall PASS · launcher `51/51` · notebook check + cmp PASS · React contracts `33/33` · `pnpm run build` PASS · lint exit 0 مع 9 تحذيرات baseline · package build وZIP integrity PASS.
 - لا تغيير في React/bridge في M42. تحقق الأصل العام الحالي أثبت manifest على `bc9fc5f…` ووجود `__teledriveReactPanelLease` في ZIP، لكن Cell 4 الحقيقي لا يزال غير مثبت؛ لا `Colab-ready` أو `Complete`.
 
-### Pending
-- لا PR أو merge أو publish في هذا المدخل. بعد CI فقط يُبنى ZIP وmanifest من SHA main النهائي. لا يحذف release/tag؛ إذا تطلب اختلاف archive استبدالًا، يستبدل الأصلين المتطابقين معًا ثم يعاد workflow للتحقق العام.
+### Merged and published
+- PR [#89](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/89) دُمج إلى `main` عند `d54b01027f3f7d33b9e5d6cacc4bd59628b26b1c` بعد نجاح CI Python وFrontend في تشغيلي push وpull request. commit المصدر `b374efcc626d23ca037c1048e4a4c7b9af71d17e`.
+- [Publish #32648577584](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648577584) توقف fail-closed لأن ZIP المنشور كان `567611` bytes مقابل archive M42 `568320` bytes؛ لم يحذف release/tag. استُبدل ZIP وmanifest المتطابقان معًا من SHA المدمج ثم نجح [Publish #32648838713](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648838713) والتحقق العام.
+- manifest/ZIP العامان الآن: `commit=d54b010…`، `sha256=ffb5f6ab…b0f1`، `size=568320` bytes. لا `Colab-ready` أو `Complete` قبل Cell 1–4 حي.
 
 ## [M41-T01] — 2026-08-23
 
