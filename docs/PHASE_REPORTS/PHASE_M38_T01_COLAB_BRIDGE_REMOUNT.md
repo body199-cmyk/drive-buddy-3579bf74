@@ -1,12 +1,12 @@
 # PHASE M38-T01 — إصلاح إعادة تركيب جسر React–Gradio في Colab
 
-> **الحالة:** Code-complete candidate + Fake-tested + proxy-verified. لا `Colab-ready` ولا `Complete` قبل فتح لوحة Colab الحية بعد نشر الحزمة.
+> **الحالة:** MERGED + CI-PASSED + package-published. لا `Colab-ready` ولا `Complete` قبل فتح لوحة Colab الحية بعد نشر الحزمة.
 
 | الحقل | القيمة |
 |---|---|
 | Task ID | `M38-T01` |
-| الفرع | `fix/m38-t01-colab-bridge-remount` |
-| خط الأساس | `main` / `origin/main` عند `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` |
+| code commit | `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` على `fix/m38-t01-colab-bridge-remount` |
+| خط الأساس / merge | `c9c1a769eb9d646d8aa564a0a6e1fa94907486c9` → `0727eba4450bd95e4f269140745a43a219b63fcc` على main |
 | النطاق | `react_panel.py`، أصل panel المضمّن، وعقد React فقط؛ بلا نوتبوك أو اعتماديات أو جلسات |
 | نقطة التراجع | حذف الفرع أو عكس commit M38 قبل الدمج؛ لا بيانات Drive أو Telegram ضمن النطاق |
 
@@ -45,16 +45,16 @@
 
 ## الاختبار الحي وما لم يثبت
 
-فتح الوكيل نوتبوك Colab الرسمي بحساب الاختبار ووصل إلى runtime جديد؛ Cell 1 نزّل الحزمة الموثقة وCell 2 أنشأ `ApplicationContext`. لكن Cell 3 توقف عند fallback إدخال بيانات Telegram لعدم وجود Session Vault لهذا حساب Drive، ثم بقي التنفيذ معلقًا قبل تشغيل Cell 4. لذلك **لم يثبت هذا التقرير نجاح لوحة Colab الحية بعد الإصلاح**، ولا يدعي نجاح Telegram أو نقل Drive.
+فتح الوكيل نوتبوك Colab الرسمي بحساب الاختبار ووصل إلى runtime جديد؛ Cell 1 نزّل الحزمة الموثقة وCell 2 أنشأ `ApplicationContext`. لكن Cell 3 توقف عند fallback إدخال بيانات Telegram لعدم وجود Session Vault لهذا حساب Drive، ثم بقي التنفيذ معلقًا قبل تشغيل Cell 4. بعد نشر الحزمة، أُعيد تشغيل Runtime جديد وحاول الوكيل Cell 1 مرة أخرى، لكن صفحة Colab المتاحة لم تكشف عداد التنفيذ أو مخرجًا قابلًا للتدقيق. لذلك **لم يثبت هذا التقرير نجاح لوحة Colab الحية بعد الإصلاح**، ولا يدعي نجاح Telegram أو نقل Drive.
 
 ## GitHub
 
 | العملية | الحالة |
 |---|---|
-| Commit | NOT ATTEMPTED |
-| Push | NOT ATTEMPTED |
-| Pull Request | NOT ATTEMPTED |
-| Merge | NOT ATTEMPTED |
-| Publish | NOT ATTEMPTED |
+| Commit | SUCCESS — `8afa544ae36f7bf845b46f291af154f3a7d2a3b1` |
+| Push | SUCCESS — فرع M38 دُفع إلى origin ثم حُذف بعد الدمج |
+| Pull Request | MERGED — [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81)؛ فحوص CI الأربعة SUCCESS |
+| Merge | MERGED — `0727eba4450bd95e4f269140745a43a219b63fcc` في `2026-08-23T04:45:31Z` |
+| Publish | SUCCESS — [Publish #31](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32618829803) على merge SHA؛ نشر manifest/ZIP العام والتحقق منهما نجح |
 
-الخطوة التالية: مراجعة الفرق وفحص الأسرار، ثم commit وPR وCI والدمج والنشر فقط ضمن تفويض المالك الصريح.
+الخطوة التالية: اختبار Colab حي قابل للرصد يصل إلى Cell 4 ويفتح الواجهة المنشورة. لا تعديل كود آخر مطلوب ما لم يظهر عيب حي متكرر.

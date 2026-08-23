@@ -8,7 +8,11 @@
 
 ### Gates
 - `746 passed` · compileall OK · launcher `51/51` · notebook check + cmp متطابقان · React contracts `27/27` · lint/build PASS (تحذير eslint baseline واحد فقط).
-- محاكاة Gradio 6.20 خلف proxy مع `root_path` أعادت لوحة حية بلا banner blocked. لا يمثل ذلك إثبات Colab حي: Cell 3 في runtime Colab الحقيقي توقف عند fallback بيانات Telegram قبل Cell 4. لذلك لا `Colab-ready` أو `Complete` حتى دمج/نشر الحزمة وإعادة اختبار Colab.
+- محاكاة Gradio 6.20 خلف proxy مع `root_path` أعادت لوحة حية بلا banner blocked. لا يمثل ذلك إثبات Colab حي: Cell 3 في runtime Colab الحقيقي توقف عند fallback بيانات Telegram قبل Cell 4.
+
+### Merged and published
+- PR [#81](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/81) دُمج إلى `main` عند `0727eba4450bd95e4f269140745a43a219b63fcc` بعد نجاح فحوص CI الأربعة؛ commit المصدر `8afa544ae36f7bf845b46f291af154f3a7d2a3b1`.
+- [Publish #31](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32618829803) نجح على merge SHA وتحقق من manifest و`teledrive_v4.5.zip` العامين. لا `Colab-ready` أو `Complete`: محاولة post-publish في Runtime جديد لم تعرض مخرج Cell 1 قابلًا للتدقيق، ولم يصل الاختبار إلى Cell 4.
 
 ## [M37-T02] — 2026-08-23
 
