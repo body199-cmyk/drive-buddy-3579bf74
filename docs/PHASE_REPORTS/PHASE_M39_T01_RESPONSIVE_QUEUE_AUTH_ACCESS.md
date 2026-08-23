@@ -1,7 +1,7 @@
 # PHASE M39-T01 — صفوف طابور متجاوبة ووصول آمن لمصادقة Telegram
 
-> **الحالة عند إعداد التقرير:** `CODE-COMPLETE CANDIDATE + FAKE-TESTED + LOCAL-GRADIO-VERIFIED`.
-> لا يوجد commit أو push أو PR أو merge لهذه المهمة وقت كتابة هذا التقرير.
+> **الحالة النهائية للكود:** `MERGED + CI-PASSED + PACKAGE-PUBLISHED`؛ يظل التحقق الحي في Colab والنقل الحي خارج نطاق هذه المهمة.
+> التزام المصدر `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e` دُمج إلى main عند `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` عبر PR [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83).
 
 ## الهدف والنطاق
 
@@ -44,7 +44,7 @@
 | تحقق الهاتف المحلي بعرض 390px | PASS | كل صف ظهر كبطاقة معنونة مع شبكة الأزرار كاملة بلا تمرير أفقي |
 | Gradio 6.20 محلي حي | PASS | زر React ظهر، فتح Accordion الآمن الأصلي، و`telegram.status` أعاد `Action completed` بعد ذلك |
 
-ملف ملاحظات الفحص البصري خارج المستودع: `/home/ubuntu/m39_visual_findings.md`. لم يدخل أي screenshot أو بيانات اعتماد أو جلسة إلى Git.
+لم يدخل أي screenshot أو بيانات اعتماد أو جلسة إلى Git. أدلة التخطيط محلية، بينما تحقق Gradio الحي اقتصر على فتح Accordion المصادقة واستدعاء حالة Telegram غير الحساسة.
 
 ## ما لم يثبت
 
@@ -63,14 +63,14 @@
 
 ## التراجع
 
-قبل الدمج: حذف فرع `fix/m39-t01-responsive-queue-auth-access`. بعد الدمج: عكس commit M39 فقط. لا توجد عملية بيانات أو مسح أو تحديث حزمة منشورة ضمن هذه المهمة.
+عكس merge `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` أو commit المصدر `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e`. تم تحديث أصلَي الحزمة المنشورة يدويًا بعد أن رفض workflow الاستبدال fail-closed بسبب اختلاف الحجم؛ manifest وZIP العامان تحققا بايتًا بعد الرفع. لا توجد بيانات حساب أو مسح ضمن المهمة.
 
-## حالة GitHub عند إعداد التقرير
+## حالة GitHub والنشر
 
 | العملية | الحالة |
 |---|---|
-| Commit | NOT ATTEMPTED |
-| Push | NOT ATTEMPTED |
-| Pull Request | NOT ATTEMPTED |
-| Merge | NOT ATTEMPTED |
-| Publish | NOT APPLICABLE — لا تغيير للنوتبوك أو التحديث التلقائي للحزمة |
+| Commit | SUCCESS — `113c0e311fb6f76d26d9e877572fb2c6fb7acc8e` |
+| Push | SUCCESS — فرع M39 دُفع ثم حذف بعد الدمج |
+| Pull Request | MERGED — [#83](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/83)؛ فحوص CI الأربعة SUCCESS |
+| Merge | MERGED — `4b490a03aa76b0d3e5cf58b4d251a401a19abfb2` |
+| Publish | SUCCESS يدويًا بعد فشل workflow [#32621429061](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32621429061) fail-closed؛ release `pkg-2026.08.09-m15t07` يستهدف merge SHA وmanifest/ZIP العامان: `dfc1f133…051ee9`، `561162` bytes |
