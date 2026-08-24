@@ -14,8 +14,10 @@
 - يغطي regression الحفظ والاستعادة Drive-managed بلا Secret خارجي، وترقية format 2 بعد استعادة موثقة، والاحتفاظ بزوج Drive عند فشل الجلسة، وحفظ/مسح الرابط في backend بلا enqueue أو local storage.
 - حد الأمان تغيّر بقرار المالك: من يملك الوصول الكامل لزوج Vault format 3 على Drive يستطيع استعادة Telegram؛ لا تظهر القيم في UI أو logs أو Git. راجع `ADR-004-session-vault.md`.
 
-### Not merged or published yet
-- لا PR أو merge أو publish أو Colab live proof حتى كتابة هذا المدخل. يلزم إثبات Cells 1–4 على الحزمة المنشورة، بما فيه `telegram session vault: restored` و`Gradio · Live bridge`؛ لا `Colab-ready` أو `Complete` قبل ذلك.
+### Merged and published
+- PR [#91](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/91) دُمج إلى `main` عند `2d5893dea014c638937e953919c68f2251d035ef` بعد نجاح CI Python وFrontend في [push #32689166257](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689166257) و[PR #32689176699](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689176699). commit المصدر `e974dfd12f2bf372e34dbca463a082b7017400e2`.
+- توقف [النشر الأول #32689333249](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689333249) fail-closed لاختلاف ZIP القديم؛ لم يُحذف release/tag. استُبدل ZIP وmanifest المتطابقان معًا من merge SHA، ثم نجح [Publish #32689575111](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689575111) والتحقق العام.
+- manifest/ZIP العامان الآن: `commit=2d5893d…`، `sha256=28d94129…90b79`، `size=570612` bytes. يلزم إثبات Cells 1–4 على الحزمة المنشورة، بما فيه `telegram session vault: restored` و`Gradio · Live bridge`؛ لا `Colab-ready` أو `Complete` قبل ذلك.
 
 ## [M42] — 2026-08-23 — استعادة Vault المشفّر في Colab
 
