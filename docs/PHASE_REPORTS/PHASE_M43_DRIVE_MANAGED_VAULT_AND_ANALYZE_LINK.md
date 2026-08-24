@@ -2,7 +2,7 @@
 
 ## الحالة
 
-**LOCAL VERIFICATION COMPLETE — لم يُلتزم أو يُدفع أو يُدمج أو يُنشر بعد عند كتابة هذا التقرير.** لا يوجد ادعاء بأن Colab live أو React bridge الحي قد أُثبتا في هذه المهمة.
+**MERGED + CI-PASSED + PACKAGE-PUBLISHED — Colab live pending.** لا يوجد ادعاء بأن Colab live أو React bridge الحي قد أُثبتا في هذه المهمة.
 
 ## طلب المالك
 
@@ -54,6 +54,12 @@
 
 لا يزال مطلوبًا اختبار Colab حي جديد: Cells 1–4 على الحساب نفسه، وظهور `Telegram restore source: Drive-managed vault` ثم `telegram session vault: restored` و`Gradio · Live bridge`. لم ننفذ OTP أو نقلًا حيًا ولا قرأنا محتويات Vault.
 
+## الدمج والنشر
+
+دُمج [PR #91](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/91) عند `2d5893dea014c638937e953919c68f2251d035ef` من commit المصدر `e974dfd12f2bf372e34dbca463a082b7017400e2`. نجح CI في [push #32689166257](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689166257) و[PR #32689176699](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689176699) بوظيفتي Python وFrontend.
+
+توقف [Publish #32689333249](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689333249) fail-closed بسبب اختلاف حجم ZIP القديم؛ لم يحذف release أو tag. بُني archive وmanifest من merge SHA، واستُبدل الأصلان الرسميان معًا ثم تحقق تنزيل عام غير مخزّن من SHA والحجم. نجح [Publish #32689575111](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689575111) في التحقق العام. الزوج الرسمي: SHA-256 `28d94129a9894fee0cf31545d286c176403c814c45203dbaf0e002eb7a390b79`، حجم `570612` bytes، commit `2d5893d…`.
+
 ## التراجع
 
-قبل الدمج، التراجع هو حذف فرع M43. بعد الدمج والنشر، يعكس commit M43 ثم ينشر ZIP/manifest متطابقان مع SHA المستهدف عبر workflow fail-closed؛ لا تُحذف release/tag ولا Vault تلقائيًا.
+يعكس merge `2d5893d…` ثم ينشر ZIP/manifest متطابقان مع SHA المستهدف عبر workflow fail-closed؛ لا تُحذف release/tag ولا Vault تلقائيًا.
