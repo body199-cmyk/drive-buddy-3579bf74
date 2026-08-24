@@ -1,5 +1,22 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M43] — 2026-08-24 — Vault Drive-managed ورابط فحص محفوظ
+
+### Changed
+- Vault format 3 هي الصيغة الافتراضية الجديدة بقرار مالك صريح: session blob المموّه وAPI metadata اللازمة للاستعادة يُحفظان في زوج versioned داخل `TeleDrive_AppData`، فيستعيد Runtime Colab جديد Telegram من Drive بلا Colab Secrets أو هاتف أو OTP عند صلاحية الجلسة.
+- تبقى format 1/2 قابلة للقراءة؛ format 2 تستخدم مفتاحها الخارجي مرة أخيرة ثم تُهجّر إلى format 3 فقط بعد أن يقبل Telegram الجلسة. staging + manifest يضمنان عدم استبدال النسخة النشطة قبل نجاح البديل، وفشل/revocation ينظف محليًا فقط.
+- Cell 3 يفضّل Vault Drive-managed؛ Colab Secrets صارت مسار ترقية اختياريًا فقط للـformat 2 القديمة. لا تُطبع API Hash أو session.
+- رابط الفحص الأخير صار محفوظًا في SQLite settings الخاصة بالـbackend ويصل إلى React عبر live snapshot الحقيقي؛ يوجد حفظ واضح عند blur/نجاح التحليل وزر مسح في React وGradio. لا `localStorage` ولا endpoint موازٍ ولا نقل Telegram زائف.
+- أعيد بناء `panel.bundle.gz` من React source، وأضيفت أفعال registry حقيقية ومربوطة لواجهة Gradio كي لا توجد عناصر ready غير موصولة.
+
+### Gates and local verification
+- `779 passed` · compileall PASS · launcher `53/53` · notebook check + cmp PASS · React contracts `34/34` · lint/build PASS (تحذيرات baseline فقط) · package build PASS (`570612` bytes، `28d94129…90b79`).
+- يغطي regression الحفظ والاستعادة Drive-managed بلا Secret خارجي، وترقية format 2 بعد استعادة موثقة، والاحتفاظ بزوج Drive عند فشل الجلسة، وحفظ/مسح الرابط في backend بلا enqueue أو local storage.
+- حد الأمان تغيّر بقرار المالك: من يملك الوصول الكامل لزوج Vault format 3 على Drive يستطيع استعادة Telegram؛ لا تظهر القيم في UI أو logs أو Git. راجع `ADR-004-session-vault.md`.
+
+### Not merged or published yet
+- لا PR أو merge أو publish أو Colab live proof حتى كتابة هذا المدخل. يلزم إثبات Cells 1–4 على الحزمة المنشورة، بما فيه `telegram session vault: restored` و`Gradio · Live bridge`؛ لا `Colab-ready` أو `Complete` قبل ذلك.
+
 ## [M42] — 2026-08-23 — استعادة Vault المشفّر في Colab
 
 ### Fixed

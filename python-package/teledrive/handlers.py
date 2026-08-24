@@ -117,6 +117,8 @@ ERROR_ARITY: dict[str, int] = {
     # DOC-39 §5 selection stage: (analyze_message, candidates_table,
     # selection_preview, enqueue_btn, group_choice).
     "analyze.run": 5,
+    "analyze.remember_link": 1,
+    "analyze.clear_remembered_link": 2,
     "analyze.set_mode": 4,
     "analyze.apply_filters": 5,
     "analyze.select_all": 5,
@@ -431,6 +433,16 @@ class Handlers:
         return _quota_view(self.call("drive.refresh_quota"))
 
     # ---- Analyze ----
+
+    @action("analyze.remember_link")
+    def h_analyze_remember_link(self, link: str):
+        self.call("analyze.remember_link", link)
+        return status_ok(t("msg.link_saved"))
+
+    @action("analyze.clear_remembered_link")
+    def h_analyze_clear_remembered_link(self):
+        self.call("analyze.clear_remembered_link")
+        return component_update(value=""), status_ok(t("msg.link_cleared"))
 
     @action("analyze.run")
     def h_analyze_run(
@@ -781,6 +793,7 @@ def shell_seed(ctx) -> dict[str, Any]:
         "selection_preview": preview,
         "enqueue_allowed": bool(summary["count"] > 0 and folder_ref is not None),
         "group_choices": [label for label, _value in (group_update.get("choices") or [])],
+        "remembered_link": ctx.scanner.remembered_link(),
         "analyze_mode": DEFAULT_SCAN_MODE,
         "analyze_fields": ctx.scanner.mode_fields(DEFAULT_SCAN_MODE),
         "dashboard": ctx.stats.dashboard(),

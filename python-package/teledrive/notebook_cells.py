@@ -563,10 +563,12 @@ print("journal mode:", ctx.db.journal_mode())
 '''
 
 CELL_3 = '''# ==== Cell 3: native Colab Drive auth + optional Telegram vault probe ====
-# Drive is connected FIRST. A saved encrypted Telegram vault still needs the
-# app API hash to decrypt in a new runtime. Colab Secrets are read before the
-# vault decision; if absent, a saved vault asks only for the missing decrypt
-# credentials, never a phone / OTP. Values are never printed or logged.
+# Drive is connected FIRST. A current Drive-managed vault contains the API
+# credentials needed only inside this local runtime, so the same Drive account
+# restores Telegram after Restart without Colab Secrets, phone or OTP. Legacy
+# format-2 vaults remain supported and ask only for their unwrap credential so
+# the app can migrate them after a successful restore. Values are never printed
+# or logged.
 
 # Google Drive: native Colab credentials only. No desktop OAuth JSON upload,
 # no pasted authorization code, no persisted Drive token file.
@@ -588,12 +590,13 @@ from teledrive.session_vault import SessionVault
 probe = SessionVault(ctx).probe(drive_service)
 has_saved_vault = bool(probe.get("has_session") and probe.get("has_creds"))
 api_id = str(probe.get("api_id") or "").strip()
-api_hash = ""
+api_hash = str(probe.get("api_hash") or "").strip()
 phone = probe.get("phone", "")
-cred_source = "hidden prompt"
+cred_source = "Drive-managed vault" if bool(probe.get("drive_managed")) else "hidden prompt"
 
-# A format-2 vault intentionally omits API Hash from Drive. Load the runtime
-# secret first even when a saved vault exists, so Cell 4 can unwrap it safely.
+# Legacy format-2 vaults intentionally omit API Hash from Drive. Colab Secrets
+# are an optional migration aid, not a requirement for the new Drive-managed
+# format. Values stay in runtime memory only and are never printed.
 try:
     from google.colab import userdata as _td_userdata
     try:
@@ -601,18 +604,24 @@ try:
     except Exception:
         secret_api_id = ""
     try:
-        api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
+        secret_api_hash = str(_td_userdata.get("TELEGRAM_API_HASH") or "").strip()
     except Exception:
-        api_hash = ""
+        secret_api_hash = ""
     if secret_api_id.isdigit():
         api_id = secret_api_id
-    if api_id.isdigit() and api_hash:
+    if secret_api_hash:
+        api_hash = secret_api_hash
+    if secret_api_id.isdigit() and secret_api_hash:
         cred_source = "Colab Secrets"
 except Exception:
     pass
 
 if has_saved_vault:
     print("saved Telegram session found for:", probe.get("phone_label") or "(hidden)")
+    if bool(probe.get("drive_managed")):
+        print("Telegram restore source: Drive-managed vault (no Colab Secret required)")
+    else:
+        print("Telegram restore source: legacy vault; API Hash is needed once to migrate")
 else:
     print("no saved Telegram session found for this Drive account")
 
@@ -644,7 +653,7 @@ if api_id and api_hash:
     restored = session_vault.restore_from_context(ctx, secret=api_hash)
     print("telegram session vault:", "restored" if restored else "not restored; manual login remains available")
     if not restored:
-        ctx.telegram_auth.set_credentials(api_id, api_hash)   # secrets stay in memory
+        ctx.telegram_auth.set_credentials(api_id, api_hash)   # runtime memory only
     del api_id, api_hash
     print("telegram credentials loaded into runtime memory")
     print("telegram status:", ctx.telegram_auth.status().state)

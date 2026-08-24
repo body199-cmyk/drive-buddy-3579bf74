@@ -1,52 +1,50 @@
-# ADR-004: Colab Secrets + Drive session vault + keep-alive
+# ADR-004 — Telegram Session Vault على Google Drive
 
-- الحالة: معتمد / منفَّذ
-- التاريخ: 2026-08-13
-- القرار من: المالك (تعليمة مباشرة في جلسة Arena)
+- الحالة: **معتمد / منفّذ محليًا في M43 — التكامل والنشر وColab الحي معلّقة**
+- التاريخ الأصلي: 2026-08-13
+- تعديل M43: 2026-08-24
+- القرار من: المالك، بتعليمات صريحة لتجربة «تسجيل واحد ثم Restart بلا Secret أو OTP»
 - المرجع الدستوري: §11 (الأسرار) · §13 (Telegram/Drive) · §16 (سبع خلايا) · تجاوز صريح بموافقة المالك
 
 ## السياق
 
-جلسة Colab المجانية تمسح `/content` عند الفصل. المستخدم كان مضطرًا في كل VM جديد أن:
+تزيل جلسة Colab المجانية محتوى `/content` عند إعادة التشغيل، بينما يريد المالك أن تكون تجربة Telegram مثل جهازه نفسه: يربط Drive ويُسجّل Telegram مرة واحدة فقط، ثم يستعيد نفس الحساب تلقائيًا من Drive على Runtime جديد. كان تصميم M42 يحل عيب تمرير مفتاح Vault format 2، لكنه ما زال يتطلب `TELEGRAM_API_HASH` من Colab Secrets لفك الـVault. ذلك لا يطابق تجربة Drive-only المطلوبة.
 
-1. يشغّل الخلايا من 1 (الحزم تُحذف مع الجهاز).
-2. يعيد كتابة API ID / API Hash.
-3. يعيد OTP / 2FA لتليجرام.
-4. يعيد نقر مصادقة Drive.
-
-الدستور §13 يقول إن بيانات تليجرام تبقى في الذاكرة فقط. المالك وافق صراحة على حلول أقل أمانًا مقابل ألا يعيد إدخال البيانات.
-
-لا يمكن تخطي الخلايا 1–4 بعد موت الـVM: بايثون والحزم وSQLite تُمسَح. الذي يمكن توفيره هو إعادة الكتابة وإعادة الـOTP.
+> **الحد الأمني المقبول بقرار المالك:** حساب Google Drive المخوّل بالوصول إلى `TeleDrive_AppData` هو حدّ الحماية العملي لاستعادة Telegram. لا يُطبع أي credential ولا يُرسل إلى React أو السجلات أو Git أو notebook output.
 
 ## القرار
 
-1. **Colab Secrets** بأسماء ثابتة `TELEGRAM_API_ID` و`TELEGRAM_API_HASH`. الخلية 3 تقرأها أولًا وتسقط إلى `getpass` إن نقص سر. الأسرار لا تُكتب في النوتبوك ولا في Git ولا في السجلات.
-2. **خزنة جلسة تليجرام** على Drive في `TeleDrive_AppData/td_telegram.session.vault`: نسخة مُعمّاة (XOR-stream بمفتاح PBKDF2 من api_hash) من ملف `telegram.session` المحلي. تُحفظ بعد `AUTHORIZED` وتُستعاد في الخلية 4 قبل `set_credentials`. Logout يحذف الملف المحلي والبلوب.
-3. **Drive يبقى native Colab** (`authenticate_user` + `about().get`). لا `drive_token.json` ولا OAuth desktop.
-4. **Keep-alive** داخل الخلية 4: خيط نبض كل دقيقتين + نقرة JS على زر Connect. لا يدّعي هزيمة حد الـ12 ساعة ولا التبويب المغلق.
-5. تبقى **سبع خلايا**. ترتيب الخلية 4: Drive أولًا → استعادة الخزنة → بيانات تليجرام → إطلاق الواجهة → keep-alive.
+1. تستخدم الحفظات الجديدة **Vault format 3 (Drive-managed)**. يحفظ manifest versioned زوجًا جديدًا من session blob المموّه وmetadata الضرورية لتشغيل Telethon في Runtime جديد، ومنها API credentials، داخل `TeleDrive_AppData`.
+2. يُستعاد format 3 في Cell 3/4 مباشرةً من Drive؛ لا يتطلب Colab Secrets أو رقم هاتف أو OTP عندما تكون جلسة Telegram ما زالت صالحة.
+3. تبقى Vault format 1 وformat 2 قابلة للقراءة. يحتاج format 2 مفتاحها مرة أخيرة من ذاكرة runtime أو Colab Secret، ثم بعد تحقق Telegram من الجلسة يُنشر زوج format 3 جديد ذريًا وتصبح الاستعادات التالية Drive-only.
+4. لا تصبح النسخة الجديدة نشطة إلا بعد staging للـsession والـmetadata ثم استبدال manifest. لا يُحذف الزوج السابق قبل نجاح البديل. فشل الاستعادة أو `AuthKeyDuplicatedError` يمسح النسخة المحلية المؤقتة فقط ويترك Vault على Drive ليحمي من فقد البيانات.
+5. لا يُحفظ أو يطبع هاتف Telegram أو OTP أو 2FA password أو Drive OAuth tokens. لا يحمل React أي credential ولا يوجد endpoint إضافي أو تخزين متصفح للأسرار.
+6. تحفظ واجهة التحليل آخر رابط صالح في SQLite settings الخاصة بالـbackend وتعيده داخل live snapshot عبر Gradio bridge. هذا ينجو من Refresh وإعادة بناء الواجهة ضمن Runtime الحالي؛ زر مسح صريح يزيله. لا يستعمل `localStorage` ولا يُرسل الرابط إلى Drive.
+
+## الأثر الأمني
+
+| النموذج | تجربة Restart | حد الحماية |
+|---|---|---|
+| Vault format 2 | يحتاج API Hash خارج Drive | Drive **مع** مفتاح مستقل خارج Drive |
+| Vault format 3 Drive-managed | لا Secret ولا OTP إذا بقيت الجلسة صالحة | حماية حساب Drive وصلاحية الوصول إلى مجلد Vault |
+
+الصيغة 3 ليست تشفيرًا مستقلًا إذا امتلك طرفٌ ما وصولًا كاملًا إلى الـVault؛ التمويه يبقي blob غير مقروء عرضيًا لكنه لا يضيف حد أمان خارج Drive. هذا trade-off اختاره المالك صراحةً لتحسين الاستخدام. ينبغي عدم مشاركة حساب Drive أو مجلد `TeleDrive_AppData` مع غير موثوق، واستخدام حساب Google محمي بمصادقة قوية.
 
 ## البدائل المرفوضة
 
-- أسرار مكتوبة داخل خلية النوتبوك: أسهل، وأخطر إن شارُك الملف أو دُفع للريبو.
-- Colab Secrets بلا خزنة جلسة: ما زال OTP مطلوبًا في كل VM.
-- وضع SQLite/runtime على Drive الموصول: ممنوع دستوريًا (FUSE/WAL).
-- تمديد جلسة Colab مجانًا بلا حدود: غير ممكن من طرفنا.
+- Secrets مكتوبة داخل خلايا النوتبوك أو Git: مرفوضة لأنها قد تنتشر عند مشاركة النوتبوك.
+- إبقاء format 2 فقط: مرفوض لأنه يفرض Colab Secrets، خلاف تجربة Drive-only التي اختارها المالك.
+- تخزين session SQLite أو قاعدة runtime على Drive mounted: مرفوض بسبب FUSE/WAL والملفات المؤقتة.
+- `localStorage` أو `sessionStorage` للرابط: مرفوض؛ الواجهة يجب أن تستمد الحالة من backend الحي عبر Gradio لا من نسخة مستقلة داخل المتصفح.
 
-## التأثير
+## التراجع
 
-- ملف الجلسة = كعكة دخول. من يملكه مع api_hash يقلّد الحساب. الحماية = حساب Drive الخاص بالمالك + تعمية بمفتاح الـapi_hash.
-- لا تُلمس قواعد النقل أو الطابور أو SQLite على FUSE.
-- النوتبوك مولَّد من مصدر واحد ما زال سبع خلايا.
-
-## خطة التنفيذ والتراجع
-
-تنفيذ في `session_vault.py` + خطافات `telegram_auth` + الخليتان 3 و4. التراجع: حذف `session_vault.py` وإرجاع الخليتين وإيقاف الخطافات؛ بلوب Drive يبقى حتى يحذفه المالك يدويًا أو يعمل Logout على النسخة الجديدة.
+إلغاء الصيغة 3 يعني إعادة الكود السابق ونشر ZIP/manifest متطابقين مع SHA السابق عبر مسار release fail-closed. لا يُحذف release/tag. لا تحذف Vault format 3 تلقائيًا؛ تظل قابلة للاسترجاع أو الحذف فقط من إجراء `session.forget` الصريح.
 
 ## الاختبارات
 
-`tests/test_session_vault.py` وامتداد `tests/test_notebook.py`. لا إثبات Colab حي في هذه الجلسة.
+يغطي `tests/test_session_vault.py` حفظ واستعادة format 3 بلا Secret خارجي، وmigration من format 2 بعد استعادة موثقة، واحتفاظ Drive عند session revoked. ويغطي `tests/test_react_bridge.py` و`tests/teledrive-sandbox.contract.test.mjs` أن رابط الفحص محفوظ في backend ويمكن مسحه ولا يفتح تخزين متصفح أو مسار نقل بديل.
 
 ## المراجع
 
-`python-package/teledrive/session_vault.py` · `docs/PHASE_REPORTS/PHASE_M25_T01.md`
+`python-package/teledrive/session_vault.py` · `python-package/teledrive/notebook_cells.py` · `python-package/teledrive/services.py` · `python-package/teledrive/react_bridge.py` · `docs/PHASE_REPORTS/PHASE_M43_DRIVE_MANAGED_VAULT_AND_ANALYZE_LINK.md`

@@ -108,15 +108,18 @@ def test_cell_4_is_non_blocking_so_cells_5_to_7_stay_runnable():
     assert "non-blocking" in cell4
 
 
-def test_cell_3_loads_colab_secrets_before_vault_branch_and_prompts_minimally():
+def test_cell_3_uses_drive_managed_vault_before_optional_secret_migration():
     cell3 = notebook_cells.CELLS[2]["code"]
+    assert 'api_id = str(probe.get("api_id") or "").strip()' in cell3
+    assert 'api_hash = str(probe.get("api_hash") or "").strip()' in cell3
+    assert 'cred_source = "Drive-managed vault"' in cell3
+    assert "no Colab Secret required" in cell3
     assert "from google.colab import userdata" in cell3
     assert "TELEGRAM_API_ID" in cell3
     assert "TELEGRAM_API_HASH" in cell3
     assert "getpass.getpass" in cell3
     assert "drive_token" not in cell3
-    assert cell3.index("from google.colab import userdata") < cell3.index("if has_saved_vault:")
-    assert 'api_id = str(probe.get("api_id") or "").strip()' in cell3
+    assert cell3.index('api_hash = str(probe.get("api_hash")') < cell3.index("from google.colab import userdata")
     assert "if not has_saved_vault and not phone:" in cell3
 
 

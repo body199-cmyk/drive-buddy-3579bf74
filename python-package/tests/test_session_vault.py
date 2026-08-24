@@ -13,6 +13,7 @@ from teledrive.errors import TeleDriveError
 from teledrive.session_vault import (
     MAGIC,
     VAULT_CREDS_NAME,
+    VAULT_FORMAT_DRIVE_MANAGED,
     VAULT_FORMAT_ENCRYPTED,
     VAULT_MANIFEST_NAME,
     VAULT_SESSION_NAME,
@@ -202,8 +203,8 @@ def test_save_now_uploads_session_and_creds(ctx, caplog):
     creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
     assert payload["api_id"] == "1234567"
-    assert payload["format"] == VAULT_FORMAT_ENCRYPTED
-    assert "api_hash" not in payload
+    assert payload["format"] == VAULT_FORMAT_DRIVE_MANAGED
+    assert payload["api_hash"] == "testhash"
     assert payload["session_file"].startswith(VAULT_VERSION_PREFIX)
     assert payload["session_file"].endswith(".session")
     session_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".session"))
@@ -315,8 +316,8 @@ def test_save_now_falls_back_to_in_memory_credentials(ctx, caplog):
     creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
     assert payload["api_id"] == "7654321"
-    assert payload["format"] == VAULT_FORMAT_ENCRYPTED
-    assert "api_hash" not in payload
+    assert payload["format"] == VAULT_FORMAT_DRIVE_MANAGED
+    assert payload["api_hash"] == "memoryhash"
     logged = "\n".join(rec.getMessage() for rec in caplog.records)
     assert "memoryhash" not in logged
     assert "+201234567890" not in logged
@@ -459,10 +460,10 @@ def test_snapshot_falls_back_when_backup_is_locked(ctx, monkeypatch):
     assert data.startswith(b"SQLite format 3")
 
 
-def test_format_two_vault_omits_api_hash_and_restores_from_memory(ctx, monkeypatch):
+def test_drive_managed_vault_restores_without_colab_secret(ctx, monkeypatch):
     from teledrive import config
 
-    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"format-two")
+    local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"drive-managed")
     ctx.telegram_auth.state = ta.AUTHORIZED
     ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
     ctx.telegram_auth._api_id = 1234567
@@ -475,10 +476,10 @@ def test_format_two_vault_omits_api_hash_and_restores_from_memory(ctx, monkeypat
     assert saved.saved is True
     creds_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".creds"))
     payload = json.loads(creds_meta["_bytes"].decode("utf-8"))
-    assert payload["format"] == VAULT_FORMAT_ENCRYPTED
-    assert "api_hash" not in payload
+    assert payload["format"] == VAULT_FORMAT_DRIVE_MANAGED
+    assert payload["api_hash"] == "restore-hash"
     session_meta = next(m for m in drive.files.values() if m["name"].startswith(VAULT_VERSION_PREFIX) and m["name"].endswith(".session"))
-    assert b"format-two" not in session_meta["_bytes"]
+    assert b"drive-managed" not in session_meta["_bytes"]
 
     ctx.telegram_auth.state = ta.DISCONNECTED
     ctx.telegram_auth.client = None
@@ -494,6 +495,10 @@ def test_format_two_vault_omits_api_hash_and_restores_from_memory(ctx, monkeypat
 
     assert restored.restored is True
     assert Path(config.TELEGRAM_SESSION).exists()
+    probe = ctx.session_vault.probe(drive)
+    assert probe["drive_managed"] is True
+    assert probe["api_hash"] == "restore-hash"
+    assert "api_hash" not in json.dumps(ctx.session_vault.status())
 
 
 def test_save_after_login_defers_then_flushes_when_drive_connects(ctx):
@@ -688,7 +693,7 @@ def test_status_is_redacted_and_reports_vault_metadata(ctx):
 
     status = ctx.session_vault.status()
 
-    assert status["vault_format"] == VAULT_FORMAT_ENCRYPTED
+    assert status["vault_format"] == VAULT_FORMAT_DRIVE_MANAGED
     assert status["phone_label"] != "+201234567890"
     names = {entry["name"] for entry in status["vault_files"]}
     assert VAULT_MANIFEST_NAME in names
@@ -696,24 +701,35 @@ def test_status_is_redacted_and_reports_vault_metadata(ctx):
     assert any(name.startswith(VAULT_VERSION_PREFIX) and name.endswith(".creds") for name in names)
 
 
-def test_restore_from_context_uses_explicit_secret_for_format_two_vault(ctx, monkeypatch):
-    """Cell 4 supplies the unwrap secret before TelegramAuth has live memory."""
+def test_restore_from_context_migrates_format_two_to_drive_managed(ctx, monkeypatch):
+    """A legacy format-2 vault needs its secret once, then becomes Drive-only."""
     from teledrive import config
 
     local = _sqlite_session(Path(config.TELEGRAM_SESSION), b"context-secret")
-    ctx.telegram_auth.state = ta.AUTHORIZED
-    ctx.telegram_auth.client = type("C", (), {"session_path": str(local)})()
-    ctx.telegram_auth._api_id = 1234567
-    ctx.telegram_auth._api_hash = "restore-hash"
-    ctx.telegram_auth._phone = "+201234567890"
     drive = _connect_fake_drive(ctx)
+    folder_id = drive.ensure_folder("TeleDrive_AppData")
+    version = "legacyformat2"
+    session_name = f"{VAULT_VERSION_PREFIX}{version}.session"
+    creds_name = f"{VAULT_VERSION_PREFIX}{version}.creds"
+    drive.upsert_bytes(session_name, session_vault.wrap_blob(local.read_bytes(), "restore-hash"), folder_id)
+    drive.upsert_bytes(
+        creds_name,
+        json.dumps({
+            "api_id": "1234567",
+            "phone": "+201234567890",
+            "format": VAULT_FORMAT_ENCRYPTED,
+            "session_file": session_name,
+        }).encode("utf-8"),
+        folder_id,
+    )
+    drive.upsert_bytes(
+        VAULT_MANIFEST_NAME,
+        json.dumps({"format": 1, "session_file": session_name, "creds_file": creds_name}).encode("utf-8"),
+        folder_id,
+    )
 
-    saved = ctx.session_vault.save_after_login()
-    assert saved.saved is True
-    remote_before = {meta["name"]: meta["_bytes"] for meta in drive.files.values()}
-
-    # This mirrors a new Colab runtime: the Vault is present, but TelegramAuth
-    # has no in-memory API hash yet. Cell 4 passes the secret explicitly.
+    # This mirrors a new Colab runtime: no in-memory hash yet. Cell 4 supplies
+    # the one-time legacy unwrap secret; no Drive artifact is deleted first.
     ctx.telegram_auth.state = ta.DISCONNECTED
     ctx.telegram_auth.client = None
     ctx.telegram_auth._api_hash = ""
@@ -722,10 +738,15 @@ def test_restore_from_context_uses_explicit_secret_for_format_two_vault(ctx, mon
     def fake_set_credentials(api_id, api_hash):
         captured.update(api_id=api_id, api_hash=api_hash)
         ctx.telegram_auth.state = ta.AUTHORIZED
+        ctx.telegram_auth._api_id = int(api_id)
+        ctx.telegram_auth._api_hash = api_hash
         return type("S", (), {"authorized": True, "state": ta.AUTHORIZED, "account_label": ""})()
 
     monkeypatch.setattr(ctx.telegram_auth, "set_credentials", fake_set_credentials)
 
     assert session_vault.restore_from_context(ctx, secret="restore-hash") is True
     assert captured == {"api_id": "1234567", "api_hash": "restore-hash"}
-    assert {meta["name"]: meta["_bytes"] for meta in drive.files.values()} == remote_before
+    active = json.loads(next(meta["_bytes"] for meta in drive.files.values() if meta["name"] == VAULT_MANIFEST_NAME))
+    active_creds = json.loads(next(meta["_bytes"] for meta in drive.files.values() if meta["name"] == active["creds_file"]))
+    assert active_creds["format"] == VAULT_FORMAT_DRIVE_MANAGED
+    assert active_creds["api_hash"] == "restore-hash"

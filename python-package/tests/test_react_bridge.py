@@ -92,6 +92,7 @@ def test_react_bridge_snapshot_has_real_empty_state(ctx):
     assert snapshot["drive"]["status"] == "DISCONNECTED"
     assert snapshot["drive"]["quotaUsed"] is None
     assert snapshot["folder"] == {"id": None, "name": None}
+    assert snapshot["analyze"] == {"sourceLink": ""}
     assert snapshot["queue"] == []
     assert snapshot["candidates"] == []
     assert snapshot["concurrency"] == 2
@@ -122,6 +123,24 @@ def test_react_bridge_folder_id_is_persisted_by_existing_service(ctx):
     assert response["status"] == "ok"
     assert response["state"]["folder"]["id"] == "folder-real-id"
     assert db.get_setting("drive_folder_id") == "folder-real-id"
+
+
+def test_react_bridge_remembers_and_clears_valid_analyze_link(ctx):
+    link = "https://t.me/example/10"
+
+    remembered = _bridge(ctx).handle(_request("analyze.remember_link", {"link": link}))
+
+    assert remembered["status"] == "ok"
+    assert remembered["state"]["analyze"]["sourceLink"] == link
+    assert db.get_setting("last_analyze_link") == link
+    assert ctx.selection.visible() == []
+    assert db.list_items() == []
+
+    cleared = _bridge(ctx).handle(_request("analyze.clear_remembered_link"))
+
+    assert cleared["status"] == "ok"
+    assert cleared["state"]["analyze"]["sourceLink"] == ""
+    assert db.get_setting("last_analyze_link") == ""
 
 
 def test_react_bridge_returns_localized_analyze_validation_failure(ctx, monkeypatch):

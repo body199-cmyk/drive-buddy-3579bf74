@@ -56,6 +56,9 @@ export type LiveUiState = {
   };
   engine: string;
   concurrency: number;
+  analyze: {
+    sourceLink: string;
+  };
   queue: QueueRow[];
   candidates: CandidateRow[];
 };

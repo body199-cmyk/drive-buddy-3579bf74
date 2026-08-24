@@ -38,6 +38,7 @@ const emptyState = {
   folder: { id: null, name: null },
   engine: "idle",
   concurrency: 2,
+  analyze: { sourceLink: "" },
   queue: [],
   candidates: [],
 };
@@ -260,6 +261,14 @@ test("15 — browser boundary has no manual network or secret storage transport"
   assert.doesNotMatch(source, /\b(fetch|XMLHttpRequest|WebSocket)\s*\(/);
   assert.doesNotMatch(source, /\b(localStorage|sessionStorage)\s*\./);
   assert.doesNotMatch(source, /\/api\//);
+});
+
+test("15b — remembered analyze link stays backend-backed and offers an explicit clear action", async () => {
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /state\?\.analyze\?\.sourceLink \?\? ""/);
+  assert.match(component, /run\("analyze\.remember_link", \{ link: value \}\)/);
+  assert.match(component, /actionId="analyze\.clear_remembered_link"/);
+  assert.doesNotMatch(component, /\b(localStorage|sessionStorage)\b/);
 });
 
 test("16 — language direction comes from live state without resetting it", async () => {
