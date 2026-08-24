@@ -292,11 +292,52 @@ class SelectionService:
         return enqueued
 
 
+LAST_ANALYZE_LINK_SETTING = "last_analyze_link"
+MAX_REMEMBERED_ANALYZE_LINK_CHARS = 4096
+
+
 class ScannerService:
     """Runs a scoped scan on the shared loop and hands results to selection."""
 
     def __init__(self, ctx) -> None:
         self.ctx = ctx
+
+    @staticmethod
+    def _validated_link(link: str) -> str:
+        candidate = str(link or "").strip()
+        if not candidate or len(candidate) > MAX_REMEMBERED_ANALYZE_LINK_CHARS:
+            raise TeleDriveError("invalid saved link", "err.bad_link")
+        try:
+            parse_link(candidate)
+        except InvalidLink as exc:
+            raise TeleDriveError(str(exc), "err.bad_link") from exc
+        return candidate
+
+    def remember_link(self, link: str) -> str:
+        """Persist only a valid user-supplied scan link in app settings.
+
+        This preference belongs to the live backend context and its SQLite
+        settings store, never to a browser-only demo state. It contains no
+        Telegram credential and is surfaced back only in the redacted live
+        snapshot that originated from the same user input.
+        """
+        candidate = self._validated_link(link)
+        db.set_setting(LAST_ANALYZE_LINK_SETTING, candidate)
+        self.ctx.ui_state.extra[LAST_ANALYZE_LINK_SETTING] = candidate
+        return candidate
+
+    def clear_remembered_link(self) -> str:
+        db.set_setting(LAST_ANALYZE_LINK_SETTING, "")
+        self.ctx.ui_state.extra[LAST_ANALYZE_LINK_SETTING] = ""
+        return ""
+
+    def remembered_link(self) -> str:
+        cached = self.ctx.ui_state.extra.get(LAST_ANALYZE_LINK_SETTING)
+        if isinstance(cached, str):
+            return cached
+        value = str(db.get_setting(LAST_ANALYZE_LINK_SETTING, "") or "").strip()
+        self.ctx.ui_state.extra[LAST_ANALYZE_LINK_SETTING] = value
+        return value
 
     def analyze(
         self,
@@ -370,6 +411,7 @@ class ScannerService:
             scan_link(telegram_auth.client, parsed, request)
         )
         self.ctx.selection.set_candidates(items)
+        self.remember_link(link)
         db.add_event("", "scan", "analyzed", {
             "count": len(items),
             "mode": request.mode,
@@ -553,6 +595,9 @@ class LiveUiStateService:
             },
             "engine": str(ctx.queue_manager.status_label()),
             "concurrency": int(ctx.settings.current()),
+            "analyze": {
+                "sourceLink": ctx.scanner.remembered_link(),
+            },
             "queue": queue,
             "candidates": candidates,
         }

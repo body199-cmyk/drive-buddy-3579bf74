@@ -448,7 +448,9 @@ function AnalyzeSection({
   onNavigate(page: Page): void;
   onValidationError(message: string): void;
 }) {
-  const [sourceLink, setSourceLink] = useState("");
+  const savedSourceLink = state?.analyze?.sourceLink ?? "";
+  const [sourceLink, setSourceLink] = useState(savedSourceLink);
+  const [sourceLinkDirty, setSourceLinkDirty] = useState(false);
   const [mode, setMode] = useState<ScanMode>("message");
   const [messageId, setMessageId] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
@@ -460,6 +462,25 @@ function AnalyzeSection({
   const candidates = state?.candidates ?? [];
   const selected = selectedVisibleCandidates(candidates);
   const blockReason = enqueueBlockReason(state, candidates);
+
+  useEffect(() => {
+    if (!sourceLinkDirty) setSourceLink(savedSourceLink);
+  }, [savedSourceLink, sourceLinkDirty]);
+
+  const rememberSourceLink = async () => {
+    const value = sourceLink.trim();
+    if (!value) return;
+    const response = await run("analyze.remember_link", { link: value });
+    if (response?.status === "ok") setSourceLinkDirty(false);
+  };
+
+  const clearRememberedSourceLink = async () => {
+    const response = await run("analyze.clear_remembered_link");
+    if (response?.status === "ok") {
+      setSourceLink("");
+      setSourceLinkDirty(false);
+    }
+  };
 
   const toggleMedia = (value: MediaType) => {
     if (value === "all") return setMediaTypes(["all"]);
@@ -507,7 +528,7 @@ function AnalyzeSection({
       onValidationError(message);
       return;
     }
-    await run("analyze.run", {
+    const response = await run("analyze.run", {
       link: sourceLink,
       mode,
       messageId: messageId || null,
@@ -516,6 +537,7 @@ function AnalyzeSection({
       limit,
       mediaTypes,
     });
+    if (response?.status === "ok") setSourceLinkDirty(false);
   };
 
   const blockText =
@@ -550,7 +572,11 @@ function AnalyzeSection({
             id="td-link"
             className="td-input"
             value={sourceLink}
-            onChange={(event) => setSourceLink(event.target.value)}
+            onChange={(event) => {
+              setSourceLink(event.target.value);
+              setSourceLinkDirty(true);
+            }}
+            onBlur={() => void rememberSourceLink()}
             placeholder="https://t.me/channel/123"
           />
         </label>
@@ -578,6 +604,16 @@ function AnalyzeSection({
         >
           <Search size={16} aria-hidden="true" />
           {localize(language, "تحليل", "Analyze")}
+        </ActionButton>
+        <ActionButton
+          actionId="analyze.clear_remembered_link"
+          pendingActions={pendingActions}
+          live={live}
+          className="td-button td-button-secondary td-align-end"
+          disabled={!sourceLink}
+          onClick={() => void clearRememberedSourceLink()}
+        >
+          {localize(language, "مسح الرابط المحفوظ", "Clear saved link")}
         </ActionButton>
       </div>
       <div className="td-panel td-mode-panel">

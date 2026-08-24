@@ -73,7 +73,7 @@ _SECURE_GRADIO_ONLY = {
 _NO_ARGS = {
     "telegram.resend_code", "telegram.logout", "telegram.status",
     "drive.connect", "drive.reconnect", "drive.status", "drive.refresh_quota",
-    "analyze.select_all", "analyze.clear_selection", "analyze.enqueue_selected",
+    "analyze.clear_remembered_link", "analyze.select_all", "analyze.clear_selection", "analyze.enqueue_selected",
     "queue.start_selected", "queue.pause", "queue.resume", "queue.stop",
     "queue.retry_failed", "queue.clear_completed", "queue.clear_incomplete",
     "queue.refresh",
@@ -253,6 +253,8 @@ class ReactBridge:
             )
         if action_id == "drive.select_folder":
             return (str(payload.get("folderId") or "").strip(),)
+        if action_id == "analyze.remember_link":
+            return (str(payload.get("link") or "").strip(),)
         if action_id == "analyze.run":
             return (
                 str(payload.get("link") or "").strip(),

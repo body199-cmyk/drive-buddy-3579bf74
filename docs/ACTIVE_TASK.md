@@ -1,28 +1,35 @@
-# ACTIVE TASK
+# المهمة النشطة
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M42` |
-| العنوان | استعادة Telegram Session Vault المشفّر في Colab ومنع login غير لازم بعد Restart |
-| code commit / merge | `b374efc` → `d54b010` عبر PR [#89](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/89) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED — Colab live pending** |
-| Publish | [#32648838713](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648838713) SUCCESS؛ manifest/ZIP العامان commit `d54b010…`، SHA `ffb5f6ab…b0f1`، حجم `568320` bytes |
+| TASK ID | `M43` |
+| العنوان | Vault Telegram ذاتية الاكتفاء على Drive + حفظ آخر رابط فحص في الواجهة الحقيقية |
+| baseline | `7a0d645dce28c352f59e747244f8773fc36ae383` |
+| branch | `fix/m43-drive-only-vault-and-link-memory` |
+| الحالة | **LOCAL VERIFICATION COMPLETE — commit / PR / merge / publish pending** |
 
-## النطاق المثبت
+## النطاق المنفذ محليًا
 
-1. زوج Vault format 2 كان موجودًا على Google Drive التجريبي في `TeleDrive_AppData` ولم يُحذف؛ فشل الاستعادة لا يبرر فقده.
-2. كان Cell 3 يتجاوز تحميل API Hash أو prompt سري عند وجود Vault، و`restore_from_context` يهمل secret الممرر من Cell 4؛ لذلك لا يملك runtime جديد مفتاح فك blob المشفّر.
-3. الإصلاح يمرر secret محليًا فقط من Cell 4 إلى `SessionVault.autorestore`، ويحمّل Cell 3 Colab Secrets قبل قرار Vault. عند وجود Vault بلا Secret، يطلب API ID/Hash المخفيين فقط؛ لا يطلب الهاتف أو OTP.
-4. API Hash لا يوضع في Drive، ولا تُحذف ملفات Vault أو `.part`، ولا تتغير إجراءات Telegram أو transport أو action IDs أو bridge.
+1. Vault format 3 Drive-managed تجعل Drive مصدر الاستعادة الكامل لجلسة Telegram؛ لا تحتاج Runtime جديدة إلى Colab Secrets أو OTP حين تكون الجلسة صالحة.
+2. Vault format 2 القديمة تبقى مدعومة وتُهجّر بعد نجاح الاستعادة فقط. لا تُحذف النسخة النشطة قبل نجاح زوج versioned بديل وmanifest جديد.
+3. Cell 3 يفضّل API metadata من Vault format 3 ويعامل Colab Secrets كوسيلة ترقية اختيارية فقط للـformat 2 القديمة. لا يطبع API Hash.
+4. React وGradio يعرضان حالة Telegram من ApplicationContext نفسه، لذلك تظهر الحالة المستعادة في واجهة المشروع بدل طلب تسجيل منفصل.
+5. رابط التحليل المحفوظ يدخل من action registry إلى `ScannerService` وSQLite settings ثم live snapshot؛ هناك زر مسح صريح في الواجهتين، ولا يوجد localStorage أو backend موازٍ.
 
-## الأدلة
+## البوابات المحلية
 
-`770 passed` محليًا، وCI Python/Frontend نجحا في push وPR · launcher `51/51` · notebook check + cmp PASS · React contracts `33/33` محليًا · `pnpm run build` PASS · lint exit 0 مع 9 تحذيرات baseline · package build/ZIP integrity PASS. workflow النشر الأول توقف fail-closed لاختلاف الحجم؛ استُبدل الزوج المتطابق معًا فقط، ثم تحقق workflow #32648838713 من الأصول العامة بنجاح.
+| البوابة | النتيجة |
+|---|---|
+| Python suite | `779 passed` |
+| launcher | `53/53 ready actions resolve` |
+| compileall / notebook check / cmp | PASS |
+| React lint / build | PASS؛ تحذيرات baseline فقط |
+| React contracts | `34/34 PASS` |
+| panel bundle | rebuilt from source |
+| package archive | PASS؛ SHA `28d94129…90b79`، `570612` bytes |
 
-## حدود لم تغلق
+## حد الأمان والتحقق المتبقي
 
-Cell 4 في Colab الخاص بالمالك لم يُشغّل بعد على الحزمة M42؛ لا `Colab-ready` أو `Complete`. كما أن وجود M41 lease في ZIP العام لا يمثل إثباتًا حيًا لـ`Backend bridge unavailable`; يبقى KNOWN_ISSUES #71 مفتوحًا حتى ظهور `Gradio · Live bridge` في Colab.
+صيغة Drive-managed قرار مالك موثق في ADR-004: حماية حساب Drive هي حد الوصول العملي. لا تُطبع أو تُرسل API Hash/session/OTP إلى الواجهة أو السجلات أو Git. لا تحذف M43 `.part` أو Vault أو release/tag.
 
-## نقطة التراجع والخطوة التالية
-
-عكس merge `d54b010…` ثم إعادة نشر زوج ZIP/manifest مطابقين لـSHA سابق هو rollback الكامل إن لزم. لا يحذف release/tag. الخطوة التالية: Runtime Colab جديد على نفس Drive، Cells 1–4، وإثبات `telegram session vault: restored` ثم `Gradio · Live bridge`.
+لم يثبت بعد تشغيل Cells 1–4 بالحزمة M43 المنشورة على Colab، ولم يظهر `Gradio · Live bridge` في هذا التعديل. لا تستخدم **Colab-ready** أو **Complete** قبل هذا الدليل.

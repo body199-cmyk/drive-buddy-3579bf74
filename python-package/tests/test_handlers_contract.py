@@ -31,6 +31,7 @@ ARGS = {
     "drive.create_folder": ("name", "root"),
     "drive.select_folder": ("name :: id",),
     "analyze.run": ("https://t.me/x/1", "auto"),
+    "analyze.remember_link": ("https://t.me/x/1",),
     "analyze.set_mode": ("message",),
     "analyze.apply_filters": ([], "", None, None, "", "", "", ""),
     "analyze.toggle_row": (SimpleNamespace(index=(0, 0), value="☐"),),

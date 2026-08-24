@@ -564,8 +564,13 @@ def _step_analyze(ctx, binder, seed) -> dict[str, Any]:
     with gr.Group(elem_classes=["td-card"]):
         gr.Markdown(t("analyze.instructions"), elem_classes=["td-section-title"])
         with gr.Row():
-            link = gr.Textbox(label=t("form.link"), scale=4)
+            link = gr.Textbox(label=t("form.link"), value=seed["remembered_link"], scale=4)
             analyze_btn = binder.button(gr, "analyze.run", variant="primary", scale=1)
+        with gr.Row():
+            remember_link_btn = binder.button(gr, "analyze.remember_link", variant="secondary")
+            clear_remembered_link_btn = binder.button(
+                gr, "analyze.clear_remembered_link", variant="secondary"
+            )
         mode_ready = binder.is_ready("analyze.set_mode")
         mode = gr.Radio(
             choices=[
@@ -610,7 +615,10 @@ def _step_analyze(ctx, binder, seed) -> dict[str, Any]:
             )
         analyze_message = gr.Textbox(label=t("analyze.result"), interactive=False)
     return {
-        "link": link, "analyze_btn": analyze_btn, "mode": mode,
+        "link": link, "analyze_btn": analyze_btn,
+        "remember_link_btn": remember_link_btn,
+        "clear_remembered_link_btn": clear_remembered_link_btn,
+        "mode": mode,
         "media_types": media_types, "message_id": message_id, "start_id": start_id,
         "end_id": end_id, "limit": limit, "analyze_message": analyze_message,
     }
@@ -959,6 +967,10 @@ def _bind_actions(
                 [analyze["link"], analyze["mode"], analyze["message_id"],
                  analyze["start_id"], analyze["end_id"], analyze["limit"],
                  analyze["media_types"]], a_out)
+    binder.wire(analyze["remember_link_btn"], "analyze.remember_link",
+                [analyze["link"]], [analyze["analyze_message"]])
+    binder.wire(analyze["clear_remembered_link_btn"], "analyze.clear_remembered_link", [],
+                [analyze["link"], analyze["analyze_message"]])
     binder.wire(analyze["mode"], "analyze.set_mode", [analyze["mode"]],
                 [analyze["message_id"], analyze["start_id"],
                  analyze["end_id"], analyze["limit"]], event="change")

@@ -5,19 +5,22 @@ See ``docs/decisions/ADR-004-session-vault.md``.
 
 What is stored
 --------------
-* Colab Secrets (outside this module): ``TELEGRAM_API_ID`` / ``TELEGRAM_API_HASH``.
-* Drive folder ``TeleDrive_AppData``: one obfuscated Telethon session blob
-  named ``td_telegram.session.vault``. That file is a login cookie. Anyone
-  who has it AND the api_hash can impersonate the account.
+* Drive folder ``TeleDrive_AppData``: a versioned Telethon session blob and
+  its credentials metadata. The default format is owner-authorized
+  Drive-managed format 3: it keeps the API credentials and an obfuscated
+  SQLite session together so a fresh Colab runtime can restore without
+  Colab Secrets or a second Telegram login.
 
 What is never stored
 --------------------
-api_id, api_hash, phone, OTP, 2FA password, Drive OAuth tokens. Nothing is
-printed, logged, checkpointed or packaged. Bytes never appear in events.
+phone OTP, 2FA password, Drive OAuth tokens. Nothing is printed, logged,
+checkpointed or packaged. Bytes never appear in events or in the React bridge.
 
-Obfuscation is XOR-stream with a PBKDF2 key derived from api_hash. It is
-NOT a claim of cryptography-grade protection — it only stops a casual
-Drive listing from being a raw SQLite session.
+The session remains wrapped with a PBKDF2-derived stream, but format 3 keeps
+its unwrap credential in the same private Drive vault by the owner's explicit
+choice. It is therefore a usability boundary backed by the Drive account, not
+independent cryptographic protection: anyone with full access to the active
+vault can restore the Telegram sign-in.
 """
 from __future__ import annotations
 
@@ -329,8 +332,13 @@ from .redaction import mask_phone
 VAULT_SESSION_NAME = "telegram.session"
 VAULT_CREDS_NAME = "telegram_creds.json"
 VAULT_FORMAT = 1                  # legacy: raw session + plaintext api_hash
-VAULT_FORMAT_ENCRYPTED = 2        # M24-T05: wrapped session, NO api_hash on Drive
-VAULT_SUPPORTED_FORMATS = (VAULT_FORMAT, VAULT_FORMAT_ENCRYPTED)
+VAULT_FORMAT_ENCRYPTED = 2        # wrapped session; API hash remains outside Drive
+VAULT_FORMAT_DRIVE_MANAGED = 3    # owner-authorized: wrapped session + API hash in Drive
+VAULT_SUPPORTED_FORMATS = (
+    VAULT_FORMAT,
+    VAULT_FORMAT_ENCRYPTED,
+    VAULT_FORMAT_DRIVE_MANAGED,
+)
 
 
 def _plaintext_vault() -> bool:
@@ -608,10 +616,22 @@ class SessionVault:
                 payload = json.loads(raw.decode("utf-8"))
             except Exception:
                 payload = None
+        fmt = int((payload or {}).get("format", 0) or 0)
+        drive_managed = fmt == VAULT_FORMAT_DRIVE_MANAGED
         return {
             "has_session": has_session,
             "has_creds": has_creds,
+            "format": fmt,
             "api_id": str((payload or {}).get("api_id") or "").strip(),
+            # This value is deliberately available only to the local Colab
+            # bootstrap. It is never included in status(), logs, events, or
+            # browser-safe React snapshots.
+            "api_hash": (
+                str((payload or {}).get("api_hash") or "").strip()
+                if drive_managed
+                else ""
+            ),
+            "drive_managed": drive_managed,
             "phone": str((payload or {}).get("phone") or ""),
             "phone_label": mask_phone(str((payload or {}).get("phone") or "")),
         }
@@ -638,6 +658,7 @@ class SessionVault:
         drive = self._drive_client()
         folder_id = self._vault_folder_id(drive)
         plaintext = _plaintext_vault()
+        vault_format = VAULT_FORMAT if plaintext else VAULT_FORMAT_DRIVE_MANAGED
         blob = raw if plaintext else wrap_blob(raw, api_hash)
         version = uuid.uuid4().hex
         session_name = self._versioned_name("session", version)
@@ -646,10 +667,12 @@ class SessionVault:
             "api_id": api_id,
             "phone": phone,
             "saved_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            "format": VAULT_FORMAT if plaintext else VAULT_FORMAT_ENCRYPTED,
+            "format": vault_format,
             "session_file": session_name,
         }
-        if plaintext:
+        if plaintext or vault_format == VAULT_FORMAT_DRIVE_MANAGED:
+            # Format 3 is owner-authorized Drive-only recovery. This metadata
+            # is never sent to browser state, output, events, or package files.
             creds["api_hash"] = api_hash
 
         # Never overwrite the active pair in place.  The new session and its
@@ -746,6 +769,8 @@ class SessionVault:
         api_id = str(payload.get("api_id") or "").strip()
         phone = str(payload.get("phone") or "").strip()
         label = mask_phone(phone)
+        if fmt not in VAULT_SUPPORTED_FORMATS:
+            return self._emit(VaultResult(False, "err.session_vault_invalid"), f"format={fmt}")
         api_hash = (
             str(payload.get("api_hash") or "").strip()
             or str(secret or "").strip()
@@ -789,9 +814,17 @@ class SessionVault:
                 f"restore verification failure: {type(exc).__name__}",
             )
         if status.authorized:
+            migration = ""
+            if fmt == VAULT_FORMAT_ENCRYPTED:
+                # A legacy encrypted vault was restored only because an unwrap
+                # secret was available in this runtime. Publish a complete
+                # format-3 replacement after authorization succeeds; its
+                # manifest becomes active before the old version is cleaned.
+                migrated = self.save_after_login(force=True)
+                migration = " migrated=drive-managed" if migrated.saved else " migration=deferred"
             return self._emit(
                 VaultResult(True, "msg.session_restored", restored=True, phone_label=label),
-                f"format={fmt}",
+                f"format={fmt}{migration}",
             )
         self._discard_stale_local_session()
         return self._emit(
@@ -967,6 +1000,7 @@ class SessionVault:
             if creds_name in children:
                 payload = json.loads(drive.download_bytes(children[creds_name]["id"]).decode("utf-8"))
                 info["vault_format"] = int(payload.get("format", 0) or 0)
+                info["drive_managed"] = info["vault_format"] == VAULT_FORMAT_DRIVE_MANAGED
                 info["saved_at"] = str(payload.get("saved_at") or "")
                 info["phone_label"] = mask_phone(str(payload.get("phone") or ""))
         except Exception as exc:  # noqa: BLE001 - a read model never raises

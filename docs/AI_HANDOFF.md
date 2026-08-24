@@ -1,49 +1,42 @@
-> آخر جلسة فقط. الأدلة التاريخية موجودة في `docs/PHASE_REPORTS/`.
-
-## بطاقة الجلسة — M42: استعادة Vault المشفّر في Colab
+# بطاقة التسليم — M43: Vault Drive-managed ورابط التحليل المحفوظ
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-08-23T15:34Z` |
-| code commit / merge | `b374efcc626d23ca037c1048e4a4c7b9af71d17e` → main `d54b01027f3f7d33b9e5d6cacc4bd59628b26b1c` عبر PR [#89](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/89) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED — Colab live pending** |
-| publish | [#32648838713](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648838713) SUCCESS |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M42_COLAB_SESSION_VAULT_RESTORE.md` |
+| Updated (UTC) | `2026-08-24` |
+| baseline | `main` عند `7a0d645dce28c352f59e747244f8773fc36ae383` |
+| فرع العمل | `fix/m43-drive-only-vault-and-link-memory` |
+| الحالة | **LOCAL VERIFICATION COMPLETE — commit / PR / merge / publish pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M43_DRIVE_MANAGED_VAULT_AND_ANALYZE_LINK.md` |
 
-## السبب الجذري المثبت
+## النتيجة المقصودة
 
-وُجد زوج Vault نشط بصيغة versioned format 2 في `TeleDrive_AppData` بحساب الاختبار: manifest، وملف `.creds`، وملف `.session`. لم يُنزّل أي ملف ولم يُحذف أو يُعدّل شيء في Drive. لذلك لا يفسر اختفاء الملفات طلب تسجيل Telegram من جديد.
+يعالج M43 تجربة المالك المطلوبة: بعد تسجيل Telegram وحفظ Vault جديدة على حساب Drive نفسه، يستطيع Runtime Colab جديد استعادة الجلسة من Drive فقط بلا Colab Secret أو هاتف أو OTP ما دامت Telegram تقبل الجلسة. لا يعرض هذا التصميم API Hash أو session أو هاتف أو OTP في React أو السجلات أو artifacts.
 
-المسار الخاطئ كان مزدوجًا. كان Cell 3 يكتشف وجود Vault ثم يتخطى تحميل `TELEGRAM_API_HASH` من Colab Secrets أو طلبه بصورة مخفية. وحتى إذا توفر hash لخلية 4، كانت `restore_from_context(ctx, secret=api_hash)` تمرر السر إلى دالة تتجاهله ثم تستدعي `autorestore_once()` بلا secret. Vault format 2 لا يخزن API Hash على Drive عمدًا، لذلك يفشل فكّه في runtime جديد ويعود لمسار تسجيل الدخول، بينما تبقى نسخة Drive كما هي.
+الصيغة الافتراضية الجديدة هي **Vault format 3 (Drive-managed)**. تبقى format 1 وformat 2 قابلة للاستعادة؛ تحتاج format 2 مفتاحها الخارجي مرة واحدة فقط، ثم تُنشر format 3 versioned بصورة ذرية بعد نجاح الاستعادة. لا يصبح البديل نشطًا قبل اكتمال staging/manifest، ولا يمس فشل الاستعادة إلا النسخة المحلية المؤقتة.
 
-## إصلاح M42
+## واجهة React وGradio
 
-1. `restore_from_context` و`autorestore_once` و`autorestore` تقبل secret اختياريًا محليًا داخل العملية فقط؛ لا يُكتب أو يُسجّل أو يُرسل إلى Drive.
-2. `probe()` يعيد API ID غير السري الموجود في metadata كي لا يطلب Cell 3 API ID عند وجود Vault.
-3. Cell 3 يقرأ Colab Secrets قبل قرار Vault. إذا لم تتوفر secrets وVault موجود، يطلب API ID/Hash المخفيين فقط ولا يطلب هاتفًا أو OTP؛ Cell 4 تستخدم hash نفسه لفك Vault ثم لا تعيد إنشاء عميل Telegram عند نجاح الاستعادة.
-4. لم تتغير صيغة format 2، ولا يحدث حفظ API Hash على Drive، ولا تتغير سياسة أن failure أو revocation ينظف النسخة المحلية فقط ويحتفظ بزوج Drive.
+حقل رابط القناة/الرسالة يستمد آخر قيمة محفوظة من backend الحي عبر `LiveUiStateService.snapshot()` ويعيدها في React وGradio. الحفظ يتم بعد نجاح التحليل أو من زر/blur صريح، ويمكن مسحه صراحةً. القيمة تحفظ في SQLite settings ضمن Runtime المشروع؛ لا تستخدم `localStorage` أو `sessionStorage` ولا تذهب إلى Drive. لا توجد حالة React وهمية أو backend جديد.
 
-## الأدلة
+## الأدلة المحلية
 
-| الفحص | النتيجة |
+| البوابة | النتيجة |
 |---|---|
-| Regression قبل التصحيح | RED: `restore_from_context(..., secret=...)` أعاد `False` مع Vault format 2 صالح |
-| Regression بعد التصحيح | PASS: secret يُستخدم، تستدعي الاستعادة `set_credentials` الصحيح، وbytes ملفات Drive لا تتغير |
-| Python suite | `770 passed` محليًا وCI Python PASS |
-| launcher | `51/51 ready actions resolve` محليًا وCI PASS |
-| notebook check + cmp | PASS محليًا وCI PASS؛ النسخ مولدة من المصدر ومتطابقة |
-| React contracts | `33/33 PASS` محليًا |
-| lint / build | lint exit 0 مع 9 تحذيرات baseline؛ build PASS محليًا وCI Frontend PASS |
-| نشر الحزمة | manifest وZIP العامان: commit `d54b010…`، SHA-256 `ffb5f6ab9043ae080508203157d2bac956bc2c7ecb6496c71e6150c4af42b0f1`، حجم `568320` bytes |
+| Python | `779 passed` |
+| launcher | `53/53 ready actions resolve` |
+| notebook check + cmp | PASS |
+| React contracts | `34/34 PASS` |
+| lint/build | PASS؛ تحذيرات baseline فقط |
+| package build | PASS؛ `570612` bytes، SHA `28d94129…90b79` |
 
-## النشر الآمن
+## حد الأمان
 
-تشغيل النشر الأول [#32648577584](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648577584) توقف كما ينبغي fail-closed عند اختلاف ZIP القديم (`567611`) عن archive M42 (`568320`). لم يحذف release أو tag أو أي Vault.
+اختار المالك صراحةً أن Drive هو حد الحماية العملي للـVault. من يملك صلاحية كاملة لزوج Vault النشط في `TeleDrive_AppData` يستطيع استعادة جلسة Telegram؛ لا يُنشر أي credential في logs/Git/UI. راجع `docs/decisions/ADR-004-session-vault.md`.
 
-وبموجب التفويض القائم، بُني archive وmanifest من merge SHA نفسه، واستُبدل الأصلان الرسميان معًا، وتحقق تنزيل عام غير مخزن من SHA والحجم والـmanifest. نتج عن محاولة تسمية مؤقتة أصلان زائدان فقط؛ أُزيلا بعد تأكيد الزوج الرسمي، مع بقاء release/tag كما هما. ثم نجح التشغيل الرسمي [#32648838713](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32648838713) في التحقق العام.
+## ما لم يثبت
 
-## الحدود والخطوة التالية
+لا `Colab-ready` ولا `Complete` بعد. يجب اختبار Cells 1–4 حيًا بالحزمة المنشورة على Drive نفسه، وإثبات `telegram session vault: restored` ثم `Gradio · Live bridge`. لم تُقرأ أو تُحذف أي جلسة Drive ولم يُرسل OTP أو يُجر اختبار Telegram حي ضمن M43.
 
-الاختبارات الوهمية وGoogle Drive القراءة فقط لا تمثل Runtime Colab الخاص بالمالك. لم يُشغّل Cell 4 بالحزمة M42 المنشورة، ولم يحدث login أو نقل Telegram/Drive حي داخل M42. كما يبقى KNOWN_ISSUES #71 مفتوحًا: bundle M41 lease موجود في الأصل العام لكنه لم يثبت حيًا داخل Colab.
+## التراجع
 
-لا تستخدم `Colab-ready` أو `Complete`. الخطوة التالية الأدنى هي Runtime Colab جديد على نفس Drive: شغّل Cells 1–4 وتحقق من `telegram session vault: restored` و`Gradio · Live bridge`. عند أي فشل يلزم فقط مخرج `telegram restore:` المنقح للتمييز بين missing secret أو revoked session أو transport.
+قبل الدمج: حذف الفرع فقط. بعد الدمج: revert لـM43 ثم نشر ZIP/manifest متطابقين مع SHA المطلوب، دون حذف release/tag أو Vault تلقائيًا.
