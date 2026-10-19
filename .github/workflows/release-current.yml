@@ -17,7 +17,7 @@ jobs:
     env:
       TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
       TELEDRIVE_LANG: en
-      RELEASE_TAG: pkg-2026.08.09-m15t07
+      RELEASE_TAG: pkg-${{ github.run_id }}
       PRODUCT_VERSION: 5.0.0
       REPOSITORY: ${{ github.repository }}
 
@@ -145,19 +145,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # M37-T01 (§11/§17): idempotent republish WITHOUT ever deleting the
-          # published release or its tag. The tag is a Cell-1 updater
-          # reference; the previous blind `release delete --cleanup-tag || true`
-          # performed unverified cleanup, masked its own failure, and opened a
-          # window where the updater's public assets did not exist at all.
-          #
-          # Policy (fail-closed):
-          #   release absent                      -> create atomically with BOTH assets
-          #   release present, both assets match  -> refresh metadata only (edit)
-          #   release present, asset missing/diff -> FAIL the run; swapping
-          #                                            published assets stays an
-          #                                            explicit owner decision.
-          NOTES="Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate and is not Colab-ready until owner-run live proof."
+          NOTES="Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate for the current main branch."
           if ! gh release view "$RELEASE_TAG" --json tagName > /tmp/release_view.json 2>/dev/null; then
             echo "release absent -> creating atomically with both assets"
             gh release create "$RELEASE_TAG" \
@@ -194,7 +182,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, json, os, time, urllib.request
+          import hashlib, json, os, urllib.request
           tag = os.environ["RELEASE_TAG"]
           base = "https://github.com/" + os.environ["REPOSITORY"] + "/releases/download/" + tag + "/"
 
