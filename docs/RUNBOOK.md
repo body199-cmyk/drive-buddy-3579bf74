@@ -11,7 +11,7 @@
   - مصدرها: آخر تشغيل CI أخضر → Actions → Artifacts → `teledrive-package` (يتطلب صلاحية على المستودع).
   - **تنبيه:** التنزيل من GitHub يعطي غلافًا خارجيًا باسم `teledrive-package.zip` يحتوي الملف الحقيقي بداخله. ارفع الغلاف **كما هو** إلى `/content/` (أو إلى `MyDrive/TeleDrive/`) — Cell 1 تكتشفه وتستخرج الملف الداخلي تلقائيًا. **لا تُعِد تسميته** أبدًا.
 
-## تشغيل 7 خلايا (العقد القانوني)
+## تشغيل 7 خلايا مطلوبة + خليتين اختياريتين للـkeep-alive
 
 ### Cell 1: Restore + install pinned
 - `resolve_package_zip()` يقبل الأشكال الثلاثة: الأرشيف الحقيقي `teledrive_v4.5.zip` (في `/content/` أو Drive)، والغلاف الرسمي `teledrive-package.zip` (في أي منهما)، وحتى غلافًا أُعيدت تسميته خطأً إلى `teledrive_v4.5.zip` (يكتشفه بالمحتوى ولا يعامله كأرشيف حقيقي).
@@ -54,12 +54,11 @@ session_vault.restore_from_context(ctx, secret=api_hash)
 ctx.telegram_auth.set_credentials(api_id, api_hash); del api_id, api_hash
 ctx.checkpoints.restore_and_reconcile()
 launch(ctx, share=False, inline=False, blocking=False)
-session_vault.start_keepalive()
 ```
 - Drive أولًا ثم استعادة `telegram.session` من `TeleDrive_AppData` إن وُجدت → لا OTP
 - `share=False` لا رابط عام افتراضي
 - `blocking=False` → الخلية ترجع فورًا، handle على `ctx.ui`
-- keep-alive يأخّر فصل الخمول؛ لا يهزم حد 12 ساعة ولا التبويب المغلق
+- لا يبدأ keep-alive تلقائيًا؛ Cell 8 الاختيارية تبدأه وCell 9 توقفه.
 - `ctx.shutdown()` في Cell 7 يغلق UI handle
 
 ### Cell 5: Handoff redacted
@@ -80,6 +79,14 @@ print(ctx.checkpoints.persist())
 storage_manager.cleanup_verified_temp()  # يحذف فقط Uploaded الموثق، الباقي → quarantine
 ctx.shutdown()
 ```
+
+### Optional Cell 8: Start keep-alive
+
+Run it after Cell 4 only if you want the best-effort two-minute Python heartbeat, Connect click, and silent in-browser WAV loop. Autoplay may be blocked; it cannot guarantee a live runtime or override Colab's session limits.
+
+### Optional Cell 9: Stop keep-alive
+
+Run it when finished to stop the heartbeat, Connect timer, and audio without shutting down the TeleDrive UI. If the browser still plays audio, press Pause on the visible player. Run Cell 7 afterward for cleanup/shutdown if desired.
 
 ## CLI Launcher
 

@@ -51,6 +51,7 @@ _SALT = b"teledrive-session-vault-v1"
 
 _KEEPALIVE_LOCK = threading.Lock()
 _KEEPALIVE_STARTED = False
+_KEEPALIVE_STOP_EVENT = threading.Event()
 
 
 def _session_path() -> Path:
@@ -274,20 +275,23 @@ def _drive_from_ctx(ctx: Any, *, require_connected: bool = True) -> Any:
 
 
 def start_keepalive(interval_seconds: int = 120) -> dict:
-    """Best-effort Colab idle delay: daemon heartbeat + browser Connect click.
+    """Start the optional, best-effort Colab keep-alive.
 
-    Does NOT defeat the 12-hour free-runtime cap or a closed tab. Idempotent.
+    The daemon heartbeat and browser Connect click can be stopped with
+    :func:`stop_keepalive`. This does not defeat Colab runtime limits or a
+    closed tab. Starting twice is idempotent.
     """
-    global _KEEPALIVE_STARTED
+    global _KEEPALIVE_STARTED, _KEEPALIVE_STOP_EVENT
     interval = max(30, int(interval_seconds or 120))
     with _KEEPALIVE_LOCK:
         if _KEEPALIVE_STARTED:
             return {"started": False, "reason": "already-running", "js": False}
         _KEEPALIVE_STARTED = True
+        stop_event = threading.Event()
+        _KEEPALIVE_STOP_EVENT = stop_event
 
         def _beat() -> None:
-            while True:
-                time.sleep(interval)
+            while not stop_event.wait(interval):
                 try:
                     stamp = time.strftime("%H:%M UTC", time.gmtime())
                     print("TeleDrive keep-alive", stamp, flush=True)
@@ -308,10 +312,32 @@ def start_keepalive(interval_seconds: int = 120) -> dict:
     return {"started": True, "reason": "ok", "js": js}
 
 
+def stop_keepalive() -> dict:
+    """Stop this process's keep-alive heartbeat and browser-side timer."""
+    global _KEEPALIVE_STARTED
+    with _KEEPALIVE_LOCK:
+        was_started = _KEEPALIVE_STARTED
+        _KEEPALIVE_STARTED = False
+        _KEEPALIVE_STOP_EVENT.set()
+
+    js = False
+    try:
+        from IPython.display import Javascript, display  # type: ignore
+
+        display(Javascript(_STOP_KEEPALIVE_JS))
+        js = True
+    except Exception:
+        js = False
+    reason = "stopped" if was_started else "not-running"
+    _log.info("keep-alive stop requested running=%s js=%s", was_started, js)
+    return {"stopped": was_started, "reason": reason, "js": js}
+
+
 def reset_keepalive_for_tests() -> None:
     global _KEEPALIVE_STARTED
     with _KEEPALIVE_LOCK:
         _KEEPALIVE_STARTED = False
+        _KEEPALIVE_STOP_EVENT.set()
 
 
 # ---------------------------------------------------------------------------
@@ -1046,5 +1072,20 @@ _KEEPALIVE_JS = r"""
   }
   window.__tdKeepAlive = setInterval(tdClickConnect, 60000);
   tdClickConnect();
+})();
+"""
+
+_STOP_KEEPALIVE_JS = r"""
+(function(){
+  if (window.__tdKeepAlive) {
+    clearInterval(window.__tdKeepAlive);
+    window.__tdKeepAlive = null;
+  }
+  try {
+    var audios = document.querySelectorAll('audio#tdSilentAudio');
+    for (var i = 0; i < audios.length; i++) {
+      try { audios[i].pause(); audios[i].currentTime = 0; } catch (e) {}
+    }
+  } catch (e) {}
 })();
 """
