@@ -5,7 +5,7 @@
 | Updated (UTC) | `2026-10-19` |
 | Base SHA | `acab9d228e45a5a77a5fef9198cf3df9dd1f4729` |
 | الفرع | `arena/5b79cd32-drive-buddy-3579bf74` |
-| الحالة | **MERGED + CI-PASSED; release/Colab live proof pending** |
+| الحالة | **MERGED + CI-PASSED; release re-create needs one owner workflow dispatch; Colab live proof pending** |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` |
 
 ## النتيجة
@@ -27,6 +27,15 @@
 `809 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS ·
 `node --test` 34/34. لا تغيير في notebook/workflow/auth/Drive/schema/Vault.
 `bun run lint` NOT RUN (`bun: command not found`), no frontend files changed.
+
+## حادث النشر — 2026-10-19
+
+رفع الأصول من الـsandbox غير ممكن (`uploads.github.com` محجوب). محاولة `--clobber` فقدت
+`teledrive_manifest.json`، فحُذف الـrelease والـtag لإعادة إنشائهما ذريًا، لكن
+`workflow_dispatch` أعاد 403 من رمز الجلسة. **المطلوب من المالك:** تشغيل
+`release-current.yml` يدويًا مرة واحدة؛ المسار «release absent → create atomically» سينشر
+حزمة M45-T01 من `main` بالأصلين ويتحقق علنًا. Cell 1 تعمل بالحزمة المحفوظة حتى ذلك الحين
+وتطبع `REFUSED update endpoint unreachable`.
 
 ## ما لم يثبت / الخطوة التالية
 
