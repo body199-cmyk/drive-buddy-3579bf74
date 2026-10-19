@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import checkpoint_manager, database as db
-from .config import CONFIG, FAST_DOWNLOAD_MIN_BYTES
+from .config import (
+    CONFIG,
+    DOWNLOAD_REQUEST_SIZE,
+    FAST_DOWNLOAD_MIN_BYTES,
+    MAX_CONCURRENT_TG_DOWNLOADS,
+    MAX_PENDING_UPLOADS,
+)
 from .duplicate_detector import check as dup_check
 from .drive_quota import preflight_or_raise
 from .error_handler import classify
@@ -43,6 +49,12 @@ class TransferManager:
         self._queue = queue if queue is not None else QueueManager()
         self._scope: Optional[set[str]] = set(item_ids) if item_ids else None
         self._sema: Optional[asyncio.Semaphore] = None
+        # M45-T01: the pipeline has three independent bounds. _sema limits the
+        # download stage only, _tg_sema limits whole files on the single MTProto
+        # connection, and _upload_sema bounds finished files waiting for the one
+        # Drive uploader (disk backpressure).
+        self._tg_sema: Optional[asyncio.Semaphore] = None
+        self._upload_sema: Optional[asyncio.Semaphore] = None
         # M26-T01 / RC-1: pause(), resume() and stop() are called from the
         # Gradio request thread while run() lives on the AsyncRuntime thread.
         # asyncio.Event is NOT thread-safe across loops/threads, so a resume
@@ -62,6 +74,10 @@ class TransferManager:
         # googleapiclient service objects are not thread-safe. All blocking
         # Drive calls are serialized in a worker thread, never on this loop.
         self._drive_lock = threading.Lock()
+        # Waiting for the single Drive service must not consume executor
+        # threads; the asyncio gate is created per running loop.
+        self._drive_loop_lock: Optional[asyncio.Lock] = None
+        self._drive_lock_loop: Any = None
         self._stop_cancel_task: Optional[asyncio.Task] = None
         # Download callbacks run on the runtime loop and upload callbacks are
         # scheduled there from a Drive worker; keep the throttle safe either way.
@@ -86,6 +102,28 @@ class TransferManager:
             self._sema = asyncio.Semaphore(self.worker_count())
         return self._sema
 
+    def _tg_semaphore(self) -> asyncio.Semaphore:
+        """Whole-file download permits on the single MTProto connection.
+
+        ``worker_count`` may be 100, but Telegram must never see 100 simultaneous
+        file streams: the socket suffers head-of-line blocking and starts
+        answering "Request was unsuccessful 6 time(s)".
+        """
+        sema = self._tg_sema
+        if sema is None:
+            cap = max(1, min(self.worker_count(), MAX_CONCURRENT_TG_DOWNLOADS))
+            sema = asyncio.Semaphore(cap)
+            self._tg_sema = sema
+        return sema
+
+    def _upload_buffer(self) -> asyncio.Semaphore:
+        """Bound finished .part files waiting for the single Drive uploader."""
+        sema = self._upload_sema
+        if sema is None:
+            sema = asyncio.Semaphore(MAX_PENDING_UPLOADS)
+            self._upload_sema = sema
+        return sema
+
     def worker_count(self) -> int:
         from .config import HARD_CONCURRENCY_CAP
         value = self._workers if self._workers is not None else CONFIG.concurrency_value()
@@ -104,6 +142,7 @@ class TransferManager:
         self._workers = max(1, min(int(workers), HARD_CONCURRENCY_CAP))
         if not self._tasks or all(task.done() for task in self._tasks):
             self._sema = None
+            self._tg_sema = None
         return self._workers
 
     # ---- per-item control ----
@@ -237,13 +276,28 @@ class TransferManager:
                 _log.warning("stop grace elapsed; cancelling stalled transfer task")
                 task.cancel()
 
+    def _drive_gate(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        if self._drive_loop_lock is None or self._drive_lock_loop is not loop:
+            self._drive_loop_lock = asyncio.Lock()
+            self._drive_lock_loop = loop
+        return self._drive_loop_lock
+
     async def _drive_call(self, fn: Callable[..., Any], *args, **kwargs) -> Any:
-        """Run one blocking Drive/googleapiclient call off the runtime loop."""
+        """Run one blocking Drive/googleapiclient call off the runtime loop.
+
+        M45-T01: callers queue on an asyncio lock before a worker thread is
+        taken. The previous code acquired the threading lock *inside*
+        ``to_thread``, so every item waiting for a drive upload also pinned a
+        thread from the default executor. With the download/upload pipeline
+        that could exhaust the executor and stall unrelated metadata calls.
+        """
         def runner():
             with self._drive_lock:
                 return fn(*args, **kwargs)
 
-        return await asyncio.to_thread(runner)
+        async with self._drive_gate():
+            return await asyncio.to_thread(runner)
 
     def _claimable(self, seen: set[str]) -> list[MediaItem]:
         return [
@@ -301,7 +355,7 @@ class TransferManager:
 
 
     async def _process(self, item: MediaItem) -> None:
-        # A paused item must wait before claiming a worker permit. Otherwise a
+        # A paused item must wait before claiming a download permit. Otherwise a
         # paused first item can starve later runnable items when concurrency is
         # one (or consume every available permit at higher concurrency).
         if not await self._wait_resume():
@@ -311,56 +365,175 @@ class TransferManager:
             self._queue.try_transition(item.id, "Stopped")
             return
 
+        try:
+            await self._do_item(item)
+        except asyncio.CancelledError:
+            # The bounded Stop fallback may cancel a socket await after its
+            # grace period. It is still an operator Stop, never a failure.
+            self._stop_item_row(item)
+            raise
+        except TransferPaused:
+            # Belt and braces: the stages already park the row. Catching here
+            # guarantees a control signal is never mistaken for a failure.
+            self._pause_item_row(item)
+        except TransferStopped:
+            self._stop_item_row(item)
+        except Exception as exc:  # last-resort classification
+            err = classify(exc)
+            item.last_error_code = err.code
+            item.last_error_msg = err.raw[:400]
+            db.upsert_item(item)
+            self._queue.try_transition(item.id, "Failed", reason=err.code)
+            PROGRESS.finish_item(item.id, ok=False)
+
+    async def _do_item(self, item: MediaItem) -> None:
+        """Download then upload as two stages, not one monopolized worker.
+
+        M45-T01: the worker permit covers ONLY the download stage. As soon as
+        the file is complete on local disk the permit is released and the upload
+        runs under the serialized Drive gate, so Telegram downloads never stop
+        waiting for a Drive upload. The upload buffer is acquired *before* the
+        download permit is released, which keeps at most MAX_PENDING_UPLOADS
+        finished files on disk while still allowing downloads to continue.
+        """
+        buffer_slot = self._upload_buffer()
         async with self._semaphore():
             if self._stop.is_set() or self.item_stopped(item.id):
                 self._queue.try_transition(item.id, "Stopped")
                 return
-            try:
-                await self._do_item(item)
-            except asyncio.CancelledError:
-                # The bounded Stop fallback may cancel a socket await after its
-                # grace period. It is still an operator Stop, never a failure.
-                self._stop_item_row(item)
-                raise
-            except TransferPaused:
-                # Belt and braces: _do_item already parks the row. Catching
-                # here too guarantees a control signal can never be mistaken
-                # for a transfer failure by the generic branch below.
-                self._pause_item_row(item)
-            except TransferStopped:
-                self._stop_item_row(item)
-            except Exception as exc:  # last-resort classification
-                err = classify(exc)
-                item.last_error_code = err.code
-                item.last_error_msg = err.raw[:400]
-                db.upsert_item(item)
-                self._queue.try_transition(item.id, "Failed", reason=err.code)
-                PROGRESS.finish_item(item.id, ok=False)
+            if not await self._download_stage(item):
+                return
+            await buffer_slot.acquire()
+        try:
+            await self._upload_stage(item)
+        finally:
+            buffer_slot.release()
 
-    async def _do_item(self, item: MediaItem) -> None:
-        # Duplicate check (Drive adapter: always off the runtime loop).
-        rep = await self._drive_call(dup_check, self.drive, item.source_key, item.size_bytes)
-        if rep.is_duplicate:
+    async def _download_stage(self, item: MediaItem) -> bool:
+        """Duplicate pre-check, disk preflight and the download retry loop.
+
+        No blocking Drive call happens here: an idle-service duplicate check is
+        best effort, and quota/duplicate decisions that need Drive are made by
+        the upload stage. Returns True only when a complete, size-verified local
+        file is ready for upload. Any parked row returns False.
+        """
+        safe = sanitize_filename(
+            item.safe_name or item.original_name or f"{item.id}.{item.extension}"
+        )
+        temp = temp_path_for(item.id, safe)
+
+        current = db.get_item(item.id)
+        if current is not None and current.state == "Downloaded":
+            # A previous run (or a failed upload) already downloaded this file.
+            # Re-downloading it would throw away gigabytes of valid work.
+            expected = int(item.size_bytes or 0)
+            if temp.exists() and (expected <= 0 or temp.stat().st_size == expected):
+                item.temp_path = str(temp)
+                db.upsert_item(item)
+                PROGRESS.start_item(item.id, safe, item.size_bytes, phase="download")
+                if item.size_bytes:
+                    PROGRESS.update(item.id, int(item.size_bytes), phase="download")
+                db.add_event(
+                    item.id,
+                    "transfer",
+                    "reusing completed download",
+                    {"bytes": temp.stat().st_size},
+                )
+                _log.info("reusing completed download for %s", item.id)
+                return True
+            # The row says Downloaded but the temp file is gone (restart on a
+            # fresh Colab VM). NeedsRetry is the legal path back to Downloading.
+            self._queue.try_transition(item.id, "NeedsRetry", reason="download_missing_temp")
+
+        # Duplicate pre-check. M45-T01 removed every BLOCKING Drive call from
+        # the download lane: waiting here behind a multi-minute Drive upload is
+        # exactly what stopped Telegram downloads on the owner's queue. The
+        # pre-check only runs while the shared Drive service is idle; otherwise
+        # the upload stage reuses the existing Drive file instead.
+        rep = await self._duplicate_precheck(item)
+        if rep is not None and rep.is_duplicate:
             self._queue.try_transition(item.id, "Skipped", reason="duplicate", drive_file_id=rep.drive_file_id or "")
             PROGRESS.finish_item(item.id, ok=True, skipped=True)
-            return
+            return False
 
-        # Preflights
+        # Local disk preflight only — it never touches the network.
         ok_disk, free = storage_preflight(item.size_bytes)
         if not ok_disk:
             self._queue.try_transition(item.id, "Failed", reason="disk_full",
                                  last_error_code="DISK_FULL",
                                  last_error_msg=f"free={free} need={item.size_bytes}")
             PROGRESS.finish_item(item.id, ok=False)
-            return
-        try:
-            await self._drive_call(preflight_or_raise, self.drive, item.size_bytes)
-        except Exception as e:
-            self._queue.try_transition(item.id, "Failed", reason="drive_quota",
-                                 last_error_code="DRIVE_QUOTA", last_error_msg=str(e)[:400])
-            PROGRESS.finish_item(item.id, ok=False)
-            return
+            return False
 
+        attempt = 0
+        while True:
+            attempt += 1
+            if not await self._wait_resume():
+                self._stop_item_row(item)
+                return False
+            if self._stop.is_set() or not await self._wait_item(item.id):
+                self._stop_item_row(item)
+                return False
+            try:
+                await self._run_download(item)
+                return True
+            except TransferPaused:
+                # NOT a failure: no attempt counter, no retry, no classify().
+                self._pause_item_row(item)
+                return False
+            except TransferStopped:
+                self._stop_item_row(item)
+                return False
+            except Exception as exc:
+                err = classify(exc)
+                item.last_error_code = err.code
+                item.last_error_msg = str(exc)[:400]
+                db.upsert_item(item)
+                db.add_event(item.id, "error", err.code,
+                             {"attempt": attempt, "cat": err.category, "stage": "download"})
+                if not should_retry(err, attempt):
+                    self._queue.try_transition(item.id, "Failed", reason=err.code)
+                    PROGRESS.finish_item(item.id, ok=False)
+                    return False
+                self._queue.try_transition(item.id, "NeedsRetry", reason=err.code)
+                await sleep_for_error(err, attempt)
+                self._queue.try_transition(item.id, "Pending", reason="retry")
+
+    async def _duplicate_precheck(self, item: MediaItem):
+        """Best-effort duplicate check that never queues behind an upload.
+
+        The single googleapiclient service is serialized by ``_drive_gate``.
+        If that gate is busy (an upload, verification or checkpoint is in
+        flight) this returns None instead of blocking the download lane; the
+        upload stage performs the authoritative check later.
+        """
+        gate = self._drive_gate()
+        # No await between ``locked()`` and ``acquire()``: on one event loop
+        # this is atomic, so an idle gate is taken without suspending.
+        if gate.locked():
+            return None
+        await gate.acquire()
+        try:
+            def runner():
+                with self._drive_lock:
+                    return dup_check(self.drive, item.source_key, item.size_bytes)
+
+            return await asyncio.to_thread(runner)
+        except Exception as exc:  # best effort; the upload stage decides
+            _log.warning(
+                "duplicate pre-check failed for %s: %s", item.id, type(exc).__name__
+            )
+            return None
+        finally:
+            gate.release()
+
+    async def _upload_stage(self, item: MediaItem) -> None:
+        """Upload + verify + durable checkpoint with their own retry budget.
+
+        A failed upload retries the upload, never the download. Before M45-T01
+        every upload retry re-entered the whole item, so the already-downloaded
+        .part file was downloaded again from byte zero.
+        """
         attempt = 0
         while True:
             attempt += 1
@@ -371,10 +544,9 @@ class TransferManager:
                 self._stop_item_row(item)
                 return
             try:
-                await self._run_once(item)
+                await self._run_upload(item)
                 return
             except TransferPaused:
-                # NOT a failure: no attempt counter, no retry, no classify().
                 self._pause_item_row(item)
                 return
             except TransferStopped:
@@ -385,15 +557,14 @@ class TransferManager:
                 item.last_error_code = err.code
                 item.last_error_msg = str(exc)[:400]
                 db.upsert_item(item)
-                db.add_event(item.id, "error", err.code, {"attempt": attempt, "cat": err.category})
+                db.add_event(item.id, "error", err.code,
+                             {"attempt": attempt, "cat": err.category, "stage": "upload"})
                 if not should_retry(err, attempt):
-                    to = "Failed" if err.category != "reauth" else "Failed"
-                    self._queue.try_transition(item.id, to, reason=err.code)
+                    self._queue.try_transition(item.id, "Failed", reason=err.code)
                     PROGRESS.finish_item(item.id, ok=False)
                     return
                 self._queue.try_transition(item.id, "NeedsRetry", reason=err.code)
                 await sleep_for_error(err, attempt)
-                self._queue.try_transition(item.id, "Pending", reason="retry")
 
     def _should_persist(self, item_id: str, force: bool) -> bool:
         """Rate-limit SQLite progress writes while preserving boundary updates."""
@@ -426,6 +597,23 @@ class TransferManager:
         partial = getattr(self.telegram, "download_partial", None)
         offset = temp.stat().st_size if temp.exists() else 0
         declared = int(item.size_bytes or 0)
+
+        # M45-T01: a retry (upload failure, transient download error, Colab
+        # restart) must never re-download bytes that are already on disk.
+        if (
+            offset > 0
+            and declared > 0
+            and offset == declared
+            and item.media_type != "photo"
+        ):
+            db.add_event(
+                item.id,
+                "transfer",
+                "reusing complete local file",
+                {"bytes": offset},
+            )
+            return str(temp)
+
         if (
             callable(partial)
             and offset > 0
@@ -440,10 +628,11 @@ class TransferManager:
             )
             return await partial(msg, str(temp), declared, progress_cb=progress_cb)
 
-        # Fresh, sizeable non-photo media: request the MTProto maximum in one
-        # sequential stream. Telethon's public download_media() uses 128 KiB
-        # requests for files <= 100 MB, which is the main throughput ceiling on
-        # Colab. The .part file stays a valid prefix at every chunk boundary.
+        # Fresh, sizeable non-photo media: request the MTProto maximum in
+        # bounded interleaved streams. Telethon's public download_media() uses
+        # 128 KiB requests for files <= 100 MB, which is the main throughput
+        # ceiling on Colab. The .part file stays a valid prefix at every
+        # contiguous chunk boundary.
         fast = getattr(self.telegram, "download_media_fast", None)
         if (
             callable(fast)
@@ -456,10 +645,28 @@ class TransferManager:
             except TransferControlSignal:
                 # Pause/Stop is an operator decision, never a transport failure.
                 raise
-            except Exception as exc:  # noqa: BLE001 - fallback path is the point
-                # One clean fallback: the legacy path rewrites the file from
-                # byte zero, so a partially fast-written .part is never
-                # appended to or trusted.
+            except Exception as exc:  # noqa: BLE001 - fallback decision is the point
+                # M45-T01: losing a resumed prefix is worse than falling back.
+                # If at least one full 512 KiB request reached disk, the retry
+                # loop can resume it; the legacy path would open(file, "wb")
+                # and throw the bytes away.
+                kept = temp.stat().st_size if temp.exists() else 0
+                if kept >= DOWNLOAD_REQUEST_SIZE:
+                    db.add_event(
+                        item.id,
+                        "RECOVERY",
+                        "fast download interrupted; partial kept for resume",
+                        {"bytes": kept, "error": f"{type(exc).__name__}: {exc}"[:400]},
+                    )
+                    _log.warning(
+                        "fast download failed for %s after %s bytes (%s); "
+                        "keeping the partial for resume",
+                        item.id,
+                        kept,
+                        type(exc).__name__,
+                    )
+                    raise
+                # Too little to be worth resuming: one clean legacy fallback.
                 db.add_event(
                     item.id,
                     "RECOVERY",
@@ -495,14 +702,13 @@ class TransferManager:
             row.download_pct = pct
         db.upsert_item(row)
 
-    async def _run_once(self, item: MediaItem) -> None:
-        loop = asyncio.get_running_loop()
+    async def _run_download(self, item: MediaItem) -> None:
+        """One download attempt, bounded by the Telegram connection budgets."""
         safe = sanitize_filename(item.safe_name or item.original_name or f"{item.id}.{item.extension}")
         temp = temp_path_for(item.id, safe)
         item.temp_path = str(temp)
         db.upsert_item(item)
 
-        # DOWNLOAD
         self._queue.transition(item.id, "Downloading")
         PROGRESS.start_item(item.id, safe, item.size_bytes, phase="download")
 
@@ -515,9 +721,13 @@ class TransferManager:
             PROGRESS.update(item.id, current, phase="download")
             self._record_progress(item.id, current, total, "download")
 
-        chat_ref = await self._chat_ref(item)
-        msg = await self.telegram.get_message(chat_ref, item.message_id)
-        actual_path = await self._download(msg, item, temp, dl_cb)
+        # M45-T01: at most MAX_CONCURRENT_TG_DOWNLOADS whole files touch the
+        # single MTProto connection, no matter how high the queue concurrency is.
+        async with self._tg_semaphore():
+            chat_ref = await self._chat_ref(item)
+            msg = await self.telegram.get_message(chat_ref, item.message_id)
+            actual_path = await self._download(msg, item, temp, dl_cb)
+
         actual = Path(actual_path)
         if not actual.exists():
             raise RuntimeError("downloaded file missing")
@@ -535,8 +745,54 @@ class TransferManager:
         self._queue.transition(item.id, "Downloaded", download_pct=100.0)
         self._reset_progress_throttle(item.id)
 
+    async def _run_upload(self, item: MediaItem) -> None:
+        """One upload attempt: resumable upload, verify, durable checkpoint."""
+        loop = asyncio.get_running_loop()
+        safe = sanitize_filename(item.safe_name or item.original_name or f"{item.id}.{item.extension}")
+        actual = Path(item.temp_path) if item.temp_path else temp_path_for(item.id, safe)
+        if not actual.exists():
+            raise RuntimeError("downloaded file missing")
+
         # UPLOAD
         self._queue.transition(item.id, "Uploading")
+
+        # Authoritative duplicate check. The download lane only performs it when
+        # the Drive service is idle; this is the fallback that prevents a second
+        # copy when it was busy. Reusing the existing Drive file ends the row as
+        # Uploaded (the bytes are on Drive), with an explicit event.
+        rep = await self._drive_call(dup_check, self.drive, item.source_key, item.size_bytes)
+        if rep.is_duplicate and rep.drive_file_id:
+            self._queue.transition(item.id, "Verifying", drive_file_id=rep.drive_file_id)
+            self._queue.transition(item.id, "UploadedPendingCheckpoint",
+                                   drive_file_id=rep.drive_file_id,
+                                   drive_folder_id=self.drive_folder_id)
+            try:
+                await self._drive_call(checkpoint_manager.persist_durable, self.drive)
+            except Exception as exc:
+                db.add_event(item.id, "RECOVERY",
+                             "duplicate reuse could not persist a checkpoint; temp kept",
+                             {"error": str(exc)[:400]})
+                PROGRESS.finish_item(item.id, ok=False)
+                return
+            self._queue.transition(item.id, "Uploaded", upload_pct=100.0)
+            self._reset_progress_throttle(item.id)
+            db.add_event(item.id, "duplicate", "reused existing drive file",
+                         {"drive_file_id": rep.drive_file_id})
+            cleanup_item(item.id)
+            PROGRESS.finish_item(item.id, ok=True, skipped=True)
+            return
+
+        # Fresh quota preflight, now that the bytes are already local. It runs
+        # in the upload lane so the (blocking) Drive call can never gate a
+        # Telegram download.
+        try:
+            await self._drive_call(preflight_or_raise, self.drive, item.size_bytes)
+        except Exception as e:
+            self._queue.transition(item.id, "Failed", reason="drive_quota",
+                                   last_error_code="DRIVE_QUOTA",
+                                   last_error_msg=str(e)[:400])
+            PROGRESS.finish_item(item.id, ok=False)
+            return
 
         def up_cb(current: int, total: int) -> None:
             # M26-T01: same gate for the resumable upload. drive_client

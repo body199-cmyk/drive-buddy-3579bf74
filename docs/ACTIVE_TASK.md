@@ -2,34 +2,46 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M44-T02` |
-| العنوان | تنزيل Telegram كبير الحجم بمسارين MTProto متوازيين ومحدودين، مع حفظ `.part` صالح واسترجاع legacy آمن |
-| الأساس | `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` — main/PR #94 merge |
-| الفرع | `arena/360d78bc-drive-buddy-3579bf74` |
-| code commit / merge | PR [#95](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/95): `8c7df03` → `a032caf3be5f0b55b8b85af64dc134de2fb6a006` |
-| الحالة | **MERGED + CI-PASSED; candidate package saved to owner Drive; GitHub Release not updated; no real Telegram benchmark** |
-| CI | [#39271630415](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39271630415) SUCCESS (Python package + Frontend) |
-| candidate archive | `583226` bytes · SHA-256 `d77a4e29e63ae17b48b2720ddce52a443eee5302bd26f256fb9c9103b0480dd3`; matching manifest 378 bytes |
-| دليل المستخدم | صورة Colab: ملف Telegram حجمه 1.3 GB، قرابة 41% بعد نحو 10 دقائق؛ تقدير تقريبي 0.9 MB/s، لا قياس مستقل. |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T02_BOUNDED_PARALLEL_TELEGRAM_DOWNLOAD.md` |
+| TASK ID | `M45-T01` |
+| العنوان | خط أنابيب تنزيل/رفع منفصل، محاذاة offset صحيحة لـ512 KiB، حفظ `.part` عند التعثر، وتصفية الوسائط الوهمية |
+| الأساس | `acab9d228e45a5a77a5fef9198cf3df9dd1f4729` — main بعد PR #97 |
+| الفرع | `arena/5b79cd32-drive-buddy-3579bf74` |
+| الحالة | **MERGED + CI-PASSED; release publish and Colab live benchmark pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` |
 
 ## النطاق
 
-- الملفات ≥32 MiB تستخدم قارئين MTProto بحد أقصى، offsets/stripes منفصلة بحجم request 512 KiB؛ الأصغر يبقى على المسار التسلسلي.
-- حد عام لطلبين تنزيل متزامنين عبر TelegramService الواحد حتى لا يتضاعف الحمل مع concurrency الصفوف.
-- reorder window من أربع قطع كحد أقصى؛ الكتابة النهائية إلى `.part` تكون متصلة فقط. Pause/Stop يحتفظان ببادئة صحيحة، وأي خطأ نقل/حجم يلغي القارئين ويعيد المسار القديم الذي يبدأ من الصفر.
-- لا اعتماد جديد ولا تغيير في Drive upload أو auth أو schema أو notebook/workflow.
+- **حدود ثلاثية بدل سيمافور واحد:** `MAX_CONCURRENT_TG_DOWNLOADS=4` ملفات،
+  `PARALLEL_DOWNLOAD_STREAMS=4` قارئات لملف واحد ≥32 MiB، `TG_INFLIGHT_REQUESTS=8`
+  طلب `GetFile` جارٍ على مستوى العميل كله (يشمل الملفات الصغيرة والاستئناف).
+- **خط أنابيب مرحلتين:** إذن العامل يغطي التنزيل فقط؛ الرفع يجري بعد تحريره تحت بوابة
+  Drive واحدة وحاجز `MAX_PENDING_UPLOADS=4` للملفات الجاهزة.
+- **لا نداء Drive حاجب في مسار التنزيل:** فحص التكرار استباقي فقط عندما يكون خدمة Drive
+  خاملة؛ وإلا يُعاد استخدام الملف الموجود على Drive في مرحلة الرفع مع حدث `duplicate`.
+- **محاذاة 512 KiB** لاستئناف الملفات >512 KiB (و4 KiB للملفات الأصغر حتى لا ينكسر عقد M27).
+- **إعادة استخدام `.part` الكامل** بدل تنزيله من جديد بعد فشل رفع أو Restart.
+- **`_has_downloadable_media()`** تمنع تحويل Web Page/Poll/Geo/Contact إلى صف 0 بايت `.bin`.
+- **تصنيف أخطاء Telethon الحقيقية**: transient لـ`request was unsuccessful`، وpermanent
+  لـ`invalid limit` و`downloaded file missing`.
 
-## بوابات محلية
+## الأدلة المحلية
 
-`798 passed` · compileall PASS · launcher `54/54` · notebook check + `cmp` PASS · package build PASS بعد إثبات SHA النهائي في phase report. `bun run lint` لم يعمل: `bun: command not found`؛ لا تغييرات frontend.
+`809 passed` · compileall PASS · launcher `54/54` · notebook check + `cmp` PASS ·
+`node --test` 34/34. اختبارات M45 الجديدة تثبت المحاذاة، حفظ البادئة، حد الطلبات
+العالمي، حد الملفات عند workers=20، استمرار التنزيل أثناء رفع محجوب، إعادة استخدام
+`.part` الكامل، تصفية الوسائط الوهمية، وتصنيف الأخطاء.
+`bun run lint/build` NOT RUN: `bun: command not found`، ولا تغييرات frontend.
 
 ## ما لم يثبت / المطلوب قبل إغلاق المهمة
 
-- لا اختبار حي على Telegram أو Colab ولا قياس مقارنة قبل/بعد؛ اختبارات الشبكة الوهمية تثبت العقود فقط.
-- التغيير مدموج؛ تبقى إعادة نشر ZIP/manifest المتطابقين عبر Runner، ثم Restart Colab وتشغيل ملف ≥100 MB مع ملاحظة `telethon crypto backend=cryptg`، throughput، الحجم النهائي، Pause/Resume، ومرور الملف إلى Drive.
-- لا توصف المهمة بأنها Colab-ready أو Complete قبل الاختبار الحي. لا ترفع concurrency ولا عدد المسارات فوق 2 بدون موافقة/قياس إضافيين.
+- لا اختبار حي على Telegram أو Colab ولا قياس benchmark؛ كل أدلة السرعة عقدية.
+- يلزم إعادة نشر ZIP/manifest من SHA المدموج، ثم Restart Colab والتأكد من
+  `telethon crypto backend=cryptg` ووجود سطر `parallel download complete ... mbps=`.
+- يلزم A/B فعلي: ملف ≥100 MB، وتسجيل الحجم/الزمن/المعدل، ثم Pause/Resume، ثم التحقق من
+  وصول الملف إلى Drive واكتمال checkpoint.
+- لا ادعاء نسبة تسريع قبل هذا القياس.
 
 ## التراجع
 
-Revert commit M44-T02. أي استثناء في المسار المتوازي يعيد استعمال fallback التسلسلي الذي يفتح `.part` من byte 0؛ لا حذف من Drive ولا تغيير للـVault.
+Revert commit M45-T01. السلوك السابق يعود بالكامل: سيمافور عامل واحد يغطي التنزيل والرفع،
+محاذاة 4 KiB، fallback من الصفر، وفحص تكرار حاجب قبل التنزيل. لا حذف من Drive أو Vault.

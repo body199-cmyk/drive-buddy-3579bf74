@@ -443,3 +443,37 @@ def test_telegram_service_partial_download_aligns_without_deleting(tmp_path):
     assert service.client.offset == 4_096
     assert path.read_bytes() == b"x" * 4_096 + b"tail"
     assert ticks == [(4_100, 10_000)]
+
+
+class _LargeOffsetClient:
+    """Records the offset of a resumed large-file read."""
+
+    def __init__(self):
+        self.offset = None
+        self.request_size = None
+
+    async def iter_download(self, media, offset=0, **kwargs):
+        self.offset = offset
+        self.request_size = kwargs.get("request_size")
+        yield b"tail"
+
+
+def test_large_partial_offset_is_aligned_to_the_512k_request_size(tmp_path):
+    """M45-T01: a 512 KiB GetFile must not cross a 1 MiB window.
+
+    Telegram rejects the range with LimitInvalidError when the 512 KiB request
+    starts 4 KiB-aligned in the middle of a window, so the resume offset is
+    rounded down to the request size for files larger than one request.
+    """
+
+    service = object.__new__(TelegramService)
+    service.client = _LargeOffsetClient()
+    path = tmp_path / "large.part"
+    path.write_bytes(b"x" * (512 * 1024 + 12_345))
+    total = 3 * 512 * 1024 + 999
+
+    asyncio.run(service.download_partial(SimpleNamespace(media=object()), str(path), total))
+
+    assert service.client.offset == 512 * 1024
+    assert service.client.request_size == 512 * 1024
+    assert path.read_bytes() == b"x" * (512 * 1024) + b"tail"

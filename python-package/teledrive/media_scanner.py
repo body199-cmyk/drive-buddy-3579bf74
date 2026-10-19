@@ -84,6 +84,43 @@ class ScanRequest:
         )
 
 
+#: Message attributes that carry a real downloadable file. Web page previews,
+#: polls, dice, contacts, venues and unsupported media have ``media`` set but
+#: none of these attributes; treating them as documents produced 0-byte .bin
+#: rows that failed five times and clogged the queue.
+_FILE_MEDIA_ATTRS = (
+    "photo",
+    "video",
+    "voice",
+    "audio",
+    "sticker",
+    "gif",
+    "animation",
+    "document",
+)
+
+
+def _has_downloadable_media(message: Any) -> bool:
+    """True only when this message exposes a real file-bearing attribute.
+
+    Telethon sets ``message.media`` for MessageMediaWebPage, MessageMediaPoll,
+    MessageMediaGeo, MessageMediaContact, MessageMediaDice, MessageMediaGame,
+    MessageMediaUnsupported and friends. None of them can be downloaded, yet
+    the old scanner classified every one of them as a ``document`` with size 0
+    and extension ``bin``.
+    """
+    if message is None or getattr(message, "media", None) is None:
+        return False
+    for attr in _FILE_MEDIA_ATTRS:
+        if getattr(message, attr, None) is not None:
+            return True
+    media = getattr(message, "media", None)
+    return (
+        getattr(media, "document", None) is not None
+        or getattr(media, "photo", None) is not None
+    )
+
+
 def _media_type_of(msg: Any) -> str:
     if getattr(msg, "photo", None):
         return "photo"
@@ -181,7 +218,7 @@ async def scan_link(
     items: list[MediaItem] = []
 
     async def _add(message: Any) -> None:
-        if message is None or not getattr(message, "media", None):
+        if not _has_downloadable_media(message):
             return
         media_type = _media_type_of(message)
         if not _matches_media_type(message, request.media_types):
