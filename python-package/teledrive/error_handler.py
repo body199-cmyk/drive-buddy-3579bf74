@@ -30,12 +30,23 @@ TRANSIENT_MARKERS = (
     "timeout", "timed out", "temporarily", "reset by peer", "connection aborted",
     "connection reset", "connection error", "eof", "ssl", "broken pipe",
     "429", "500", "502", "503", "504", "floodwait", "flood wait",
+    # Telethon's own wording when a saturated MTProto socket drops a GetFile
+    # request. Retrying with backoff is correct; the old UNKNOWN default made
+    # this look identical to a real protocol error.
+    "request was unsuccessful", "internal server error", "server error",
 )
 
 PERMANENT_MARKERS = (
     "invalid link", "not found", "no access", "no permission", "forbidden",
     "insufficient storage", "quota exceeded", "invalid credential", "no media",
     "unsupported", "too large",
+    # Telegram rejects a GetFile range that crosses a 1 MiB window with
+    # LimitInvalidError("An invalid limit was provided"). Retrying the exact
+    # same range forever cannot help; the offset alignment has to change.
+    "invalid limit",
+    # A row whose local file vanished is not a transport failure; retrying the
+    # download five times only hides the real state.
+    "downloaded file missing",
 )
 
 REAUTH_MARKERS = (

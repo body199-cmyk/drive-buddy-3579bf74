@@ -1,3 +1,45 @@
+# بطاقة التسليم — M45-T01: خط أنابيب تنزيل/رفع، محاذاة 512 KiB، ووسائط حقيقية فقط
+
+| الحقل | القيمة |
+|---|---|
+| Updated (UTC) | `2026-10-19` |
+| Base SHA | `acab9d228e45a5a77a5fef9198cf3df9dd1f4729` |
+| الفرع | `arena/5b79cd32-drive-buddy-3579bf74` |
+| الحالة | **MERGED + CI-PASSED; release/Colab live proof pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` |
+
+## النتيجة
+
+- أُعيد تأسيس توصيات Gemini على الشجرة الحالية بعد M44-T02 بدل تطبيقها حرفيًا على baseline قديم.
+- السبب الجذري للسرعة: اتصال MTProto واحد + طلب 512 KiB متسلسل لكل ملف (زمن الرحلة يحكم)،
+  وكل ملف صغير كان يفتح طلبًا غير محدود، وكل عامل يمسك إذنه أثناء انتظار قفل Drive.
+- الحل: ثلاثة حدود مستقلة (`MAX_CONCURRENT_TG_DOWNLOADS=4`، `PARALLEL_DOWNLOAD_STREAMS=4`،
+  `TG_INFLIGHT_REQUESTS=8`) + خط أنابيب مرحلتين يحرر عامل التنزيل قبل الرفع + `MAX_PENDING_UPLOADS=4`.
+- مسار التنزيل لا ينفّذ نداء Drive حاجبًا: فحص التكرار استباقي فقط عند خمول الخدمة، وإلا
+  يُعاد استخدام ملف Drive الموجود في مرحلة الرفع.
+- `download_partial` يحاذي 512 KiB للملفات الكبيرة، ويستأنفها بالقارئات المتداخلة.
+- فشل `download_media_fast` بعد ≥512 KiB يحفظ `.part` ويعيد المحاولة من offset بدل مسحه.
+- `_has_downloadable_media()` تمنع Web Page/Poll/Geo/Contact من إنشاء صف 0 بايت `.bin`.
+- تصنيف `request was unsuccessful` كـtransient و`invalid limit`/`downloaded file missing` كـpermanent.
+
+## الأدلة المحلية
+
+`809 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS ·
+`node --test` 34/34. لا تغيير في notebook/workflow/auth/Drive/schema/Vault.
+`bun run lint` NOT RUN (`bun: command not found`), no frontend files changed.
+
+## ما لم يثبت / الخطوة التالية
+
+لا قياس حي. يلزم: دمج، إعادة نشر ZIP + manifest من SHA المدموج، Restart Colab، تأكيد
+`telethon crypto backend=cryptg`، ثم نقل ملف ≥100 MB وتسجيل `mbps=` من السجل، مع
+Pause/Resume والتحقق من Drive. لا تضف اتصالات MTProto إضافية قبل A/B موثق.
+
+## التراجع
+
+Revert التغيير؛ يعود سيمافور واحد وfallback من الصفر. لا حذف من Drive/Vault/release.
+
+---
+
 # بطاقة التسليم — M44-T02: تسريع تنزيل Telegram بمدخلين محدودين
 
 | الحقل | القيمة |

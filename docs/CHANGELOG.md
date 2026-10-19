@@ -1,5 +1,39 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M45-T01] — 2026-10-19 — خط أنابيب تنزيل/رفع وحل جذري لسرعة Telegram
+
+### Changed
+- `config.py`: ثلاثة حدود مستقلة قابلة للتعديل بالبيئة — `MAX_CONCURRENT_TG_DOWNLOADS=4`
+  (`TELEDRIVE_TG_FILES`)، `PARALLEL_DOWNLOAD_STREAMS=4` (`TELEDRIVE_TG_STREAMS`)،
+  `TG_INFLIGHT_REQUESTS=8` (`TELEDRIVE_TG_INFLIGHT`) — و`MAX_PENDING_UPLOADS=4`
+  (`TELEDRIVE_UPLOAD_BUFFER`).
+- `telegram_client.py`: ميزانية الطلبات صارت عالمية وتشمل المسار المتسلسل والاستئناف؛
+  `connect()` يمرر `request_retries/connection_retries/retry_delay/flood_sleep_threshold`
+  مع fallback عند `TypeError`؛ القارئات المتداخلة تدعم `start_at` للاستئناف؛
+  `download_partial()` يحاذي 512 KiB للملفات >512 KiB (و4 KiB للأصغر) ويستأنف الكبير
+  بالمسار المتداخل؛ تسجيل `mbps=` وثواني القياس.
+- `transfer_manager.py`: مرحلتان — `_download_stage` (بلا نداء Drive حاجب) و`_upload_stage`
+  (فحص تكرار/حصة ثم رفع/تحقق/checkpoint). إذن العامل يغطي التنزيل فقط؛ حاجز
+  `MAX_PENDING_UPLOADS` يحد الملفات الجاهزة؛ `_drive_call` ينتظر على `asyncio.Lock` قبل
+  استهلاك ثريد؛ فشل الرفع يعيد الرفع فقط ولا يعيد التنزيل؛ `.part` الكامل يُعاد استخدامه.
+- `media_scanner.py`: `_has_downloadable_media()` ترفض Web Page/Poll/Geo/Contact/Dice/Game/
+  Unsupported فلا تُنشأ صفوف 0 بايت `.bin`.
+- `error_handler.py`: `request was unsuccessful`/`server error` transient،
+  `invalid limit`/`downloaded file missing` permanent.
+
+### Gates and local verification
+- `809 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS ·
+  `node --test tests/teledrive-sandbox.contract.test.mjs` 34/34.
+- اختبارات M45 الجديدة في `tests/test_fast_download.py` و`tests/test_m27_hardening.py`
+  تثبت المحاذاة، حفظ البادئة، الحد العالمي للطلبات، حد الملفات عند workers=20، استمرار
+  التنزيل أثناء رفع محجوب، إعادة استخدام `.part` الكامل، تصفية الوسائط، وتصنيف الأخطاء.
+- `bun run lint/build` NOT RUN: `bun: command not found`؛ لا تغييرات frontend.
+
+### Open / not proven
+- لا قياس Telegram/Colab حي. إعادة نشر الحزمة وRestart Colab ثم تسجيل `mbps=` وPause/Resume
+  والتحقق من Drive بيد المالك. لا ادعاء نسبة تسريع قبل ذلك.
+- اتصال MTProto واحد يظل سقف النقل النظري؛ تجمع اتصالات يحتاج A/B ومراجعة Vault.
+
 ## [M44-T02] — 2026-10-19 — تنزيل Telegram كبير الحجم بمسارين محدودين
 
 ### Changed

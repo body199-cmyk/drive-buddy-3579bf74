@@ -36,10 +36,12 @@ class _FastClient:
             yield chunk
 
 
-def _service(client) -> TelegramService:
+def _service(client, slots: int | None = None) -> TelegramService:
+    from teledrive.config import TG_INFLIGHT_REQUESTS
+
     service = object.__new__(TelegramService)
     service.client = client
-    service._download_request_slots = asyncio.Semaphore(2)
+    service._download_request_slots = asyncio.Semaphore(slots or TG_INFLIGHT_REQUESTS)
     return service
 
 
@@ -144,12 +146,18 @@ def test_large_fast_download_uses_two_ranges_and_reassembles_ordered_prefix(tmp_
         )
     )
 
+    expected_streams = min(
+        telegram_module.PARALLEL_DOWNLOAD_STREAMS,
+        (len(payload) + request - 1) // request,
+    )
     assert result == str(target)
     assert target.read_bytes() == payload
-    assert len(client.calls) == 2
-    assert client.max_active == 2, "the two ranges should make requests concurrently"
-    assert [call["offset"] for call in client.calls] == [0, request]
-    assert all(call["stride"] == request * 2 for call in client.calls)
+    assert len(client.calls) == expected_streams
+    assert client.max_active == expected_streams, "the ranges should make requests concurrently"
+    assert [call["offset"] for call in client.calls] == [
+        lane * request for lane in range(expected_streams)
+    ]
+    assert all(call["stride"] == request * expected_streams for call in client.calls)
     assert all(call["request_size"] == request for call in client.calls)
     assert ticks[-1] == (len(payload), len(payload))
     assert [current for current, _ in ticks] == sorted(current for current, _ in ticks)
@@ -317,3 +325,335 @@ def test_photos_and_small_documents_keep_the_legacy_path(tmp_path):
 
     assert telegram.fast_calls == []
     assert len(telegram.legacy_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# M45-T01 — protocol-valid resume, preserved partials, bounded pipeline
+# ---------------------------------------------------------------------------
+
+import threading
+from types import SimpleNamespace
+
+
+class _RecordingResumeClient:
+    def __init__(self, chunk: bytes = b"tail"):
+        self.chunk = chunk
+        self.offset = None
+        self.request_size = None
+        self.file_size = None
+
+    async def iter_download(self, media, offset=0, **kwargs):
+        self.offset = offset
+        self.request_size = kwargs.get("request_size")
+        self.file_size = kwargs.get("file_size")
+        yield self.chunk
+
+
+def test_partial_download_aligns_large_offsets_to_512k(tmp_path):
+    """A 4 KiB-aligned offset makes a 512 KiB GetFile cross the 1 MiB window."""
+    request = DOWNLOAD_REQUEST_SIZE
+    total = request * 3 + 1_000
+    client = _RecordingResumeClient()
+    service = _service(client)
+    path = tmp_path / "partial.bin"
+    path.write_bytes(b"x" * (request + 75_000))
+
+    asyncio.run(
+        service.download_partial(
+            SimpleNamespace(media=object()), str(path), total
+        )
+    )
+
+    assert client.offset == request, "offset must be 512 KiB aligned for large files"
+    assert client.request_size == request
+    assert client.file_size == total
+    assert path.read_bytes() == b"x" * request + b"tail"
+
+
+class _ConcurrentSequentialClient:
+    def __init__(self):
+        self.active = 0
+        self.peak = 0
+
+    def iter_download(self, media, **_kwargs):
+        async def _gen():
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            try:
+                await asyncio.sleep(0.02)
+                yield b"x" * 512
+            finally:
+                self.active -= 1
+
+        return _gen()
+
+
+def test_small_file_downloads_share_one_global_inflight_budget(tmp_path):
+    client = _ConcurrentSequentialClient()
+    service = _service(client, slots=1)
+
+    async def scenario():
+        await asyncio.gather(
+            service.download_media_fast(
+                SimpleNamespace(media=object()), str(tmp_path / "a.bin"), 512
+            ),
+            service.download_media_fast(
+                SimpleNamespace(media=object()), str(tmp_path / "b.bin"), 512
+            ),
+        )
+
+    asyncio.run(scenario())
+    assert client.peak == 1, "the global GetFile budget must cap sequential files too"
+
+
+def test_fast_failure_keeps_a_resumable_partial_and_skips_legacy(tmp_path):
+    request = DOWNLOAD_REQUEST_SIZE
+
+    async def fast(file_path):
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * (request + 7))
+        raise RuntimeError("socket reset")
+
+    telegram = _DownloadingTelegram(fast=fast)
+    manager, queue = _manager(telegram)
+    item = _item(queue, size=8 * 1024 * 1024)
+    temp = tmp_path / "clip.bin.part"
+
+    with pytest.raises(RuntimeError, match="socket reset"):
+        asyncio.run(manager._download(object(), item, temp, None))
+
+    assert telegram.legacy_calls == [], "the legacy path would truncate the prefix"
+    assert temp.stat().st_size == request + 7
+    recovery = [e for e in db.recent_events(50) if e["kind"] == "RECOVERY"]
+    assert any("partial kept" in str(e.get("message")) for e in recovery)
+
+
+class _CountingTelegram:
+    def __init__(self, delay: float = 0.03):
+        self.delay = delay
+        self.active = 0
+        self.peak = 0
+
+    async def get_message(self, chat, mid):
+        return SimpleNamespace(id=mid, media=1_024)
+
+    async def download_media(self, message, file_path, progress_cb=None):
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        try:
+            await asyncio.sleep(self.delay)
+            path = Path(file_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x" * int(message.media))
+            if progress_cb:
+                progress_cb(int(message.media), int(message.media))
+            return str(path)
+        finally:
+            self.active -= 1
+
+
+def _pipeline_item(queue: QueueManager, mid: int, size: int = 1_024) -> MediaItem:
+    item = MediaItem(
+        source_key=f"tg:99:{mid}",
+        chat_id=99,
+        message_id=mid,
+        original_name=f"clip{mid}.bin",
+        safe_name=f"clip{mid}.bin",
+        media_type="document",
+        extension="bin",
+        size_bytes=size,
+    )
+    queue.enqueue(item)
+    return item
+
+
+def test_worker_count_never_multiplies_telegram_file_downloads():
+    from teledrive.config import MAX_CONCURRENT_TG_DOWNLOADS
+    from .mocks.fake_drive import FakeDrive
+
+    async def scenario():
+        queue = QueueManager()
+        for mid in range(500, 520):
+            _pipeline_item(queue, mid)
+        telegram = _CountingTelegram()
+        manager = TransferManager(telegram, FakeDrive(), "folder", queue=queue)
+        manager.set_workers(20)
+        await manager.run()
+        return telegram
+
+    telegram = asyncio.run(scenario())
+    assert telegram.peak <= MAX_CONCURRENT_TG_DOWNLOADS
+    assert telegram.peak > 1, "the cap must still allow real parallelism"
+
+
+class _GateDrive:
+    """FakeDrive whose first upload waits for the second download to start."""
+
+    def __init__(self):
+        from .mocks.fake_drive import FakeDrive
+
+        self._inner = FakeDrive()
+        self.download_started = threading.Event()
+        self.upload_started = threading.Event()
+        self.download_during_upload = None
+        self.uploads: list[str] = []
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def upload_resumable(self, file_path, drive_name, parent_id, source_key,
+                         progress_cb=None, mime_type=None):
+        self.uploads.append(drive_name)
+        if len(self.uploads) == 1:
+            self.upload_started.set()
+            self.download_during_upload = self.download_started.wait(timeout=5)
+        return self._inner.upload_resumable(
+            file_path, drive_name, parent_id, source_key, progress_cb, mime_type
+        )
+
+
+class _TwoStepTelegram:
+    def __init__(self):
+        self.downloads = 0
+        self.drive = None
+
+    async def get_message(self, chat, mid):
+        return SimpleNamespace(id=mid, media=1_024)
+
+    async def download_media(self, message, file_path, progress_cb=None):
+        self.downloads += 1
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * 1_024)
+        if self.downloads == 2 and self.drive is not None:
+            self.drive.download_started.set()
+        if progress_cb:
+            progress_cb(1_024, 1_024)
+        return str(path)
+
+
+def test_downloads_continue_while_a_drive_upload_is_in_flight():
+    """workers=1 + one blocked upload must not freeze the download lane."""
+    from teledrive import database as db2
+
+    async def scenario():
+        queue = QueueManager()
+        first = _pipeline_item(queue, 601)
+        second = _pipeline_item(queue, 602)
+        drive = _GateDrive()
+        telegram = _TwoStepTelegram()
+        telegram.drive = drive
+        manager = TransferManager(telegram, drive, "folder", queue=queue)
+        manager.set_workers(1)
+        await manager.run()
+        return drive, first, second
+
+    drive, first, second = asyncio.run(scenario())
+    assert drive.download_during_upload is True, (
+        "the second download must start while the first upload is still running"
+    )
+    assert len(drive.uploads) == 2
+    assert db2.get_item(first.id).state == "Uploaded"
+    assert db2.get_item(second.id).state == "Uploaded"
+
+
+class _NeverTelegram:
+    async def download_media(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("a complete .part must never be re-downloaded")
+
+    async def download_media_fast(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("a complete .part must never be re-downloaded")
+
+    async def download_partial(self, *args, **kwargs):  # pragma: no cover
+        raise AssertionError("a complete .part must never be resumed")
+
+
+def test_complete_partial_is_reused_without_any_network_download(tmp_path):
+    manager, queue = _manager(_NeverTelegram())
+    item = _item(queue, size=2 * 1024 * 1024)
+    temp = tmp_path / "clip.bin.part"
+    temp.write_bytes(b"x" * item.size_bytes)
+
+    output = asyncio.run(manager._download(object(), item, temp, None))
+
+    assert output == str(temp)
+    assert temp.stat().st_size == item.size_bytes
+
+
+# ---------------------------------------------------------------------------
+# M45-T01 — virtual media must never become a 0-byte queue row
+# ---------------------------------------------------------------------------
+
+
+class _ScanTelegram:
+    def __init__(self, messages):
+        self.messages = messages
+
+    async def get_entity(self, chat):
+        return SimpleNamespace(id=42, title="chan", username=None)
+
+    async def resolve_entity(self, chat):
+        return chat
+
+    async def iter_messages(self, chat, **kwargs):
+        for message in self.messages:
+            yield message
+
+
+def test_scan_link_ignores_webpages_and_polls_without_files():
+    from teledrive.media_scanner import ScanRequest, scan_link
+    from teledrive.telegram_links import ParsedLink
+
+    messages = [
+        SimpleNamespace(
+            id=1,
+            media=SimpleNamespace(webpage=SimpleNamespace(url="https://example.com")),
+            document=None,
+            photo=None,
+            date="",
+        ),
+        SimpleNamespace(
+            id=2,
+            media=SimpleNamespace(poll=SimpleNamespace(question="q")),
+            document=None,
+            photo=None,
+            date="",
+        ),
+        SimpleNamespace(
+            id=3,
+            media=object(),
+            document=SimpleNamespace(id=99, size=4_096, mime_type="video/mp4", attributes=[]),
+            photo=None,
+            date="",
+        ),
+    ]
+    items = asyncio.run(
+        scan_link(
+            _ScanTelegram(messages),
+            ParsedLink(kind="public", chat="chan"),
+            ScanRequest(mode="chat", limit=50),
+        )
+    )
+
+    assert [item.message_id for item in items] == [3]
+    assert items[0].size_bytes == 4_096
+    assert items[0].extension == "mp4"
+
+
+def test_telethon_error_strings_are_classified_instead_of_unknown():
+    from teledrive.error_handler import classify
+
+    transient = classify(RuntimeError("Request was unsuccessful 6 time(s)"))
+    assert transient.code == "TRANSIENT"
+    assert transient.retryable is True
+
+    invalid_limit = classify(
+        RuntimeError("An invalid limit was provided (caused by GetFileRequest)")
+    )
+    assert invalid_limit.code == "PERMANENT"
+    assert invalid_limit.retryable is False
+
+    missing = classify(RuntimeError("downloaded file missing"))
+    assert missing.code == "PERMANENT"
+    assert missing.retryable is False

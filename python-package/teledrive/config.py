@@ -114,20 +114,47 @@ AUTO_REFRESH_DEFAULT_MS = 1000
 AUTO_REFRESH_OPTIONS = (0, 1000, 2000, 5000)
 
 # ---------------------------------------------------------------------------
-# Telegram download request size.
+# Telegram download throughput and connection health (M45-T01).
 #
-# upload.getFile accepts at most 512 KiB per request. Telethon's public
-# download_media() chooses 128 KiB for files <= 100 MB, so a large transfer
-# spends most of its time waiting for round trips rather than moving bytes.
-# The fast path requests the protocol maximum; see telegram_client.py.
+# One Telethon client multiplexes every upload.getFile over a SINGLE MTProto
+# TCP connection. Each request is latency-bound: roughly
+#     per-stream throughput = 512 KiB / round-trip time.
+# That is why a sequential 512 KiB reader plateaus around 1 MB/s on Colab and
+# why flooding the same socket with one request per queued row produced
+# "Request was unsuccessful 6 time(s)".
+#
+# Three independent, bounded knobs fix both sides of that problem:
+#   TG_INFLIGHT_REQUESTS        requests in flight across ALL files
+#   PARALLEL_DOWNLOAD_STREAMS   striped readers for ONE large file
+#   MAX_CONCURRENT_TG_DOWNLOADS whole files downloading at the same time
+#
+# They are overridable per runtime so a slow Colab VM can be tuned down (and a
+# fast one up) without rebuilding the package.
 # ---------------------------------------------------------------------------
 DOWNLOAD_REQUEST_SIZE = 512 * 1024
+
+
+def _bounded_env_int(name: str, default: int, low: int, high: int) -> int:
+    """Read a bounded integer override; never raise on a bad environment."""
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(low, min(value, high))
+
+
 # Keep ordinary media on the simple sequential path; a second MTProto reader is
 # only worthwhile for larger files where request latency dominates.
 FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
 PARALLEL_DOWNLOAD_MIN_BYTES = 32 * 1024 * 1024
-PARALLEL_DOWNLOAD_STREAMS = 2
-PARALLEL_DOWNLOAD_WINDOW_CHUNKS = 4
+PARALLEL_DOWNLOAD_STREAMS = _bounded_env_int("TELEDRIVE_TG_STREAMS", 4, 1, 8)
+TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 8, 1, 16)
+MAX_CONCURRENT_TG_DOWNLOADS = _bounded_env_int("TELEDRIVE_TG_FILES", 4, 1, 8)
+PARALLEL_DOWNLOAD_WINDOW_CHUNKS = max(PARALLEL_DOWNLOAD_STREAMS, 4)
+# Completed files allowed to wait for the single Drive uploader. This is the
+# disk backpressure of the download/upload pipeline: downloads pause instead of
+# filling local disk with finished .part files.
+MAX_PENDING_UPLOADS = _bounded_env_int("TELEDRIVE_UPLOAD_BUFFER", 4, 1, 16)
 
 RETRY_MAX_ATTEMPTS = 5
 RETRY_BASE_SECONDS = 2.0

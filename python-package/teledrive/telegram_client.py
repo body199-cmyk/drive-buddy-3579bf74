@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -11,6 +12,7 @@ from .config import (
     PARALLEL_DOWNLOAD_STREAMS,
     PARALLEL_DOWNLOAD_WINDOW_CHUNKS,
     TELEGRAM_SESSION,
+    TG_INFLIGHT_REQUESTS,
 )
 from .logging_config import get_logger
 
@@ -72,13 +74,49 @@ class TelegramService:
         self._entity_cache_warmed = False
         # The whole context shares one Telegram client. Cap outstanding media
         # requests globally even when several queue workers are active.
-        self._download_request_slots = asyncio.Semaphore(PARALLEL_DOWNLOAD_STREAMS)
+        # M45-T01: the cap is TG_INFLIGHT_REQUESTS (not the per-file stream
+        # count). Before this, only the striped readers respected a bound and
+        # every small file opened its own unbounded GetFile stream, which is
+        # exactly the "Request was unsuccessful 6 time(s)" flood.
+        self._download_request_slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
+
+    def _request_slots(self) -> asyncio.Semaphore:
+        """Lazily create the global GetFile budget.
+
+        Tests build the service with ``object.__new__`` and may not run
+        ``__init__``; a single lazy accessor keeps every download path safe
+        without duplicating semaphore bookkeeping.
+        """
+        slots = getattr(self, "_download_request_slots", None)
+        if slots is None:
+            slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
+            self._download_request_slots = slots
+        return slots
 
     async def connect(self) -> None:
-        self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
+        # M45-T01: retrying a timed-out GetFile is what turns one slow socket
+        # into a stalled queue. Telethon accepts these resiliency options, but
+        # a test double / older Telethon build may not; fall back safely.
+        try:
+            self.client = TelegramClient(
+                self.session_path,
+                self.api_id,
+                self.api_hash,
+                request_retries=10,
+                connection_retries=10,
+                retry_delay=1,
+                flood_sleep_threshold=60,
+                auto_reconnect=True,
+            )
+        except TypeError:
+            self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
         await self.client.connect()
         self._connected = True
-        _log.info("telethon crypto backend=%s", crypto_backend())
+        _log.info(
+            "telethon crypto backend=%s inflight_cap=%s",
+            crypto_backend(),
+            TG_INFLIGHT_REQUESTS,
+        )
 
     async def is_authorized(self) -> bool:
         if not self.client:
@@ -204,23 +242,36 @@ class TelegramService:
         path: Path,
         total: int,
         progress_cb: Optional[Callable[[int, int], None]],
+        start_at: int = 0,
     ) -> str:
-        """Fetch a large file with two bounded MTProto range readers.
+        """Fetch a large file with bounded interleaved MTProto range readers.
 
         Each reader requests disjoint 512 KiB stripes. A bounded reorder window
-        writes only the contiguous prefix to the .part file, so pause/stop leaves
-        a normal resumable prefix rather than sparse/out-of-order bytes. Any
-        transport/validation error propagates to the caller's legacy fallback.
+        writes only the contiguous prefix to the .part file, so pause/stop (and
+        a dropped socket) leaves a normal resumable prefix rather than
+        sparse/out-of-order bytes. ``start_at`` must be 512 KiB aligned; the
+        caller (download_partial) guarantees that.
+
+        Any transport/validation error propagates to the retry path, which
+        resumes from the prefix on disk instead of discarding it.
         """
         request_size = DOWNLOAD_REQUEST_SIZE
-        streams = min(PARALLEL_DOWNLOAD_STREAMS, (total + request_size - 1) // request_size)
+        start_at = max(0, int(start_at))
+        started_at = time.monotonic()
+        remaining = max(0, total - start_at)
+        streams = min(
+            PARALLEL_DOWNLOAD_STREAMS,
+            (remaining + request_size - 1) // request_size,
+        )
         if streams < 2:
-            return await self._download_media_sequential(media, path, total, progress_cb)
+            return await self._download_media_sequential(
+                media, path, total, progress_cb, start_at=start_at
+            )
 
         stride = streams * request_size
         work: list[tuple[int, int]] = []
         for lane in range(streams):
-            start = lane * request_size
+            start = start_at + lane * request_size
             if start >= total:
                 continue
             count = (total - start + stride - 1) // stride
@@ -228,16 +279,17 @@ class TelegramService:
 
         queue: asyncio.Queue = asyncio.Queue(maxsize=PARALLEL_DOWNLOAD_WINDOW_CHUNKS)
         window = asyncio.Semaphore(PARALLEL_DOWNLOAD_WINDOW_CHUNKS)
-        request_slots = self._download_request_slots
+        request_slots = self._request_slots()
         _log.info(
-            "parallel download start bytes=%s streams=%s request_size=%s",
+            "parallel download start bytes=%s offset=%s streams=%s request_size=%s",
             total,
+            start_at,
             len(work),
             request_size,
         )
         sentinel = object()
         lanes_finished = 0
-        next_offset = 0
+        next_offset = start_at
         pending: dict[int, bytes] = {}
         tasks: list[asyncio.Task] = []
 
@@ -282,7 +334,11 @@ class TelegramService:
             await queue.put(("done", sentinel))
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as handle:
+        mode = "r+b" if start_at and path.exists() else "wb"
+        with open(path, mode) as handle:
+            if start_at:
+                handle.truncate(start_at)
+                handle.seek(start_at)
             tasks = [asyncio.create_task(produce(start, count)) for start, count in work]
             try:
                 while lanes_finished < len(work):
@@ -319,11 +375,15 @@ class TelegramService:
             else:
                 await asyncio.gather(*tasks)
 
+        elapsed = max(1e-6, time.monotonic() - started_at)
         _log.info(
-            "parallel download complete bytes=%s streams=%s request_size=%s",
+            "parallel download complete bytes=%s streams=%s request_size=%s "
+            "seconds=%.2f mbps=%.2f",
             total,
             streams,
             request_size,
+            elapsed,
+            (max(0, total - start_at) / (1024 * 1024)) / elapsed,
         )
         return str(path)
 
@@ -333,19 +393,32 @@ class TelegramService:
         path: Path,
         total: int,
         progress_cb: Optional[Callable[[int, int], None]],
+        start_at: int = 0,
     ) -> str:
-        """One ordered reader used for small media and safe fallback."""
-        written = 0
-        with open(path, "wb") as handle:
-            async for chunk in self.client.iter_download(
-                media,
-                request_size=DOWNLOAD_REQUEST_SIZE,
-                file_size=total or None,
-            ):
-                handle.write(chunk)
-                written += len(chunk)
-                if progress_cb:
-                    progress_cb(written, total or written)
+        """One ordered 512 KiB reader used for small media and safe resume.
+
+        The global in-flight budget is held for the whole ordered read, so a
+        queue full of small files can never open more GetFile streams than
+        ``TG_INFLIGHT_REQUESTS`` on the single MTProto connection.
+        """
+        start_at = max(0, int(start_at))
+        written = start_at
+        mode = "r+b" if start_at and path.exists() else "wb"
+        with open(path, mode) as handle:
+            if start_at:
+                handle.truncate(start_at)
+                handle.seek(start_at)
+            async with self._request_slots():
+                async for chunk in self.client.iter_download(
+                    media,
+                    offset=start_at,
+                    request_size=DOWNLOAD_REQUEST_SIZE,
+                    file_size=total or None,
+                ):
+                    handle.write(chunk)
+                    written += len(chunk)
+                    if progress_cb:
+                        progress_cb(written, total or written)
             handle.flush()
         return str(path)
 
@@ -360,13 +433,13 @@ class TelegramService:
 
         Telethon's public :meth:`download_media` picks 128 KiB requests for
         files up to 100 MB. This path always uses the 512 KiB MTProto maximum;
-        files >= 32 MiB use two bounded, interleaved range readers while the
+        files >= 32 MiB use bounded, interleaved range readers while the
         writer commits only contiguous bytes to the partial file. Smaller media
         stays sequential. Pause/stop therefore leaves a valid prefix.
 
-        The caller owns the fallback: :class:`TransferManager` retries the
-        legacy path if this raises. A control signal raised by ``progress_cb``
-        is never caught here.
+        The caller owns the retry decision: :class:`TransferManager` resumes a
+        non-trivial prefix instead of overwriting it. A control signal raised
+        by ``progress_cb`` is never caught here.
         """
         assert self.client
         path = Path(file_path)
@@ -375,11 +448,16 @@ class TelegramService:
         total = int(total_size or 0)
         if total >= PARALLEL_DOWNLOAD_MIN_BYTES:
             return await self._download_media_parallel(media, path, total, progress_cb)
+        started = time.monotonic()
         result = await self._download_media_sequential(media, path, total, progress_cb)
+        elapsed = max(1e-6, time.monotonic() - started)
+        size = path.stat().st_size
         _log.info(
-            "fast download complete bytes=%s request_size=%s",
-            path.stat().st_size,
+            "fast download complete bytes=%s request_size=%s seconds=%.2f mbps=%.2f",
+            size,
             DOWNLOAD_REQUEST_SIZE,
+            elapsed,
+            (size / (1024 * 1024)) / elapsed,
         )
         return result
 
@@ -390,39 +468,45 @@ class TelegramService:
         total_size: int,
         progress_cb: Optional[Callable[[int, int], None]] = None,
     ) -> str:
-        """Continue a non-empty local partial from Telethon's aligned offset.
+        """Continue a non-empty local partial from a protocol-valid offset.
 
-        The existing partial is truncated only down to the mandatory alignment
-        boundary; it is never deleted. If no usable offset exists, the normal
-        full-download path remains authoritative.
+        Telegram rejects a 512 KiB GetFile request whose offset+limit crosses
+        a 1 MiB window (``An invalid limit was provided``). Aligning the
+        offset down to the request size keeps every request inside one window.
+        For files <= 512 KiB a 4 KiB alignment is still used, so the smallest
+        media does not lose a whole request worth of progress.
+
+        The existing partial is truncated only down to the alignment boundary;
+        it is never deleted. Large remainders resume with the striped readers.
         """
-
         assert self.client
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        total = int(total_size or 0)
+        align = (
+            self.DOWNLOAD_ALIGN
+            if (0 < total <= DOWNLOAD_REQUEST_SIZE)
+            else max(self.DOWNLOAD_ALIGN, DOWNLOAD_REQUEST_SIZE)
+        )
         offset = path.stat().st_size if path.exists() else 0
-        offset -= offset % self.DOWNLOAD_ALIGN
+        offset -= offset % align
         if offset <= 0:
+            if total >= DOWNLOAD_REQUEST_SIZE:
+                return await self.download_media_fast(
+                    message, file_path, total, progress_cb=progress_cb
+                )
             return await self.download_media(message, file_path, progress_cb=progress_cb)
         media = getattr(message, "media", None) or message
-        total = int(total_size or 0)
-        current = offset
-        with open(path, "r+b") as handle:
-            handle.truncate(offset)
-            handle.seek(offset)
-            async for chunk in self.client.iter_download(
-                media,
-                offset=offset,
-                request_size=DOWNLOAD_REQUEST_SIZE,
-                file_size=total or None,
-            ):
-                handle.write(chunk)
-                current += len(chunk)
-                if progress_cb:
-                    progress_cb(current, total or current)
-            handle.flush()
+        if total and total - offset >= PARALLEL_DOWNLOAD_MIN_BYTES:
+            result = await self._download_media_parallel(
+                media, path, total, progress_cb, start_at=offset
+            )
+        else:
+            result = await self._download_media_sequential(
+                media, path, total, progress_cb, start_at=offset
+            )
         _log.info("resumed download from offset=%s", offset)
-        return str(path)
+        return result
 
     async def disconnect(self) -> None:
         if self.client:
