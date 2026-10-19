@@ -101,6 +101,26 @@ def test_keepalive_is_idempotent():
     session_vault.reset_keepalive_for_tests()
 
 
+def test_keepalive_can_be_stopped_and_started_again():
+    session_vault.reset_keepalive_for_tests()
+    try:
+        started = session_vault.start_keepalive(interval_seconds=3600)
+        assert started["started"] is True
+
+        stopped = session_vault.stop_keepalive()
+        assert stopped["stopped"] is True
+        assert stopped["reason"] == "stopped"
+
+        repeated_stop = session_vault.stop_keepalive()
+        assert repeated_stop["stopped"] is False
+        assert repeated_stop["reason"] == "not-running"
+
+        restarted = session_vault.start_keepalive(interval_seconds=3600)
+        assert restarted["started"] is True
+    finally:
+        session_vault.reset_keepalive_for_tests()
+
+
 def test_authorize_uploads_vault_and_logout_wipes_it(ctx, tmp_path):
     from teledrive import config
 

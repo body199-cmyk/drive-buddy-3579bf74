@@ -65,10 +65,12 @@ validate connections → bounded scan → MediaItem → dedupe (source_key+size)
 1. restore + `pip install -r requirements.lock` (مصدر وحيد) + طباعة path lock
 2. `bootstrap.run()` → dirs + logging + migrations/WAL
 3. `getpass` hidden Telegram + native Drive auth + `about().get()` gate
-4. `ctx.telegram_auth.set_credentials()` + `ctx.drive_auth.adopt_service(drive_service)` + `restore_and_reconcile()` + `launch(ctx, share=False, blocking=False)` — handle على `ctx.ui`
+4. `ctx.telegram_auth.set_credentials()` + `ctx.drive_auth.adopt_service(drive_service)` + `restore_and_reconcile()` + `launch(ctx, share=False, blocking=False)` — handle على `ctx.ui`؛ لا يبدأ keep-alive تلقائيًا
 5. `handoff.generate()` مع redaction تلقائي
 6. `python -m pytest -q tests` يفشل الخلية عند فشل
 7. `checkpoint.persist()` + `storage_manager.cleanup_verified_temp()` + `quarantine` + `ctx.shutdown()` (يغلق UI handle أولاً)
+
+Optional Cell 8 يبدأ نبض keep-alive وWAV صامتًا في المتصفح؛ Optional Cell 9 يوقفهما دون إغلاق التطبيق. لا ضمان ضد مهلة Colab أو حد الجلسة.
 
 `teledrive_launcher.py` هو نقطة دخول مستقرة — `teledrive_launcher.py --check` يتحقق من bindings بدون credentials.
 

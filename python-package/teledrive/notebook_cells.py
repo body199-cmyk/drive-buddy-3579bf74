@@ -13,7 +13,7 @@ and refreshes ``teledrive/colab_cells.json`` so the in-app "copy the cells"
 export can never drift from the shipped notebook.
 
 Constitution rules encoded here:
-  * exactly seven required cells;
+  * exactly seven required cells plus two optional keep-alive start/stop cells;
   * native Colab Drive auth only (no client_secret.json, no pasted OAuth code,
     no persisted drive_token.json);
   * ``share=False`` — no public tunnel by default;
@@ -66,8 +66,10 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   restore. Logout / Forget deletes that saved sign-in.
 * Google Drive auth is **native Colab** — usually one click on a new VM.
   No desktop OAuth JSON and no pasted authorization code.
-* Cell 4 starts a keep-alive (2-min heartbeat + Connect click). It delays
-  idle disconnect; it does **not** beat the 12-hour free cap or a closed tab.
+* Cell 4 starts the UI only. Run optional Cell 8 afterward if you want the
+  best-effort heartbeat and silent browser audio; run Cell 9 to stop both, then
+  Cell 7 for cleanup/shutdown. Autoplay may be blocked, and this cannot override
+  Colab's runtime limits or guarantee a live session.
 * The interface runs **locally in this runtime** (`share=False`).
 * The database and temporary files live on local `/content`; only finished
   uploads and the session vault go to Google Drive.
@@ -680,9 +682,7 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 # maintenance) stay runnable while the interface keeps serving. The launch
 # handle lives on ctx.ui and is closed by ctx.shutdown() in cell 7.
 launch(ctx, share=False, inline=False, blocking=False)
-session_vault.start_keepalive()
-print("keep-alive started (2-min heartbeat + Connect click); a closed tab can still idle-out")
-print("ui running (non-blocking); cells 5-7 can be run while it serves")
+print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
 '''
 
 CELL_5 = '''# ==== Cell 5: redacted handoff snapshot ====
@@ -724,6 +724,52 @@ ctx.shutdown()      # closes the UI handle, stops the async runtime, closes SQLi
 print("runtime closed")
 '''
 
+CELL_8_KEEPALIVE_START = '''# ==== Optional Cell 8: start the best-effort Colab keep-alive ====
+# Run only after Cell 4 if you want the browser/runtime hint. Cell 9 stops the
+# heartbeat, Connect timer, and silent-audio player without closing TeleDrive.
+from teledrive import session_vault
+from IPython.display import HTML, display
+import base64, io, wave
+
+_keepalive_result = session_vault.start_keepalive()
+print("keep-alive:", "started" if _keepalive_result["started"] else _keepalive_result["reason"])
+
+# Inline WAV, generated locally: no external URL or network request.
+_silent_audio_buffer = io.BytesIO()
+with wave.open(_silent_audio_buffer, "wb") as _silent_wav:
+    _silent_wav.setnchannels(1)
+    _silent_wav.setsampwidth(2)
+    _silent_wav.setframerate(8000)
+    _silent_wav.writeframes(bytes(3200))  # 0.2 seconds of PCM silence
+
+_silent_audio_base64 = base64.b64encode(_silent_audio_buffer.getvalue()).decode("ascii")
+silent_audio_code = (
+    '<audio id="tdSilentAudio" controls autoplay loop muted playsinline style="width: 100%;">'
+    f'<source src="data:audio/wav;base64,{_silent_audio_base64}" type="audio/wav">'
+    'Your browser does not support audio playback.'
+    '</audio>'
+    '<script>(function () {'
+    'var audio = document.getElementById("tdSilentAudio");'
+    'if (!audio || typeof audio.play !== "function") return;'
+    'var attempt = audio.play();'
+    'if (attempt && typeof attempt.catch === "function") {'
+    'attempt.catch(function () { console.log("Silent-audio autoplay was prevented; click Play once if desired."); });'
+    '}'
+    '})();</script>'
+    '<p style="color: gray; font-size: 12px;">ℹ️ محاولة best-effort فقط؛ قد يمنع المتصفح التشغيل التلقائي، وقد تظل جلسة Colab خاضعة لمهلها وحدودها.</p>'
+)
+display(HTML(silent_audio_code))
+'''
+
+CELL_9_KEEPALIVE_STOP = '''# ==== Optional Cell 9: stop keep-alive and silent browser audio ====
+# Safe to run while TeleDrive is open; this stops only the keep-alive helpers.
+from teledrive import session_vault
+
+_stop_result = session_vault.stop_keepalive()
+print("keep-alive:", "stopped" if _stop_result["stopped"] else "not active")
+print("If the audio player is still playing, press its Pause button.")
+'''
+
 # Friendly, non-technical titles shown in Colab's collapsed form view.
 # These are what non-coders see; the original `teledrive_title` stays in
 # metadata for tracing and never changes logic.
@@ -735,6 +781,8 @@ FRIENDLY_TITLES: tuple[str, ...] = (
     "📋 الخطوة 5 — تقرير الجلسة (اختياري) | Session Report (optional)",
     "✅ الخطوة 6 — فحص النظام (اختياري) | Health Check (optional)",
     "🧹 الخطوة 7 — تنظيف وإغلاق | Cleanup & Shutdown",
+    "📡 خلية اختيارية 8 — إبقاء Colab نشطًا | Start Keep-Alive",
+    "⏹️ خلية اختيارية 9 — إيقاف إبقاء Colab نشطًا | Stop Keep-Alive",
 )
 
 def _title_line(friendly_title: str) -> str:
@@ -760,6 +808,8 @@ CELLS: tuple[dict[str, str], ...] = (
     {"title": "Redacted handoff snapshot", "code": CELL_5},
     {"title": "Run the packaged test suite", "code": CELL_6},
     {"title": "Safe maintenance and clean shutdown", "code": CELL_7},
+    {"title": "Optional start of best-effort Colab keep-alive", "code": CELL_8_KEEPALIVE_START},
+    {"title": "Optional stop of Colab keep-alive", "code": CELL_9_KEEPALIVE_STOP},
 )
 
 REQUIREMENTS_LOCK = PACKAGE_ROOT / "requirements.lock"
@@ -790,6 +840,8 @@ def hardcoded_pins_in_cells() -> list[str]:
 
 
 REQUIRED_CELL_COUNT = 7
+OPTIONAL_CELL_COUNT = 2
+TOTAL_CELL_COUNT = REQUIRED_CELL_COUNT + OPTIONAL_CELL_COUNT
 
 
 def _source_lines(text: str) -> list[str]:

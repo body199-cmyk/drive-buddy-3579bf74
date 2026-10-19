@@ -42,10 +42,14 @@ def test_title_is_v50(notebooks):
         assert "v3.1" not in head, path
 
 
-def test_exactly_seven_code_cells(notebooks):
+def test_seven_required_and_two_optional_code_cells(notebooks):
     for path, nb in notebooks.items():
         code = [c for c in nb["cells"] if c["cell_type"] == "code"]
-        assert len(code) == notebook_cells.REQUIRED_CELL_COUNT, path
+        assert notebook_cells.REQUIRED_CELL_COUNT == 7
+        assert notebook_cells.OPTIONAL_CELL_COUNT == 2
+        assert len(code) == notebook_cells.TOTAL_CELL_COUNT, path
+        assert "Optional start of best-effort Colab keep-alive" in code[7]["metadata"]["teledrive_title"]
+        assert "Optional stop of Colab keep-alive" in code[8]["metadata"]["teledrive_title"]
 
 
 def test_no_forbidden_patterns(notebooks):
@@ -98,7 +102,7 @@ def test_maintenance_cell_is_targeted(notebooks):
 def test_colab_cells_export_matches_the_notebook_source():
     payload = json.loads(notebook_cells.CELLS_JSON.read_text(encoding="utf-8"))
     assert payload["version"] == notebook_cells.NOTEBOOK_VERSION
-    assert len(payload["cells"]) == notebook_cells.REQUIRED_CELL_COUNT
+    assert len(payload["cells"]) == notebook_cells.TOTAL_CELL_COUNT
     assert [c["code"] for c in payload["cells"]] == [c["code"] for c in notebook_cells.CELLS]
 
 
@@ -123,13 +127,26 @@ def test_cell_3_uses_drive_managed_vault_before_optional_secret_migration():
     assert "if not has_saved_vault and not phone:" in cell3
 
 
-def test_cell_4_restores_session_vault_before_credentials_and_starts_keepalive():
+def test_cell_4_restores_vault_and_leaves_keepalive_optional():
     cell4 = notebook_cells.CELLS[3]["code"]
     adopt = cell4.index("ctx.drive_auth.adopt_service")
     restore = cell4.index("session_vault.restore_from_context")
     creds = cell4.index("ctx.telegram_auth.set_credentials")
-    keep = cell4.index("session_vault.start_keepalive")
-    assert adopt < restore < creds < keep
+    assert adopt < restore < creds
+    assert "session_vault.start_keepalive" not in cell4
+
+
+def test_optional_keepalive_cell_has_start_audio_and_stop_control():
+    start_cell = notebook_cells.CELLS[7]["code"]
+    stop_cell = notebook_cells.CELLS[8]["code"]
+    assert "session_vault.start_keepalive()" in start_cell
+    assert "wave.open(_silent_audio_buffer" in start_cell
+    assert "data:audio/wav;base64,{_silent_audio_base64}" in start_cell
+    assert "controls autoplay loop muted playsinline" in start_cell
+    assert "display(HTML(silent_audio_code))" in start_cell
+    assert "no external URL or network request" in start_cell
+    assert "session_vault.stop_keepalive()" in stop_cell
+    assert "If the audio player is still playing" in stop_cell
 
 
 def test_requirements_lock_is_the_only_dependency_source():
