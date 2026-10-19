@@ -2,11 +2,12 @@
 
 | الحقل | القيمة |
 |---|---|
-| Updated (UTC) | `2026-10-19T16:32Z` |
+| Updated (UTC) | `2026-10-19T19:24Z` |
 | Session type | New Coding Session after Arena closure (استئناف DOC M45-T01) |
 | Resume status | **RESUME_VERIFIED** |
 | Base SHA | `d991cf4783545ee838d3c2eeaf3b98fc0c22cf6f` (main بعد دمج PR #100) |
 | الفرع | `arena/3befa0b6-drive-buddy-3579bf74` |
+| merge | **PR [#104](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/104) MERGED** → main `337c19e7d69a903c1b7c5060e572d17f09ff8f86` (CI على الـPR: Python + Frontend SUCCESS) |
 | الحالة | **VERIFIED COMPLETE** — DOC كُتب ضد baseline `db0f2a0` وافتراضه («M44-T01 غير مدمج») غير صحيح للشجرة الحية |
 
 ## نتيجة الاستئناف
@@ -17,13 +18,19 @@
   وكل اختبارات M45 في `test_fast_download.py` و`test_m27_hardening.py`.
 - الفجوة الحرفية الوحيدة: marker `serverresent` المطلوب في §3.5 — أُضيف إلى
   `TRANSIENT_MARKERS` مع اختبار تصنيف في `test_fast_download.py`.
-- `pkg-2026.08.09-m15t07` **منشور حاليًا** من `d991cf4` (run 39278373927) — المالك
-  نفّذ خطوة الاسترداد المطلوبة في بطاقة M45-T01 السابقة؛ KNOWN_ISSUES #79 أُغلقت.
-- البوابات: `809 passed` · compileall PASS · launcher `54/54` · notebook check + cmp
-  PASS · package build PASS (`594716` bytes، SHA-256 `aee30938…fb`) · `node --test`
+- `pkg-2026.08.09-m15t07` **منشور** (أحدث إصدار من `33bf50d` عبر جلسات موازية:
+  sha256 `7774a340…`، `600312` bytes) — KNOWN_ISSUES #79 مغلقة.
+- دُمج PR #104 بعد مطابقة `main` مرتين (M45-T02/T03 ثم M45-T04 دُمجتا بالتوازي
+  أثناء الجلسة؛ تعارضان حُلّا بالاحتفاظ بالطرفين، و`teledrive_v4.5.zip` المُتبع
+  في main أُبقِى كما هو).
+- البوابات بعد الدمج النهائي على الشجرة الموحّدة: `813 passed` · compileall PASS ·
+  launcher `54/54` · notebook check + cmp PASS · package build PASS · `node --test`
   34/34. `bun` غير مثبت (لا تغيير frontend).
-- ما لم يُثبت: قياس Colab/Telegram حي (بيد المالك)، و`workflow_dispatch` للنشر الآلي
-  (403 سابقًا — أُعيدت المحاولة وسُجّلت النتيجة الفعلية).
+- **نشر الحزمة من الجلسة: FAILED** — `gh workflow run release-current.yml` أعاد
+  `HTTP 403: Resource not accessible by integration` (نفس حادث §8). الإصدار
+  المنشور حاليًا يثبت M45-T01 كاملة؛ إعادة النشر من `337c19e` خطوة واحدة بيد
+  المالك (Actions → Publish current TeleDrive package → Run workflow).
+- ما لم يُثبت: قياس Colab/Telegram حي (بيد المالك).
 - التفاصيل والأدلة: `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` §9.
 
 ---
