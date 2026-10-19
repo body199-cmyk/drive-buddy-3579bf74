@@ -1,34 +1,46 @@
-# بطاقة التسليم — M44-T01: مفتاح التحديث التلقائي وسرعة تنزيل Telegram
+# بطاقة التسليم — M44-T02: تسريع تنزيل Telegram بمدخلين محدودين
 
 | الحقل | القيمة |
 |---|---|
 | Updated (UTC) | `2026-10-19` |
-| code commit / merge | غير مدموج بعد (العمل على `arena/1a507b63-drive-buddy-3579bf74`) |
-| الحالة | **IMPLEMENTED + LOCAL-TESTED + BRANCH-CI-PASSED — ليس مدموجًا/منشورًا، ولا Colab live** |
-| CI | push [#39246461893](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39246461893) SUCCESS — Python package + Frontend build |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T01_UI_HEARTBEAT_AND_DOWNLOAD_SPEED.md` |
+| Base SHA | `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` |
+| الفرع | `arena/360d78bc-drive-buddy-3579bf74` |
+| الحالة | **IMPLEMENTED + LOCAL-TESTED — candidate only؛ لم يندمج/ينشر ولم يُختبر على Telegram/Colab حقيقي** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T02_BOUNDED_PARALLEL_TELEGRAM_DOWNLOAD.md` |
 
 ## النتيجة
 
-- **مفتاح التحديث التلقائي:** إعداد backend محفوظ `auto_refresh_ms` بقيم `0/1000/2000/5000` (الافتراضي 1000). React يوقف `setInterval` عند `0`؛ زر `queue.refresh` اليدوي يظل متاحًا، والـrefresh الأحادي بعد الإجراءات يظل يعمل. Gradio shell له نفس الإعداد. لا `localStorage`.
-- **سرعة التنزيل:** مسار `download_media_fast()` بطلبات `512 KiB` بدل `128 KiB` للملفات ≥1 MiB غير المصوّرة، مع fallback آمن للمسار القديم وإعادة إطلاق Pause/Stop. الاستئناف يستعمل نفس الحجم صراحةً.
-- **AES:** `cryptg==0.6.0` في dependency lock، و`crypto_backend()` يسجّل التطبيق الفعّال (`cryptg`/`libssl`/`pyaes`) عند اتصال Telegram.
+- بعد بلاغ المالك عن ملف 1.3 GB وصل 41% في نحو 10 دقائق (تقدير ~0.9 MB/s)، فُحص المصدر: M44-T01 يطلب 512 KiB لكن كل ملف ما زال تنزيله تسلسليًا.
+- أُضيف للميديا ≥32 MiB قارئان MTProto بقطاعات متداخلة؛ الأصغر يبقى متسلسلًا. Semaphore واحد على TelegramService يحدّ الطلبات المتزامنة إلى 2 إجمالًا، حتى مع عدة عمال للطابور.
+- يُعاد ترتيب القطع بنافذة أربع قطع، ويُكتب فقط prefix متصل إلى `.part`. Pause/Stop يترك prefix صالحًا. أي خطأ/حجم غير متوقع يلغي المسارات ويترك TransferManager يستخدم fallback الحالي من byte 0.
+- لا تغييرات dependency أو notebook/workflow أو auth/Drive/SQLite. لا مساس بقفل Drive.
 
 ## الأدلة المحلية
 
-`795 passed` · compileall PASS · launcher `54/54` · notebooks in sync · React contracts `34/34` · lint 0 errors (8 baseline warnings) · bundle rebuilt · package build PASS (`578225` bytes، `e4723b02…15f6`). `bun run build` غير قابل للتشغيل في sandbox بسبب رفض المرآة لحزمة `@lovable.dev/vite-tanstack-config@2.8.5` وحدها.
+`798 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS · package build PASS: `583226` bytes، SHA-256 `d77a4e29e63ae17b48b2720ddce52a443eee5302bd26f256fb9c9103b0480dd3`.
+New tests exercise two active ranges, ordered reconstruction, valid prefix on Pause, and fallback-triggering transport failure. `bun run lint` NOT RUN: `bun: command not found`; no frontend files changed.
 
 ## ما لم يثبت / الخطوة التالية
 
-1. نشر الحزمة، Restart، Cell 1 (يثبّت cryptg)، ثم Cells 2–4.
-2. في Logs: `telethon crypto backend=cryptg`، ثم قياس سرعة ملف ≥100 MB في Dashboard.
-3. اختبار إيقاف/تشغيل التحديث التلقائي حيًا في Colab.
-4. إن بقي التنزيل مقيدًا بالزمن: خطوة تالية = 2–4 جداول `iter_download` متوازية مع اختبار حي.
-5. توازي رفع Drive يحتاج ADR (قاعدة «Drive service واحد»)؛ `_drive_lock` يبقى كما هو الآن.
+اختبارات fake لا تثبت Telegram/Colab speed. يلزم review/CI/merge ثم إعادة نشر ZIP وmanifest، Restart Colab، التأكد من `telethon crypto backend=cryptg`، ونقل ملف كبير مع التحقق من الحجم وPause/Resume. لا ندّعي تسريعًا فعليًا قبل benchmark حي. لا تضف مسارات أو concurrency إضافية بلا دليل.
 
-## ما لم يُمس
+## التراجع
 
-لا تغيير في notebook cells أو `.github/workflows` أو schema SQLite أو Drive/Telegram auth أو session vault. التراجع = revert هذا الـcommit؛ صف `auto_refresh_ms` في SQLite غير ضار.
+Revert التغيير؛ الملفات الأصغر أصلًا تسلسلية، والملفات الكبيرة تعود إلى fast sequential 512 KiB مع legacy fallback. لا حذف من Drive/Vault/release.
+
+---
+
+# بطاقة التسليم السابقة — M44-T01: مفتاح التحديث التلقائي وسرعة تنزيل Telegram
+
+| الحقل | القيمة |
+|---|---|
+| Updated (UTC) | `2026-10-19` |
+| code merge | PR [#93](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/93) merged; incorporated in release commit `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` |
+| الحالة | **MERGED + RELEASE-PUBLISHED; live throughput still poor per owner report** |
+| release verification | workflow [#39263636789](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39263636789) SUCCESS; ZIP `580737` bytes + manifest `378` bytes; target db0f2a0 |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T01_UI_HEARTBEAT_AND_DOWNLOAD_SPEED.md` |
+
+The persisted refresh toggle and 512 KiB fast sequential Telegram path are present in the release. `cryptg==0.6.0` is pinned; runtime backend must still be checked in Colab logs. The owner's report that a 1.3 GB file reached 41% in about ten minutes motivated M44-T02. No live performance claim is made.
 
 ---
 

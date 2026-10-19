@@ -2,31 +2,31 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M43` |
-| العنوان | Vault Telegram ذاتية الاكتفاء على Drive + حفظ آخر رابط فحص في الواجهة الحقيقية |
-| code commit / merge | `e974dfd` → `2d5893d` عبر PR [#91](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/91) |
-| الحالة | **MERGED + CI-PASSED + PACKAGE-PUBLISHED — Colab live pending** |
-| CI | push [#32689166257](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689166257) وPR [#32689176699](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689176699) SUCCESS |
-| Publish | [#32689575111](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/32689575111) SUCCESS؛ manifest/ZIP: commit `2d5893d…`، SHA `28d94129…90b79`، `570612` bytes |
+| TASK ID | `M44-T02` |
+| العنوان | تنزيل Telegram كبير الحجم بمسارين MTProto متوازيين ومحدودين، مع حفظ `.part` صالح واسترجاع legacy آمن |
+| الأساس | `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` — main/PR #94 merge |
+| الفرع | `arena/360d78bc-drive-buddy-3579bf74` |
+| الحالة | **IMPLEMENTED + LOCAL-TESTED — candidate only; not merged/published and no real Telegram benchmark** |
+| دليل المستخدم | صورة Colab: ملف Telegram حجمه 1.3 GB، قرابة 41% بعد نحو 10 دقائق؛ تقدير تقريبي 0.9 MB/s، لا قياس مستقل. |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T02_BOUNDED_PARALLEL_TELEGRAM_DOWNLOAD.md` |
 
-## النطاق المثبت
+## النطاق
 
-1. Vault format 3 Drive-managed تجعل Drive مصدر الاستعادة الكامل لجلسة Telegram؛ لا تحتاج Runtime جديدة إلى Colab Secrets أو OTP حين تكون الجلسة صالحة.
-2. Vault format 2 القديمة تبقى مدعومة وتُهجّر بعد نجاح الاستعادة فقط. لا تُحذف النسخة النشطة قبل نجاح زوج versioned بديل وmanifest جديد.
-3. Cell 3 يفضّل API metadata من Vault format 3 ويعامل Colab Secrets كوسيلة ترقية اختيارية فقط للـformat 2 القديمة. لا يطبع API Hash.
-4. React وGradio يعرضان حالة Telegram من ApplicationContext نفسه، لذلك تظهر الحالة المستعادة في واجهة المشروع بدل طلب تسجيل منفصل.
-5. رابط التحليل المحفوظ يدخل من action registry إلى `ScannerService` وSQLite settings ثم live snapshot؛ هناك زر مسح صريح في الواجهتين، ولا يوجد localStorage أو backend موازٍ.
+- الملفات ≥32 MiB تستخدم قارئين MTProto بحد أقصى، offsets/stripes منفصلة بحجم request 512 KiB؛ الأصغر يبقى على المسار التسلسلي.
+- حد عام لطلبين تنزيل متزامنين عبر TelegramService الواحد حتى لا يتضاعف الحمل مع concurrency الصفوف.
+- reorder window من أربع قطع كحد أقصى؛ الكتابة النهائية إلى `.part` تكون متصلة فقط. Pause/Stop يحتفظان ببادئة صحيحة، وأي خطأ نقل/حجم يلغي القارئين ويعيد المسار القديم الذي يبدأ من الصفر.
+- لا اعتماد جديد ولا تغيير في Drive upload أو auth أو schema أو notebook/workflow.
 
-## الأدلة
+## بوابات محلية
 
-`779 passed` محليًا، وCI Python/Frontend نجحا في push وPR. launcher `53/53`، notebook check + cmp PASS، React contracts `34/34` محليًا، lint/build PASS، وarchive مطابق للـmanifest العام. workflow النشر الأول توقف fail-closed لاختلاف الحجم؛ استُبدل الزوج المتطابق معًا فقط، ثم تحقق workflow #32689575111 من الأصول العامة بنجاح.
+`798 passed` · compileall PASS · launcher `54/54` · notebook check + `cmp` PASS · package build PASS بعد إثبات SHA النهائي في phase report. `bun run lint` لم يعمل: `bun: command not found`؛ لا تغييرات frontend.
 
-## حد الأمان والتحقق المتبقي
+## ما لم يثبت / المطلوب قبل إغلاق المهمة
 
-صيغة Drive-managed قرار مالك موثق في ADR-004: حماية حساب Drive هي حد الوصول العملي. لا تُطبع أو تُرسل API Hash/session/OTP إلى الواجهة أو السجلات أو Git. لا تحذف M43 `.part` أو Vault أو release/tag.
+- لا اختبار حي على Telegram أو Colab ولا قياس مقارنة قبل/بعد؛ اختبارات الشبكة الوهمية تثبت العقود فقط.
+- يجب دمج التغيير ونشر ZIP/manifest متطابقين عبر Runner، ثم Restart Colab وتشغيل ملف ≥100 MB مع ملاحظة `telethon crypto backend=cryptg`، throughput، الحجم النهائي، Pause/Resume، ومرور الملف إلى Drive.
+- لا توصف المهمة بأنها Colab-ready أو Complete قبل الاختبار الحي. لا ترفع concurrency ولا عدد المسارات فوق 2 بدون موافقة/قياس إضافيين.
 
-لم يثبت بعد تشغيل Cells 1–4 بالحزمة M43 المنشورة، ولم يظهر `Gradio · Live bridge` في هذا التعديل. لا تستخدم **Colab-ready** أو **Complete** قبل هذا الدليل.
+## التراجع
 
-## نقطة التراجع
-
-يعكس merge `2d5893d…` ثم ينشر ZIP/manifest متطابقان مع SHA المستهدف، دون حذف release/tag أو Vault تلقائيًا.
+Revert commit M44-T02. أي استثناء في المسار المتوازي يعيد استعمال fallback التسلسلي الذي يفتح `.part` من byte 0؛ لا حذف من Drive ولا تغيير للـVault.

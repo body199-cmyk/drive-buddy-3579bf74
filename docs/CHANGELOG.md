@@ -1,5 +1,21 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M44-T02] — 2026-10-19 — تنزيل Telegram كبير الحجم بمسارين محدودين
+
+### Changed
+- الملفات ≥32 MiB تستخدم قارئين `iter_download` متداخلين بقطاعات MTProto منفصلة (512 KiB)؛ حد الطلبات الجارية عالميًا في TelegramService هو 2 حتى لا يتضاعف الحمل عبر عمال الطابور. الأصغر يبقى على المسار المتسلسل.
+- ترتيب القطع عبر نافذة bounded من أربع قطع، والكتابة إلى `.part` تظل بادئة متصلة فقط. Pause/Stop يحافظان على بادئة قابلة للاستئناف؛ فشل النقل أو mismatch يلغي بقية المسارات ويرجع إلى fallback القديم الذي يعيد الكتابة من الصفر.
+- لم تتغير الاعتماديات أو Drive upload أو auth أو schema أو notebook أو workflow.
+
+### Gates and local verification
+- `798 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS · deterministic package build PASS (`583226` bytes، SHA-256 `d77a4e29e63ae17b48b2720ddce52a443eee5302bd26f256fb9c9103b0480dd3`).
+- اختبارات جديدة تثبت إعادة ترتيب القطع، تزامنًا بحد 2، بادئة صحيحة عند Pause، وفشل مسار النقل بأمان.
+- `bun run lint` NOT RUN: `bun: command not found`; لا تغييرات frontend.
+
+### Open / not proven
+- أبلغ المالك عن ملف 1.3 GB وصل قرابة 41% في نحو 10 دقائق (~0.9 MB/s تقديريًا) بعد نشر M44-T01. هذا report مستخدم، ليس قياسًا آليًا.
+- مسار M44-T02 لم يُختبر على Telegram أو Colab حقيقي، ولم يُنشر. القياس الحي مع `cryptg`، صحة الحجم، Pause/Resume ثم Drive upload بيد المالك بعد الدمج والنشر؛ لا ضمان لنسبة تسريع قبلها.
+
 ## [M44-T01] — 2026-10-19 — مفتاح التحديث التلقائي وسرعة تنزيل Telegram
 
 ### Changed
