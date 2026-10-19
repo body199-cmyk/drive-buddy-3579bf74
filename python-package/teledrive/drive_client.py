@@ -105,8 +105,12 @@ class DriveService:
         source_key: str,
         progress_cb: Callable[[int, int], None] | None = None,
         mime_type: str | None = None,
+        chunk_lock: Any = None,
     ) -> dict[str, Any]:
         assert self.service
+        from contextlib import nullcontext
+
+        lock_ctx = chunk_lock if chunk_lock is not None else nullcontext()
         media = MediaFileUpload(
             file_path,
             mimetype=mime_type or "application/octet-stream",
@@ -121,10 +125,11 @@ class DriveService:
                 "teledrive_source_key": source_key,
             },
         }
-        request = self.service.files().create(
-            body=body, media_body=media,
-            fields="id,name,size,parents,appProperties,trashed"
-        )
+        with lock_ctx:
+            request = self.service.files().create(
+                body=body, media_body=media,
+                fields="id,name,size,parents,appProperties,trashed"
+            )
         # M26-T01: a cooperative pause/stop signal raised by the progress
         # callback MUST escape this loop. Everything else stays swallowed:
         # a cosmetic progress failure may never break a real upload.
@@ -133,7 +138,8 @@ class DriveService:
         response = None
         total = os.path.getsize(file_path) or 1
         while response is None:
-            status, response = request.next_chunk()
+            with lock_ctx:
+                status, response = request.next_chunk()
             if status and progress_cb:
                 try:
                     progress_cb(int(status.resumable_progress), total)

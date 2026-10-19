@@ -16,23 +16,86 @@ _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
 
 
+def _ensure_writable_db_paths() -> None:
+    import os
+    assert_local_path(DB_PATH, what="SQLite database")
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(DB_PATH.parent, 0o755)
+    except OSError:
+        pass
+    for suffix in ("", "-wal", "-shm"):
+        candidate = DB_PATH.with_name(DB_PATH.name + suffix)
+        if candidate.exists():
+            try:
+                os.chmod(candidate, 0o644)
+            except OSError:
+                pass
+
+
 def _connect() -> sqlite3.Connection:
     global _conn
     if _conn is None:
-        assert_local_path(DB_PATH, what="SQLite database")
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _conn = sqlite3.connect(str(DB_PATH), check_same_thread=False, isolation_level=None)
+        _ensure_writable_db_paths()
+        _conn = sqlite3.connect(
+            str(DB_PATH),
+            timeout=30.0,
+            check_same_thread=False,
+            isolation_level=None,
+        )
         _conn.row_factory = sqlite3.Row
+        _conn.execute("PRAGMA busy_timeout=30000")
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA synchronous=NORMAL")
         _conn.execute("PRAGMA foreign_keys=ON")
     return _conn
 
 
+def _reconnect() -> sqlite3.Connection:
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+        _conn = None
+    return _connect()
+
+
+class _RecoveringCursor:
+    """Cursor wrapper that heals once if SQLite reports a stale readonly handle."""
+
+    def __init__(self, raw_cursor: sqlite3.Cursor):
+        self._cur = raw_cursor
+
+    def execute(self, sql: str, parameters: Any = ()):
+        try:
+            return self._cur.execute(sql, parameters)
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if any(k in msg for k in ("readonly", "locked", "disk i/o")):
+                try:
+                    self._cur.close()
+                except Exception:
+                    pass
+                self._cur = _reconnect().cursor()
+                return self._cur.execute(sql, parameters)
+            raise
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._cur, name)
+
+    def close(self) -> None:
+        try:
+            self._cur.close()
+        except Exception:
+            pass
+
+
 @contextmanager
 def cursor():
     with _lock:
-        c = _connect().cursor()
+        c = _RecoveringCursor(_connect().cursor())
         try:
             yield c
         finally:

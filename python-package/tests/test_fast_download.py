@@ -657,3 +657,130 @@ def test_telethon_error_strings_are_classified_instead_of_unknown():
     missing = classify(RuntimeError("downloaded file missing"))
     assert missing.code == "PERMANENT"
     assert missing.retryable is False
+
+
+# ---------------------------------------------------------------------------
+# M45-T02 — per-chunk Drive lock for duplicate precheck + SQLite recovery
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_precheck_succeeds_during_active_upload_and_skips_download():
+    """A duplicate item must transition Pending -> Skipped without downloading,
+    even while another item is mid-upload on Drive."""
+    from .mocks.fake_drive import FakeDrive
+
+    class _ChunkedSlowDrive:
+        def __init__(self):
+            self._inner = FakeDrive()
+            self.first_upload_chunk_released = threading.Event()
+            self.second_dup_checked = threading.Event()
+            # Pre-seed the second item (mid=702) as already on Drive
+            self._inner.files["existing-702"] = {
+                "id": "existing-702",
+                "name": "clip702.bin",
+                "size": "1024",
+                "parents": ["folder"],
+                "appProperties": {
+                    "source_key": "tg:99:702",
+                    "teledrive_source_key": "tg:99:702",
+                },
+                "trashed": False,
+            }
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def find_by_source_key(self, source_key):
+            res = self._inner.find_by_source_key(source_key)
+            if source_key == "tg:99:702":
+                self.second_dup_checked.set()
+            return res
+
+        def upload_resumable(
+            self,
+            file_path,
+            drive_name,
+            parent_id,
+            source_key,
+            progress_cb=None,
+            mime_type=None,
+            chunk_lock=None,
+        ):
+            from contextlib import nullcontext
+
+            lock_ctx = chunk_lock if chunk_lock is not None else nullcontext()
+            with lock_ctx:
+                if progress_cb:
+                    progress_cb(512, 1024)
+            # Between chunks: chunk_lock is released so duplicate pre-check can run!
+            self.first_upload_chunk_released.set()
+            self.second_dup_checked.wait(timeout=3.0)
+            with lock_ctx:
+                return self._inner.upload_resumable(
+                    file_path, drive_name, parent_id, source_key, progress_cb, mime_type
+                )
+
+    class _StrictTelegram:
+        def __init__(self, drive):
+            self.drive = drive
+            self.downloaded_mids = []
+
+        async def get_message(self, chat, mid):
+            return SimpleNamespace(id=mid, media=1024)
+
+        async def download_media(self, message, file_path, progress_cb=None):
+            if message.id == 702:
+                raise AssertionError("duplicate item 702 should never be downloaded")
+            self.downloaded_mids.append(message.id)
+            path = Path(file_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x" * 1024)
+            if progress_cb:
+                progress_cb(1024, 1024)
+            return str(path)
+
+    async def scenario():
+        queue = QueueManager()
+        first = _pipeline_item(queue, 701)
+        second = _pipeline_item(queue, 702)
+        drive = _ChunkedSlowDrive()
+        telegram = _StrictTelegram(drive)
+        manager = TransferManager(telegram, drive, "folder", queue=queue)
+        manager.set_workers(1)
+        await manager.run()
+        return telegram, first, second
+
+    telegram, first, second = asyncio.run(scenario())
+    assert telegram.downloaded_mids == [701]
+    assert db.get_item(first.id).state == "Uploaded"
+    assert db.get_item(second.id).state == "Skipped"
+
+
+def test_database_recovers_from_readonly_sqlite_connection(monkeypatch):
+    """If SQLite raises OperationalError('attempt to write a readonly database'),
+    cursor() reconnects once and succeeds, and error_handler marks it transient."""
+    import sqlite3
+    from teledrive.error_handler import classify
+
+    classified = classify(sqlite3.OperationalError("attempt to write a readonly database"))
+    assert classified.code == "TRANSIENT"
+    assert classified.retryable is True
+
+    calls = {"count": 0}
+    real_connect = db._connect
+
+    class _StaleReadonlyConn:
+        def cursor(self):
+            return self
+
+        def execute(self, sql, params=()):
+            calls["count"] += 1
+            raise sqlite3.OperationalError("attempt to write a readonly database")
+
+        def close(self):
+            pass
+
+    db._conn = _StaleReadonlyConn()  # type: ignore[assignment]
+    db.set_setting("recovered_key", "recovered_val")
+    assert calls["count"] == 1
+    assert db.get_setting("recovered_key") == "recovered_val"

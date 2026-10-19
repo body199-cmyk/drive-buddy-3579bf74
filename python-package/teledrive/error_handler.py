@@ -34,6 +34,7 @@ TRANSIENT_MARKERS = (
     # request. Retrying with backoff is correct; the old UNKNOWN default made
     # this look identical to a real protocol error.
     "request was unsuccessful", "internal server error", "server error",
+    "readonly database", "database is locked", "disk i/o error",
 )
 
 PERMANENT_MARKERS = (
