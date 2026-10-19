@@ -15,6 +15,11 @@ Transfer media from Telegram to Google Drive using only Google Colab. No servers
 1. **افتح** `notebook/TeleDrive.ipynb` داخل Colab (File → Upload notebook).
 2. **ارفع** الحزمة كـ ZIP في الخلية الأولى.
 3. **شغّل** الخلايا بالترتيب: تثبيت → bootstrap → إدخال api_id/hash → إطلاق الواجهة.
+   في الخلية 4 اختر `UI_MODE`: `Modern_Web_Dashboard` (واجهة FastAPI حية
+   بـ AJAX Polling على المنفذ 8765)، أو `Classic_Gradio_Backup` (7860)،
+   أو `Run_Both_Together`. بيانات دخول Telegram تُكتب فقط في حقول Gradio.
+   In cell 4 pick `UI_MODE`: the live FastAPI dashboard (8765), the classic
+   Gradio UI (7860), or both — Telegram secrets stay in Gradio's secure fields.
 4. **افتح** تبويب Google Drive في الواجهة وارفع ملف OAuth Desktop JSON من Google Cloud Console.
 5. **الصق** رابط تيليجرام في تبويب "Link & Analyze"، اضغط Analyze، ثم Start.
 

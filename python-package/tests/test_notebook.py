@@ -127,6 +127,21 @@ def test_cell_3_uses_drive_managed_vault_before_optional_secret_migration():
     assert "if not has_saved_vault and not phone:" in cell3
 
 
+def test_cell_4_offers_modern_web_dashboard_and_classic_gradio_backup():
+    cell4 = notebook_cells.CELLS[3]["code"]
+    # M46-T01: one dropdown, two interfaces, same ONE context/loop/clients.
+    assert 'UI_MODE = "Modern_Web_Dashboard"' in cell4
+    assert '"Classic_Gradio_Backup"' in cell4
+    assert '"Run_Both_Together"' in cell4
+    assert "from teledrive.web_dashboard import launch_web_dashboard" in cell4
+    assert "launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)" in cell4
+    assert "launch(ctx, share=False, inline=False, blocking=False)" in cell4
+    # A missing modern stack must fall back to Gradio, never to no UI.
+    assert "falling back to Classic_Gradio_Backup" in cell4
+    # The choice happens AFTER vault restore, on the same injected ctx.
+    assert cell4.index("session_vault.restore_from_context") < cell4.index("UI_MODE")
+
+
 def test_cell_4_restores_vault_and_leaves_keepalive_optional():
     cell4 = notebook_cells.CELLS[3]["code"]
     adopt = cell4.index("ctx.drive_auth.adopt_service")

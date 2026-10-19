@@ -1,5 +1,35 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M46-T01] — 2026-10-19 — واجهة ويب حديثة (FastAPI + AJAX Polling) + Gradio احتياطي
+
+### Added
+- `teledrive/web_dashboard.py`: لوحة ويب حية مكتفية ذاتيًا (صفر CDN، عربي RTL)
+  تستطلع `api/metrics` كل ثانية بلا ريفرش، مربوطة فعليًا بـ
+  `progress/queue_manager/LiveUiStateService/LogService` وتُرسل كل إجراء عبر
+  `handlers.bridge_request` الموثّق نفسه (لا أسرار عبر HTTP، لا CORS عام،
+  لا `innerHTML`). دُمجت من حمولة `TeleDrive_WebUI_GitHub_Bridge.ipynb` على
+  Drive بعد تكييفها دستوريًا (حلقة `ctx.aio` الواحدة بدل حلقة ثانية، وبلا
+  محرك النقل الخمّين/المكرر الذي كان في الحمولة) — تقرير
+  `docs/PHASE_REPORTS/PHASE_M46_T01_MODERN_WEB_DASHBOARD.md`.
+- خلية 4 في `notebook_cells.py` (وتوليد النسختين + `colab_cells.json` منها):
+  قائمة `UI_MODE` بخيارات `Modern_Web_Dashboard` (8765، الافتراضي) /
+  `Classic_Gradio_Backup` (7860) / `Run_Both_Together`، مع سقوط تلقائي إلى
+  Gradio عند تعذّر الواجهة الحديثة.
+- `app_context.py`: مقبض `ctx.web_dashboard` يُغلق في `shutdown()`.
+- تثبيت `fastapi==0.149.0` و`uvicorn==0.54.0` في `requirements.lock`
+  (+ `requirements.txt`)، باستيراد كسول فلا ينكسر وضع Gradio بدونهما.
+- اختبارات `tests/test_web_dashboard.py` + عقد خلية-4 مزدوجة الواجهة.
+
+### Gates and local verification
+- `823 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS ·
+  معاينة HTTP حية (`/api/health`، `/api/metrics`) بحالة صادقة غير متصلة.
+- حزمة مختبرة `teledrive_v4.5.zip`: `614404` بايت، SHA-256
+  `de902fa6cf50dde106ed5126627e1dd2e425c9cc658cdf1d53c0781e5c9bfaf5`.
+
+### Security
+- دفتر كوبري Drive المصدر يحتوي GitHub Token كنص صريح؛ لم يدخل أي جزء منه
+  المستودع (حُذفت النسخ المحلية وفحص `ghp_` نظيف). على المالك إلغاؤه فورًا.
+
 ## [M45-T01] — 2026-10-19 — استئناف Arena: تحقق وإغلاق الفجوة الحرفية الوحيدة
 
 ### Fixed

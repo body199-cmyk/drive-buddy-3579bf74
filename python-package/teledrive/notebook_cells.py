@@ -66,6 +66,10 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   restore. Logout / Forget deletes that saved sign-in.
 * Google Drive auth is **native Colab** — usually one click on a new VM.
   No desktop OAuth JSON and no pasted authorization code.
+* Cell 4 has a **UI_MODE** dropdown: `Modern_Web_Dashboard` (FastAPI +
+  AJAX Polling, port 8765), `Classic_Gradio_Backup` (port 7860), or
+  `Run_Both_Together`. Telegram login secrets are only ever typed into
+  the Gradio fields, never into the Web Dashboard.
 * Cell 4 starts the UI only. Run optional Cell 8 afterward if you want the
   best-effort heartbeat and silent browser audio; run Cell 9 to stop both, then
   Cell 7 for cleanup/shutdown. Autoplay may be blocked, and this cannot override
@@ -670,6 +674,17 @@ else:
 
 ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resume
 
+# UI_MODE (Cell 4 dropdown): pick the interface — both run on the ONE
+# context / event loop / Telegram client / Drive service created above.
+#   Modern_Web_Dashboard  : FastAPI + AJAX Polling page (port 8765),
+#                           live metrics about once a second, no refresh.
+#   Classic_Gradio_Backup : the original Gradio UI (port 7860).
+#   Run_Both_Together     : both; secure Telegram login fields live in
+#                           Gradio, so prefer this until your session
+#                           vault restore shows "connected" automatically.
+UI_MODE = "Modern_Web_Dashboard"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "Run_Both_Together"]
+WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
+
 # share=False: the UI is reachable inside this runtime only. A public link is an
 # explicit opt-in (pass share to launch yourself) and is never the default —
 # no Gradio public tunnel is created and no secrets are exposed.
@@ -678,10 +693,25 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 # with it so /config, events, assets and queue resolve through the proxy (not
 # localhost), and prints ONE usable "TeleDrive URL:" line below. A clickable
 # external proxy URL is preferred over a fragile inline iframe.
-# blocking=False: the cell returns immediately, so cells 5-7 (handoff, tests,
-# maintenance) stay runnable while the interface keeps serving. The launch
-# handle lives on ctx.ui and is closed by ctx.shutdown() in cell 7.
-launch(ctx, share=False, inline=False, blocking=False)
+# blocking=False: the cell returns immediately (non-blocking), so cells 5-7
+# (handoff, tests, maintenance) stay runnable while the interface keeps
+# serving. The Gradio handle lives on ctx.ui, the Web Dashboard handle on
+# ctx.web_dashboard; both are closed by ctx.shutdown() in cell 7.
+web_server = None
+if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
+    try:
+        from teledrive.web_dashboard import launch_web_dashboard
+
+        web_server = launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)
+    except Exception as _web_exc:  # never leave the user with no UI at all
+        print("web dashboard unavailable:", type(_web_exc).__name__, _web_exc)
+        if UI_MODE == "Modern_Web_Dashboard":
+            print("falling back to Classic_Gradio_Backup")
+            UI_MODE = "Classic_Gradio_Backup"
+
+if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
+    launch(ctx, share=False, inline=False, blocking=False)
+
 print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
 '''
 
