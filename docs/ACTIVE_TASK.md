@@ -1,5 +1,19 @@
 # المهمة النشطة
 
+## بطاقة M46-T01 — Modern Web Dashboard (جلسة Arena 2026-10-19)
+
+| الحقل | القيمة |
+|---|---|
+| TASK ID | `M46-T01` |
+| العنوان | دمج واجهة الويب الحديثة (FastAPI + AJAX Polling) من Drive WebUI Bridge، مع إبقاء Gradio احتياطيًا |
+| الأساس | `337c19e7d69a903c1b7c5060e572d17f09ff8f86` — main بعد PR #104 |
+| الفرع | `arena/137aa454-drive-buddy-3579bf74` |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M46_T01_MODERN_WEB_DASHBOARD.md` |
+| الحالة | **IMPLEMENTED + GATES GREEN** — `web_dashboard.py` على الحلقة الواحدة عبر `bridge_request`، خلية 4 بـ `UI_MODE`، `823 passed`، حزمة مختبرة `614404` بايت |
+
+---
+
+
 ## بطاقة الاستئناف — M45-T01 (جلسة Arena 2026-10-19T16:32Z)
 
 | الحقل | القيمة |

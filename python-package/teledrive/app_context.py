@@ -105,6 +105,7 @@ class ApplicationContext:
         self.queue_manager.bind_context(self)
         self.progress.reset()
         self.ui: Any = None          # Gradio launch handle (set by app.launch)
+        self.web_dashboard: Any = None  # uvicorn handle (web_dashboard.launch)
         self.transfer_manager: Any = None
         self.drive_client: Any = None
         self.bootstrap_info: dict = {}
@@ -147,6 +148,12 @@ class ApplicationContext:
 
 
     def shutdown(self) -> None:
+        if self.web_dashboard is not None:
+            try:
+                self.web_dashboard.should_exit = True
+            except Exception:  # pragma: no cover - defensive
+                _log.warning("web dashboard stop failed during shutdown")
+            self.web_dashboard = None
         if self.ui is not None:
             try:
                 self.ui.close()
