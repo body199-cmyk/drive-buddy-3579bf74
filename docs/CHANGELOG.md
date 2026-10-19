@@ -1,5 +1,15 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M46-T01] — 2026-10-19 — تثبيت طريقة شغل Arena وقفل حادثة النشر #79 (وثائق فقط)
+
+### Added
+- `docs/ARENA_WORKFLOW.md`: طريقة التعديل والدمج المثبَّتة باعتماد المالك — فرع `arena/...` ← تعديل ← بوابات ← Commit ← Push ← PR ← دمج بأمر صريح من المالك ← فرع جديد بعد `pr_merged`، مع المحظورات (لا force-push/rebase، لا تعديل workflows من البوت، لا أسرار) وخطوات المالك وحدها. الدليل: PR #101 و #102 المدموجان.
+
+### Documentation / memory
+- `KNOWN_ISSUES #79` تُقفل: الـ Release `pkg-2026.08.09-m15t07` أُعيد إنشاؤه بالأصلين — تشغيل النشر `39278373927` SUCCESS على `d991cf4` (M45-T01)، والأصول الحالية عند `f272e87` (M45-T02): ZIP ‏`596345` بايت + manifest ‏`378` بايت.
+- `TODO.md`: حالة M45-T01 صارت RELEASE-PUBLISHED، وسُجّلت M45-T02 (commit مالك مباشر `f272e87`، CI `39291747719` SUCCESS).
+- لا تغيير كود/notebook/workflow/اعتماديات. `TESTS NOT RUN`: جلسة وثائق؛ لم يُنزَّل manifest من sandbox (EOF من مضيف الأصول).
+
 ## [M45-T01] — 2026-10-19 — خط أنابيب تنزيل/رفع وحل جذري لسرعة Telegram
 
 ### Changed
