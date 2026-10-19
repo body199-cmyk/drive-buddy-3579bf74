@@ -6,7 +6,7 @@
 | العنوان | خط أنابيب تنزيل/رفع منفصل، محاذاة offset صحيحة لـ512 KiB، حفظ `.part` عند التعثر، وتصفية الوسائط الوهمية |
 | الأساس | `acab9d228e45a5a77a5fef9198cf3df9dd1f4729` — main بعد PR #97 |
 | الفرع | `arena/5b79cd32-drive-buddy-3579bf74` |
-| الحالة | **MERGED + CI-PASSED; release publish and Colab live benchmark pending** |
+| الحالة | **MERGED + CI-PASSED (main run 39275554488); release asset republish needs ONE owner click; Colab live benchmark pending** |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` |
 
 ## النطاق
@@ -45,3 +45,17 @@
 
 Revert commit M45-T01. السلوك السابق يعود بالكامل: سيمافور عامل واحد يغطي التنزيل والرفع،
 محاذاة 4 KiB، fallback من الصفر، وفحص تكرار حاجب قبل التنزيل. لا حذف من Drive أو Vault.
+
+## حادث النشر (2026-10-19) — يجب على المالك تنفيذ خطوة واحدة
+
+- محاولة رفع الأصول من sandbox فشلت لأن `uploads.github.com` محجوب في بيئة التنفيذ
+  (`SSL_ERROR_SYSCALL`)، ومع `--clobber` حُذف `teledrive_manifest.json` القديم قبل فشل الرفع.
+- لتجنّب ترك أصل واحد فقط، حُذف الـrelease والـtag `pkg-2026.08.09-m15t07` كاملًا بقصد
+  إعادة إنشائهما ذريًا عبر `release-current.yml`، لكن `workflow_dispatch` أعاد HTTP 403
+  («Resource not accessible by integration») من رمز الجلسة.
+- **الإصلاح المطلوب (خطوة واحدة من المالك):** Actions → «Publish current TeleDrive package»
+  → Run workflow على `main`. سيبني من `main` الحالي (M45-T01) ويُنشئ الـrelease بالأصلين
+  معًا ثم يتحقق منهما علنًا (المسار «release absent → create atomically»).
+- حتى ذلك الحين: Cell 1 تطبع `Package update: REFUSED update endpoint unreachable; current
+  package unchanged` ثم تعمل بالحزمة المحفوظة/المُستعادة — لا انهيار ولا تغيير صامت.
+
