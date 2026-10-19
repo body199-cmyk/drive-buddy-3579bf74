@@ -174,6 +174,107 @@ class TelegramService:
                 except Exception:
                     pass
 
+    async def _create_one_dc_sender(self, dc: Any, auth_key: Any) -> Any:
+        from telethon.network import MTProtoSender
+
+        sender = MTProtoSender(auth_key, loggers=self.client._log)
+        await sender.connect(
+            self.client._connection(
+                dc.ip_address,
+                dc.port,
+                dc.id,
+                loggers=self.client._log,
+                proxy=self.client._proxy,
+            )
+        )
+        return sender
+
+    async def _open_fast_senders(
+        self, media: Any, count: int
+    ) -> Optional[tuple[Any, list[Any], int]]:
+        """Open ``count`` dedicated MTProtoSender TCP sockets to the file's DC.
+
+        M45-T04 (FastTelethon direct-DC engine): ``iter_download`` shares a
+        single ``MTProtoSender`` across all streams (``self.client._sender`` on
+        the home DC or ``self.client._borrowed_senders[dc_id]`` on a foreign
+        DC). Opening ``count`` independent ``MTProtoSender`` connections
+        directly to ``dc_id`` (exporting/importing authorization once when
+        ``dc_id != session.dc_id``) multiplies TCP throughput by ``count``.
+        Returns ``(location, senders, dc_id)`` or ``None`` on test doubles /
+        fallback.
+        """
+        if not _TELETHON_AVAILABLE or self.client is None or count < 1:
+            return None
+        for req_attr in ("_get_dc", "_call", "_connection", "_init_request", "session", "_log"):
+            if not hasattr(self.client, req_attr):
+                return None
+        try:
+            import copy
+            from telethon import utils
+            from telethon.tl.alltlobjects import LAYER
+            from telethon.tl.functions import InvokeWithLayerRequest
+            from telethon.tl.functions.auth import (
+                ExportAuthorizationRequest,
+                ImportAuthorizationRequest,
+            )
+
+            dc_id, location = utils.get_input_location(media)
+            if not dc_id or location is None:
+                return None
+
+            dc = await self.client._get_dc(dc_id)
+            home_dc = getattr(self.client.session, "dc_id", None)
+            dc_keys = getattr(self, "_dc_auth_keys", None)
+            if dc_keys is None:
+                dc_keys = {}
+                self._dc_auth_keys = dc_keys
+
+            auth_key = (
+                self.client.session.auth_key
+                if dc_id == home_dc
+                else dc_keys.get(dc_id)
+            )
+
+            senders: list[Any] = []
+            try:
+                if auth_key is None or not getattr(auth_key, "key", None):
+                    first = await self._create_one_dc_sender(dc, None)
+                    senders.append(first)
+                    auth = await self.client(ExportAuthorizationRequest(dc_id))
+                    init_req = copy.copy(self.client._init_request)
+                    init_req.query = ImportAuthorizationRequest(
+                        id=auth.id, bytes=auth.bytes
+                    )
+                    req = InvokeWithLayerRequest(LAYER, init_req)
+                    await self.client._call(first, req)
+                    auth_key = first.auth_key
+                    dc_keys[dc_id] = auth_key
+
+                remaining = count - len(senders)
+                if remaining > 0:
+                    more = await asyncio.gather(
+                        *(self._create_one_dc_sender(dc, auth_key) for _ in range(remaining))
+                    )
+                    senders.extend(more)
+                _log.info(
+                    "opened %s direct MTProtoSender connections to dc=%s",
+                    len(senders),
+                    dc_id,
+                )
+                return location, senders, int(dc_id)
+            except BaseException:
+                await asyncio.gather(
+                    *(s.disconnect() for s in senders if s is not None),
+                    return_exceptions=True,
+                )
+                raise
+        except Exception as exc:
+            _log.debug(
+                "fast MTProtoSender pool unavailable (%s); using iter_download",
+                type(exc).__name__,
+            )
+            return None
+
     async def connect(self) -> None:
         # M45-T01: retrying a timed-out GetFile is what turns one slow socket
         # into a stalled queue. Telethon accepts these resiliency options, but
@@ -374,6 +475,64 @@ class TelegramService:
         next_offset = start_at
         pending: dict[int, bytes] = {}
         tasks: list[asyncio.Task] = []
+        fast_bundle = await self._open_fast_senders(media, len(work))
+        fast_location = fast_bundle[0] if fast_bundle else None
+        fast_senders = fast_bundle[1] if fast_bundle else []
+        fast_dc_id = fast_bundle[2] if fast_bundle else None
+
+        async def _stream_from_sender(
+            sender: Any, location: Any, start_offset: int, remaining_count: int
+        ) -> int:
+            from collections import deque
+            from telethon.tl.functions.upload import GetFileRequest
+
+            async def _fetch_one(req_offset: int) -> tuple[int, bytes]:
+                await window.acquire()
+                try:
+                    async with request_slots:
+                        req = GetFileRequest(location, offset=req_offset, limit=request_size)
+                        res = await self.client._call(sender, req)
+                        data = bytes(getattr(res, "bytes", b""))
+                except BaseException:
+                    window.release()
+                    raise
+                expected = min(request_size, total - req_offset)
+                if len(data) != expected:
+                    window.release()
+                    raise RuntimeError(
+                        f"parallel Telegram chunk size mismatch: expected {expected}, got {len(data)}"
+                    )
+                return req_offset, data
+
+            # Pipeline 2 concurrent GetFileRequests per MTProtoSender so the
+            # next request is already on the wire while the first returns.
+            pipeline_depth = 2
+            inflight: deque[asyncio.Task] = deque()
+            scheduled = 0
+            done_chunks = 0
+            try:
+                while scheduled < min(pipeline_depth, remaining_count):
+                    inflight.append(
+                        asyncio.create_task(_fetch_one(start_offset + scheduled * stride))
+                    )
+                    scheduled += 1
+                while inflight:
+                    got_offset, chunk = await inflight.popleft()
+                    if scheduled < remaining_count:
+                        inflight.append(
+                            asyncio.create_task(_fetch_one(start_offset + scheduled * stride))
+                        )
+                        scheduled += 1
+                    await queue.put(("chunk", got_offset, chunk))
+                    done_chunks += 1
+            except BaseException:
+                for t in inflight:
+                    if not t.done():
+                        t.cancel()
+                if inflight:
+                    await asyncio.gather(*inflight, return_exceptions=True)
+                raise
+            return done_chunks
 
         async def _stream_from_client(client_obj: Any, start_offset: int, remaining_count: int) -> int:
             offset = start_offset
@@ -413,30 +572,54 @@ class TelegramService:
 
         async def produce(lane: int, start: int, count: int) -> None:
             try:
-                lane_client = await self._get_lane_client(lane)
-                if lane_client is not self.client:
-                    done_chunks = 0
+                done_chunks = 0
+                if lane < len(fast_senders) and fast_senders[lane] is not None:
                     try:
-                        done_chunks = await _stream_from_client(lane_client, start, count)
+                        done_chunks = await _stream_from_sender(
+                            fast_senders[lane], fast_location, start, count
+                        )
+                        await queue.put(("done", sentinel))
+                        return
                     except asyncio.CancelledError:
                         raise
-                    except Exception as worker_exc:
-                        # Secondary socket failed (e.g. foreign DC media);
-                        # seamlessly continue the remaining stripes on self.client!
+                    except Exception as sender_exc:
+                        if done_chunks == 0 and fast_dc_id is not None:
+                            getattr(self, "_dc_auth_keys", {}).pop(fast_dc_id, None)
                         _log.debug(
-                            "lane=%s secondary client fallback after %s/%s chunks (%s)",
+                            "lane=%s direct MTProtoSender fallback after %s/%s chunks (%s)",
                             lane,
                             done_chunks,
                             count,
-                            type(worker_exc).__name__,
+                            type(sender_exc).__name__,
                         )
-                        rem = count - done_chunks
-                        if rem > 0:
-                            await _stream_from_client(
-                                self.client, start + done_chunks * stride, rem
+
+                rem_after_sender = count - done_chunks
+                cur_start = start + done_chunks * stride
+                if rem_after_sender > 0:
+                    lane_client = await self._get_lane_client(lane)
+                    if lane_client is not self.client:
+                        sub_done = 0
+                        try:
+                            sub_done = await _stream_from_client(
+                                lane_client, cur_start, rem_after_sender
                             )
-                else:
-                    await _stream_from_client(self.client, start, count)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as worker_exc:
+                            _log.debug(
+                                "lane=%s secondary client fallback after %s/%s chunks (%s)",
+                                lane,
+                                sub_done,
+                                rem_after_sender,
+                                type(worker_exc).__name__,
+                            )
+                            rem2 = rem_after_sender - sub_done
+                            if rem2 > 0:
+                                await _stream_from_client(
+                                    self.client, cur_start + sub_done * stride, rem2
+                                )
+                    else:
+                        await _stream_from_client(self.client, cur_start, rem_after_sender)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -446,50 +629,57 @@ class TelegramService:
 
         path.parent.mkdir(parents=True, exist_ok=True)
         mode = "r+b" if start_at and path.exists() else "wb"
-        with open(path, mode, buffering=4 * 1024 * 1024) as handle:
-            if start_at:
-                handle.truncate(start_at)
-                handle.seek(start_at)
-            tasks = [
-                asyncio.create_task(produce(lane, start, count))
-                for lane, (start, count) in enumerate(work)
-            ]
-            try:
-                while lanes_finished < len(work):
-                    entry = await queue.get()
-                    if entry[0] == "error":
-                        raise entry[1]
-                    if entry[0] == "done":
-                        lanes_finished += 1
-                        continue
+        try:
+            with open(path, mode, buffering=4 * 1024 * 1024) as handle:
+                if start_at:
+                    handle.truncate(start_at)
+                    handle.seek(start_at)
+                tasks = [
+                    asyncio.create_task(produce(lane, start, count))
+                    for lane, (start, count) in enumerate(work)
+                ]
+                try:
+                    while lanes_finished < len(work):
+                        entry = await queue.get()
+                        if entry[0] == "error":
+                            raise entry[1]
+                        if entry[0] == "done":
+                            lanes_finished += 1
+                            continue
 
-                    _, offset, chunk = entry
-                    if offset < next_offset or offset in pending:
-                        raise RuntimeError("parallel Telegram stream returned overlapping ranges")
-                    pending[offset] = chunk
-                    while next_offset in pending:
-                        contiguous = pending.pop(next_offset)
-                        handle.write(contiguous)
-                        next_offset += len(contiguous)
-                        # Release the sliding window permit BEFORE progress_cb so
-                        # SQLite progress writes never stall producer lanes.
-                        window.release()
-                        if progress_cb:
-                            progress_cb(next_offset, total)
+                        _, offset, chunk = entry
+                        if offset < next_offset or offset in pending:
+                            raise RuntimeError("parallel Telegram stream returned overlapping ranges")
+                        pending[offset] = chunk
+                        while next_offset in pending:
+                            contiguous = pending.pop(next_offset)
+                            handle.write(contiguous)
+                            next_offset += len(contiguous)
+                            # Release the sliding window permit BEFORE progress_cb so
+                            # SQLite progress writes never stall producer lanes.
+                            window.release()
+                            if progress_cb:
+                                progress_cb(next_offset, total)
 
-                if next_offset != total or pending:
-                    raise RuntimeError(
-                        f"parallel Telegram download incomplete: wrote {next_offset} of {total} bytes"
-                    )
-                handle.flush()
-            except BaseException:
-                for task in tasks:
-                    if not task.done():
-                        task.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
-                raise
-            else:
-                await asyncio.gather(*tasks)
+                    if next_offset != total or pending:
+                        raise RuntimeError(
+                            f"parallel Telegram download incomplete: wrote {next_offset} of {total} bytes"
+                        )
+                    handle.flush()
+                except BaseException:
+                    for task in tasks:
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    raise
+                else:
+                    await asyncio.gather(*tasks)
+        finally:
+            if fast_senders:
+                await asyncio.gather(
+                    *(s.disconnect() for s in fast_senders if s is not None),
+                    return_exceptions=True,
+                )
 
         elapsed = max(1e-6, time.monotonic() - started_at)
         _log.info(
