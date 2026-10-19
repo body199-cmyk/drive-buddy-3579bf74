@@ -820,3 +820,76 @@ def test_parallel_download_uses_independent_media_clients_and_falls_back_cleanly
     assert target.read_bytes() == payload
     assert len(secondary_failing.calls) == 1, "lane 1 tried secondary client first"
     assert len(primary.calls) == 2, "lane 0 used primary and lane 1 fell back to primary"
+
+
+# ---------------------------------------------------------------------------
+# M45-T04 — FastTelethon direct-DC MTProtoSender pool + 2-request pipelining
+# ---------------------------------------------------------------------------
+
+
+def test_direct_mtproto_sender_pool_pipelines_requests_and_disconnects_cleanly(tmp_path, monkeypatch):
+    """When _open_fast_senders returns dedicated MTProtoSender instances,
+    _download_media_parallel streams via client._call(sender, GetFileRequest)
+    with 2-request pipelining and disconnects all senders in finally."""
+    import sys
+    import types
+    import teledrive.telegram_client as telegram_module
+
+    # Provide a fake telethon.tl.functions.upload.GetFileRequest for the test
+    upload_mod = types.ModuleType("telethon.tl.functions.upload")
+
+    class _FakeGetFileRequest:
+        def __init__(self, location, offset=0, limit=0):
+            self.location = location
+            self.offset = offset
+            self.limit = limit
+
+    upload_mod.GetFileRequest = _FakeGetFileRequest
+    monkeypatch.setitem(sys.modules, "telethon.tl.functions.upload", upload_mod)
+
+    request = DOWNLOAD_REQUEST_SIZE
+    payload = bytes((i % 251 for i in range(request * 6 + 123)))
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_MIN_BYTES", 1)
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_STREAMS", 3)
+
+    class _FakeSender:
+        def __init__(self, lane_id: int):
+            self.lane_id = lane_id
+            self.disconnected = False
+            self.calls = 0
+
+        async def disconnect(self):
+            self.disconnected = True
+
+    class _DirectCallClient:
+        def __init__(self, data: bytes):
+            self.data = data
+            self.sender_calls = []
+
+        async def _call(self, sender, req):
+            sender.calls += 1
+            self.sender_calls.append((sender.lane_id, req.offset, req.limit))
+            await asyncio.sleep(0.002)
+            chunk = self.data[req.offset : req.offset + req.limit]
+            return SimpleNamespace(bytes=chunk)
+
+    client = _DirectCallClient(payload)
+    service = _service(client)
+    fake_senders = [_FakeSender(0), _FakeSender(1), _FakeSender(2)]
+
+    async def _fake_open_senders(_media, count):
+        return ("loc_dc4", fake_senders[:count], 4)
+
+    monkeypatch.setattr(service, "_open_fast_senders", _fake_open_senders)
+    target = tmp_path / "fast_mtproto.bin"
+
+    result = asyncio.run(
+        service.download_media_fast(
+            SimpleNamespace(media=object()), str(target), len(payload)
+        )
+    )
+
+    assert result == str(target)
+    assert target.read_bytes() == payload
+    assert all(s.calls > 0 for s in fake_senders), "every MTProtoSender must be used"
+    assert all(s.disconnected for s in fake_senders), "all senders must disconnect cleanly"

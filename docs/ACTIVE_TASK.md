@@ -2,14 +2,7 @@
 
 | الحقل | القيمة |
 |---|---|
-| TASK ID | `M45-T03` |
-| العنوان | مضاعفة سرعة التنزيل من تيليجرام عبر مجمع اتصالات MTProto مستقلة في الذاكرة (`MemorySession` Pool) ونافذة انزلاق `36` قطعة (`18 MiB`) بلا توقف |
-| الأساس | `f272e87823fd1249be6bd115e0892a3edb82daba` — main بعد M45-T02 |
-| التقرير | `docs/PHASE_REPORTS/PHASE_M45_T03_MULTI_SOCKET_TELEGRAM_TURBO.md` |
-
-## النطاق
-
-- **إصلاح حاجز التوقف في نافذة الترتيب (`PARALLEL_DOWNLOAD_WINDOW_CHUNKS = 36`):** كانت النافذة مساوية لعدد المسارات (`4`)، مما كان يجبر المسارات السريعة على التوقف الكامل عند نهاية كل `2 MiB` بانتظار المسار رقم 0.
-- **مجمع اتصالات MTProto متوازية في الذاكرة (`_media_clients`):** فتح اتصالات TCP مستقلة عبر `MemorySession` (`receive_updates=False`) تشترك في مفتاح الجلسة الموثق دون لمس ملف `telegram.session`، مع تراجع تلقائي فوري إلى `self.client` عند أي تعثر.
-- **تخفيض حد التنزيل المتوازي إلى `4 MiB` ورفع المسارات إلى `6` (`TG_INFLIGHT_REQUESTS = 16`).**
-- **تنظيف تلقائي للـ Checkpoints القديمة (`> 15`) في `TeleDrive_AppData` عند الاستعادة.**
+| TASK ID | `M45-T04` |
+| العنوان | محرك FastTelethon المباشر: 12 اتصال `MTProtoSender` مستقل مباشر إلى داتا سنتر الملف + Pipelining مزدوج لكل اتصال + نافذة 72 قطعة (`36 MiB`) |
+| الأساس | `e177dec8503ab37ca3156c5035e918babf4e2265` — main بعد M45-T03 |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M45_T04_FASTTELETHON_DIRECT_MTPROTOSENDER_POOL.md` |

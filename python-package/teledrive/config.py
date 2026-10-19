@@ -146,14 +146,13 @@ def _bounded_env_int(name: str, default: int, low: int, high: int) -> int:
 # Keep ordinary media on the simple sequential path; a second MTProto reader is
 # only worthwhile for larger files where request latency dominates.
 FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
-PARALLEL_DOWNLOAD_MIN_BYTES = 4 * 1024 * 1024
-PARALLEL_DOWNLOAD_STREAMS = _bounded_env_int("TELEDRIVE_TG_STREAMS", 6, 1, 8)
-TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 16, 1, 24)
+PARALLEL_DOWNLOAD_MIN_BYTES = 2 * 1024 * 1024
+PARALLEL_DOWNLOAD_STREAMS = _bounded_env_int("TELEDRIVE_TG_STREAMS", 12, 1, 16)
+TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 24, 1, 32)
 MAX_CONCURRENT_TG_DOWNLOADS = _bounded_env_int("TELEDRIVE_TG_FILES", 4, 1, 8)
-# M45-T03: the reorder window must be a multiple of PARALLEL_DOWNLOAD_STREAMS.
-# When window == streams, fast lanes barrier-stall at the end of every single
-# stripe waiting for lane 0 to write to disk before acquiring the next permit.
-PARALLEL_DOWNLOAD_WINDOW_CHUNKS = max(PARALLEL_DOWNLOAD_STREAMS * 6, 24)
+# M45-T04: large sliding reorder window (72 chunks = 36 MiB) for 12 independent
+# FastTelethon MTProtoSender TCP connections so fast sockets never barrier-stall.
+PARALLEL_DOWNLOAD_WINDOW_CHUNKS = max(PARALLEL_DOWNLOAD_STREAMS * 6, 64)
 # Completed files allowed to wait for the single Drive uploader. This is the
 # disk backpressure of the download/upload pipeline: downloads pause instead of
 # filling local disk with finished .part files.
