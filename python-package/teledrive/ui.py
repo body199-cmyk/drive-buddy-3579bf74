@@ -367,6 +367,8 @@ def _render_shell(
                 queue_table=_queue_refs["queue_table"],
                 concurrency_slider=_set_refs["concurrency"],
                 concurrency_box=_set_refs["concurrency_box"],
+                auto_refresh_radio=_set_refs["auto_refresh"],
+                auto_refresh_status=_set_refs["auto_refresh_status"],
                 theme_radio=_set_refs["theme_radio"],
                 theme_status=_set_refs["theme_status"],
                 recovery_btn=_set_refs["recover_btn"],
@@ -835,6 +837,28 @@ def _advanced(ctx, binder, seed, lang) -> dict[str, Any]:
             value=f"{seed['concurrency']}/{HARD_CONCURRENCY_CAP}", visible=True,
         )
         gr.Markdown(f"> {t('warn.concurrency_high')}", elem_classes=["td-hint"])
+        # ---- live auto-refresh (M44-T01) ----
+        # 0 = off; the manual queue.refresh button remains available. This is
+        # the same persisted preference the React panel reads over the bridge.
+        auto_refresh_ready = binder.is_ready("settings.set_auto_refresh")
+        auto_refresh = gr.Radio(
+            choices=[
+                (t("settings.auto_refresh.off"), 0),
+                (t("settings.auto_refresh.1s"), 1000),
+                (t("settings.auto_refresh.2s"), 2000),
+                (t("settings.auto_refresh.5s"), 5000),
+            ],
+            value=seed["auto_refresh_ms"],
+            label=t("settings.auto_refresh.label"),
+            info=t("settings.auto_refresh.info"),
+            elem_id="td-auto-refresh",
+            interactive=auto_refresh_ready,
+            visible=True,
+        )
+        binder.register(auto_refresh, "settings.set_auto_refresh")
+        auto_refresh_status = gr.Textbox(
+            label=t("settings.auto_refresh.label"), interactive=False, visible=True,
+        )
         # ---- language + theme ----
         with gr.Accordion(t("settings.appearance"), open=True):
             lang_btn = binder.button(gr, "settings.toggle_language", variant="secondary")
@@ -874,6 +898,7 @@ def _advanced(ctx, binder, seed, lang) -> dict[str, Any]:
     return {
         "lang_btn": lang_btn,
         "concurrency": concurrency, "concurrency_box": concurrency_box,
+        "auto_refresh": auto_refresh, "auto_refresh_status": auto_refresh_status,
         "theme_radio": theme_radio, "theme_status": theme_status,
         "recover_btn": recover_btn, "checkpoint_btn": checkpoint_btn,
         "maintenance_box": maintenance_box, "folder_picker": folder_picker,
@@ -1029,6 +1054,9 @@ def _bind_actions(
     # ``change`` so a 1..100 drag writes to SQLite once, not once per pixel.
     binder.wire(sets["concurrency"], "settings.set_concurrency", [sets["concurrency"]],
                 [sets["concurrency"], sets["concurrency_box"]], event="release")
+    # M44-T01: persisted heartbeat preference; change writes to SQLite once.
+    binder.wire(sets["auto_refresh"], "settings.set_auto_refresh", [sets["auto_refresh"]],
+                [sets["auto_refresh"], sets["auto_refresh_status"]], event="change")
     binder.wire(sets["recover_btn"], "recovery.restore", [], [sets["maintenance_box"]])
     binder.wire(sets["checkpoint_btn"], "maintenance.checkpoint", [],
                 [sets["maintenance_box"]])

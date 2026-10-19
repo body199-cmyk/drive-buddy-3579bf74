@@ -39,6 +39,7 @@ ARGS = {
     "analyze.select_group": ("My Chat :: 12345",),
     "logs.search": ("query",),
     "settings.set_concurrency": ("safe",),
+    "settings.set_auto_refresh": (0,),
     "settings.set_theme": ("dark",),
     "queue.pause_item": ("id",),
     "queue.resume_item": ("id",),

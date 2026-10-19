@@ -17,9 +17,9 @@ TeleDrive محرك نقل داخل Google Colab — واجهة Gradio في نف�
    - `resolve(service_path)` يفشل بصوت عالٍ على typo / None / non-callable — يمنع الأزرار الميتة.
 
 3. **UI Binding** (`action_registry.py` + `ui_binder.py` + `handlers.py` + `ui.py` + `theme.py` + `i18n.py`):
-   - `ACTION_SPECS` = 51 إجراء معلن — كل زر له `action_id`, `handler_name`, `service_path`, `label_key`, `section`, `implemented`, `tested`, `proof_test`.
+   - `ACTION_SPECS` = 54 إجراء معلن — كل زر له `action_id`, `handler_name`, `service_path`, `label_key`, `section`, `implemented`, `tested`, `proof_test`.
    - `ready = implemented and tested` + proof_test مطلوب (القاعدة تمنع helper يقلب الاثنين معًا).
-   - كل الإجراءات الـ51 حاليًا ready (`binding check ok: 51/51`).
+   - كل الإجراءات الـ54 حاليًا ready (`binding check ok: 54/54`).
    - إجراء غير جاهز لو وُجد يُرسم visible-disabled مع سبب مترجم (`blocked_reason_key`) — لا أزرار مخفية صامتة ولا أزرار ميتة (M17-T02/T03).
    - `binder.wire_if_ready()` يربط click/change بـ handler مسمى فقط، لا `.click(` ولا `lambda` في `ui.py`.
    - `binder.assert_complete()` يفشل البناء إذا وجد ready غير موصول أو مرسوم غير موصول.
@@ -49,6 +49,7 @@ validate connections → bounded scan → MediaItem → dedupe (source_key+size)
 ```
 
 - Concurrency: Default=2، manual 1..100، hard cap 100، وتحذير واجهة إجباري فوق 8 (ADR-0001)، Semaphore-bound worker pool حقيقي.
+- **Throughput (M44-T01):** التنزيل الجديد يستعمل `iter_download` بطلب 512 KiB (حد MTProto) للملفات ≥1 MiB غير المصوّرة؛ Telethon `download_media()` كان يعطي 128 KiB≤100MB. أي فشل يعود للمسار القديم بأمان، وPause/Stop لا يُبتلعان. `cryptg` مثبّت لتفكيك AES بلغة C، ويُسجَّل التطبيق الفعّال عند الاتصال. **رفع Drive يبقى متسلسلًا عبر `_drive_lock`** لأن service object غير thread-safe؛ توسيعه يحتاج ADR.
 - Cancel/stop/clear-completed لا تحذف ملف Drive أبدًا.
 - Size mismatch يبقي `.part`، ملفات مجهولة → quarantine لا حذف أعمى.
 

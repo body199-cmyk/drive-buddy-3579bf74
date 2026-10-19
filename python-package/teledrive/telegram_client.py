@@ -5,7 +5,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from .config import TELEGRAM_SESSION
+from .config import DOWNLOAD_REQUEST_SIZE, TELEGRAM_SESSION
 from .logging_config import get_logger
 
 _log = get_logger("teledrive.telegram")
@@ -24,6 +24,29 @@ except Exception:  # pragma: no cover
     PhoneCodeInvalidError = Exception  # type: ignore
     FloodWaitError = Exception  # type: ignore
     _TELETHON_AVAILABLE = False
+
+
+def crypto_backend() -> str:
+    """Report which AES-IGE implementation Telethon will use.
+
+    Telethon decrypts every MTProto media chunk. It prefers ``cryptg`` when
+    installed, then the system libssl binding, and only then pure Python
+    ``pyaes``. Exposing the answer in the log makes a slow transfer
+    diagnosable without guessing. Never raises.
+    """
+    try:
+        import cryptg  # noqa: F401
+        return "cryptg"
+    except Exception:
+        pass
+    try:
+        from telethon.crypto import libssl
+
+        if getattr(libssl, "decrypt_ige", None) and getattr(libssl, "encrypt_ige", None):
+            return "libssl"
+    except Exception:
+        pass
+    return "pyaes"
 
 
 class TelegramService:
@@ -46,6 +69,7 @@ class TelegramService:
         self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
         await self.client.connect()
         self._connected = True
+        _log.info("telethon crypto backend=%s", crypto_backend())
 
     async def is_authorized(self) -> bool:
         if not self.client:
@@ -165,6 +189,49 @@ class TelegramService:
         )
         return path or file_path
 
+    async def download_media_fast(
+        self,
+        message: Any,
+        file_path: str,
+        total_size: int,
+        progress_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> str:
+        """Download a fresh media file at the MTProto maximum request size.
+
+        Telethon's public :meth:`download_media` picks 128 KiB requests for
+        files up to 100 MB, which leaves most of a Colab transfer waiting on
+        round trips. ``upload.getFile`` accepts 512 KiB, so this path asks for
+        the maximum and writes chunks sequentially (the partial file is always
+        a valid prefix, so pause/stop/resume semantics are unchanged).
+
+        The caller owns the fallback: :class:`TransferManager` retries the
+        legacy path if this raises. A control signal raised by ``progress_cb``
+        is never caught here.
+        """
+        assert self.client
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        media = getattr(message, "media", None) or message
+        total = int(total_size or 0)
+        written = 0
+        with open(path, "wb") as handle:
+            async for chunk in self.client.iter_download(
+                media,
+                request_size=DOWNLOAD_REQUEST_SIZE,
+                file_size=total or None,
+            ):
+                handle.write(chunk)
+                written += len(chunk)
+                if progress_cb:
+                    progress_cb(written, total or written)
+            handle.flush()
+        _log.info(
+            "fast download complete bytes=%s request_size=%s",
+            written,
+            DOWNLOAD_REQUEST_SIZE,
+        )
+        return str(path)
+
     async def download_partial(
         self,
         message: Any,
@@ -192,7 +259,12 @@ class TelegramService:
         with open(path, "r+b") as handle:
             handle.truncate(offset)
             handle.seek(offset)
-            async for chunk in self.client.iter_download(media, offset=offset):
+            async for chunk in self.client.iter_download(
+                media,
+                offset=offset,
+                request_size=DOWNLOAD_REQUEST_SIZE,
+                file_size=total or None,
+            ):
                 handle.write(chunk)
                 current += len(chunk)
                 if progress_cb:

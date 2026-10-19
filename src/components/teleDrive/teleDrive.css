@@ -869,6 +869,18 @@
   min-height: var(--td-touch);
 }
 
+.td-setting-control .td-select {
+  width: 100%;
+  min-height: var(--td-touch);
+  margin-bottom: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--td-line);
+  border-radius: var(--radius-md);
+  background: var(--td-surface-2);
+  color: var(--td-text);
+  font: inherit;
+}
+
 .td-range-labels {
   display: flex;
   justify-content: space-between;

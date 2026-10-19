@@ -291,6 +291,8 @@ class ReactBridge:
             )
         if action_id == "settings.set_concurrency":
             return (payload.get("value"),)
+        if action_id == "settings.set_auto_refresh":
+            return (payload.get("value"),)
         if action_id == "settings.set_theme":
             return (str(payload.get("theme") or "light"),)
         raise ValueError("unsupported action adapter")

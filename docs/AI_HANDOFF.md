@@ -1,4 +1,38 @@
-# بطاقة التسليم — M43: Vault Drive-managed ورابط التحليل المحفوظ
+# بطاقة التسليم — M44-T01: مفتاح التحديث التلقائي وسرعة تنزيل Telegram
+
+| الحقل | القيمة |
+|---|---|
+| Updated (UTC) | `2026-10-19` |
+| code commit / merge | غير مدموج بعد (العمل على `arena/1a507b63-drive-buddy-3579bf74`) |
+| الحالة | **IMPLEMENTED + LOCAL-TESTED — ليس مدموجًا/منشورًا، ولا Colab live** |
+| CI | لم يُشغَّل بعد؛ البوابات المحلية في التقرير |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M44_T01_UI_HEARTBEAT_AND_DOWNLOAD_SPEED.md` |
+
+## النتيجة
+
+- **مفتاح التحديث التلقائي:** إعداد backend محفوظ `auto_refresh_ms` بقيم `0/1000/2000/5000` (الافتراضي 1000). React يوقف `setInterval` عند `0`؛ زر `queue.refresh` اليدوي يظل متاحًا، والـrefresh الأحادي بعد الإجراءات يظل يعمل. Gradio shell له نفس الإعداد. لا `localStorage`.
+- **سرعة التنزيل:** مسار `download_media_fast()` بطلبات `512 KiB` بدل `128 KiB` للملفات ≥1 MiB غير المصوّرة، مع fallback آمن للمسار القديم وإعادة إطلاق Pause/Stop. الاستئناف يستعمل نفس الحجم صراحةً.
+- **AES:** `cryptg==0.6.0` في dependency lock، و`crypto_backend()` يسجّل التطبيق الفعّال (`cryptg`/`libssl`/`pyaes`) عند اتصال Telegram.
+
+## الأدلة المحلية
+
+`795 passed` · compileall PASS · launcher `54/54` · notebooks in sync · React contracts `34/34` · lint 0 errors (8 baseline warnings) · bundle rebuilt · package build PASS (`578225` bytes، `e4723b02…15f6`). `bun run build` غير قابل للتشغيل في sandbox بسبب رفض المرآة لحزمة `@lovable.dev/vite-tanstack-config@2.8.5` وحدها.
+
+## ما لم يثبت / الخطوة التالية
+
+1. نشر الحزمة، Restart، Cell 1 (يثبّت cryptg)، ثم Cells 2–4.
+2. في Logs: `telethon crypto backend=cryptg`، ثم قياس سرعة ملف ≥100 MB في Dashboard.
+3. اختبار إيقاف/تشغيل التحديث التلقائي حيًا في Colab.
+4. إن بقي التنزيل مقيدًا بالزمن: خطوة تالية = 2–4 جداول `iter_download` متوازية مع اختبار حي.
+5. توازي رفع Drive يحتاج ADR (قاعدة «Drive service واحد»)؛ `_drive_lock` يبقى كما هو الآن.
+
+## ما لم يُمس
+
+لا تغيير في notebook cells أو `.github/workflows` أو schema SQLite أو Drive/Telegram auth أو session vault. التراجع = revert هذا الـcommit؛ صف `auto_refresh_ms` في SQLite غير ضار.
+
+---
+
+# بطاقة التسليم السابقة — M43: Vault Drive-managed ورابط التحليل المحفوظ
 
 | الحقل | القيمة |
 |---|---|

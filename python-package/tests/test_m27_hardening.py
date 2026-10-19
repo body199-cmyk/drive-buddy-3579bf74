@@ -414,9 +414,11 @@ def test_oversized_partial_uses_full_download_path_without_deleting_file(tmp_pat
 class _IterDownloadClient:
     def __init__(self):
         self.offset = None
+        self.request_size = None
 
-    async def iter_download(self, media, offset):
+    async def iter_download(self, media, offset, **kwargs):
         self.offset = offset
+        self.request_size = kwargs.get("request_size")
         yield b"tail"
 
 

@@ -38,6 +38,7 @@ const emptyState = {
   folder: { id: null, name: null },
   engine: "idle",
   concurrency: 2,
+  autoRefreshMs: 1000,
   analyze: { sourceLink: "" },
   queue: [],
   candidates: [],
@@ -470,6 +471,13 @@ test("24 — sandbox auto-refreshes the whole live snapshot while transferring",
   assert.match(component, /setInterval/);
   assert.match(component, /hasActiveTransfer/);
   assert.match(component, /actionId:\s*"queue\.refresh"/);
+  // M44-T01: the persisted Python preference controls the interval.
+  assert.match(component, /autoRefreshMs/);
+  assert.match(component, /autoRefreshMs\s*<=\s*0/);
+  assert.match(component, /settings\.set_auto_refresh/);
+  assert.match(component, /run\("settings\.set_auto_refresh",\s*\{\s*value:\s*autoRefresh/);
+  // A heartbeat snapshot must not revert an unsaved dropdown selection.
+  assert.match(component, /persistedAutoRefresh/);
   // Silent heartbeat: talks to the bridge directly, never through run()
   // (which would flash busy spinners and success notices every tick).
   assert.match(component, /bridge\s*\.\s*request\(\{/);
@@ -485,6 +493,8 @@ test("25 — shipped panel bundle includes the auto-refresh heartbeat", async ()
   assert.match(bundle, /TeleDriveGradioPanel/);
   assert.match(bundle, /setInterval/);
   assert.match(bundle, /queue\.refresh/);
+  // The shipped asset must carry the new persisted preference control too.
+  assert.match(bundle, /settings\.set_auto_refresh/);
   // Gradio injects this IIFE straight into a browser scope; Node's process
   // global is unavailable there and would prevent the panel from mounting.
   assert.doesNotMatch(bundle, /process\.env\.NODE_ENV/);

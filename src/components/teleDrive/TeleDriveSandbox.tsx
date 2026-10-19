@@ -1228,6 +1228,19 @@ function SettingsSection({
   useEffect(() => {
     if (state?.concurrency != null) setConcurrency(state.concurrency);
   }, [state]);
+  // Local draft of the persisted heartbeat interval. The snapshot is the
+  // authority after every save, so a rejected value snaps back honestly. Only
+  // a *changed* persisted value overwrites the draft: the 1-second heartbeat
+  // must not revert a selection the owner is about to save.
+  const [autoRefresh, setAutoRefresh] = useState(state?.autoRefreshMs ?? 1000);
+  const persistedAutoRefresh = useRef(state?.autoRefreshMs ?? 1000);
+  useEffect(() => {
+    const next = state?.autoRefreshMs;
+    if (next != null && next !== persistedAutoRefresh.current) {
+      persistedAutoRefresh.current = next;
+      setAutoRefresh(next);
+    }
+  }, [state]);
   return (
     <section className="td-page" aria-labelledby="settings-title">
       <SectionTitle
@@ -1278,6 +1291,48 @@ function SettingsSection({
                 )}
               </p>
             ) : null}
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "التحديث التلقائي", "Auto-refresh")}</h2>
+            <p>
+              {localize(
+                language,
+                "يحدّث شريط التقدم أثناء النقل فقط. عند الإيقاف استخدم زر التحديث اليدوي.",
+                "Updates the progress view during a transfer only. When off, use the manual Refresh button.",
+              )}
+            </p>
+          </div>
+          <div className="td-setting-control">
+            <select
+              className="td-select"
+              value={autoRefresh}
+              disabled={!live}
+              aria-label={localize(language, "تحديث التقدم تلقائيًا", "Progress auto-refresh")}
+              onChange={(event) => setAutoRefresh(Number(event.target.value))}
+            >
+              <option value={0}>{localize(language, "إيقاف", "Off")}</option>
+              <option value={1000}>{localize(language, "كل ثانية", "Every second")}</option>
+              <option value={2000}>{localize(language, "كل ثانيتين", "Every 2 seconds")}</option>
+              <option value={5000}>{localize(language, "كل 5 ثوانٍ", "Every 5 seconds")}</option>
+            </select>
+            <ActionButton
+              actionId="settings.set_auto_refresh"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() =>
+                void run("settings.set_auto_refresh", { value: autoRefresh }).then((response) => {
+                  // No optimistic success: a refused save snaps the draft
+                  // back to the value Python actually holds.
+                  if (!response || response.status !== "ok") {
+                    setAutoRefresh(state?.autoRefreshMs ?? 1000);
+                  }
+                })
+              }
+            >
+              {localize(language, "حفظ في Python", "Save in Python")}
+            </ActionButton>
           </div>
         </div>
         <div className="td-setting-row">
@@ -1388,6 +1443,9 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const latestRequest = useRef(new Map<string, string>());
   const live = bridge.isLive();
   const language = liveState?.language ?? "ar";
+  // Python owns this preference. 0 = the owner switched the heartbeat off;
+  // the manual queue.refresh button remains available either way.
+  const autoRefreshMs = liveState?.autoRefreshMs ?? AUTO_REFRESH_INTERVAL_MS;
 
   useEffect(() => bridge.subscribe(setLiveState), [bridge]);
 
@@ -1462,7 +1520,9 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   );
 
   useEffect(() => {
-    if (!live) return;
+    // 0 disables the periodic heartbeat completely. One-shot post-action
+    // verification refreshes still run; they are not a background loop.
+    if (!live || autoRefreshMs <= 0) return;
     const interval = setInterval(() => {
       // Background tab: skip this tick entirely.
       if (typeof document !== "undefined" && document.hidden) return;
@@ -1474,9 +1534,9 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       const snapshot = liveStateRef.current;
       if (!snapshot || !hasActiveTransfer(snapshot)) return;
       issueSilentRefresh();
-    }, AUTO_REFRESH_INTERVAL_MS);
+    }, autoRefreshMs);
     return () => clearInterval(interval);
-  }, [live, issueSilentRefresh]);
+  }, [live, autoRefreshMs, issueSilentRefresh]);
 
   const run: RunAction = async <T,>(actionId: string, payload: Record<string, unknown> = {}) => {
     if (!bridge.isLive()) {

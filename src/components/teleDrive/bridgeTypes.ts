@@ -56,6 +56,8 @@ export type LiveUiState = {
   };
   engine: string;
   concurrency: number;
+  /** Persisted React heartbeat interval in ms; 0 means auto-refresh is off. */
+  autoRefreshMs: number;
   analyze: {
     sourceLink: string;
   };

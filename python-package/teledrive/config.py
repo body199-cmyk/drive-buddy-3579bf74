@@ -101,6 +101,30 @@ HARD_CONCURRENCY_CAP = 100
 DEFAULT_CONCURRENCY = 2
 CONCURRENCY_WARN_ABOVE = 8
 
+# ---------------------------------------------------------------------------
+# React live-progress heartbeat (persisted user preference).
+#
+# The browser polls the Gradio bridge while a transfer is in flight. The poll
+# is useful, but on a slow Colab proxy a 1-second repaint can make the page
+# feel busy. The owner asked for an explicit off switch; 0 means "no automatic
+# polling" and the manual queue.refresh button stays available. The default is
+# unchanged (1000 ms) so existing behaviour is preserved.
+# ---------------------------------------------------------------------------
+AUTO_REFRESH_DEFAULT_MS = 1000
+AUTO_REFRESH_OPTIONS = (0, 1000, 2000, 5000)
+
+# ---------------------------------------------------------------------------
+# Telegram download request size.
+#
+# upload.getFile accepts at most 512 KiB per request. Telethon's public
+# download_media() chooses 128 KiB for files <= 100 MB, so a large transfer
+# spends most of its time waiting for round trips rather than moving bytes.
+# The fast path requests the protocol maximum; see telegram_client.py.
+# ---------------------------------------------------------------------------
+DOWNLOAD_REQUEST_SIZE = 512 * 1024
+# Below this size the extra path is not worth the branch; photos never use it.
+FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
+
 RETRY_MAX_ATTEMPTS = 5
 RETRY_BASE_SECONDS = 2.0
 RETRY_MULTIPLIER = 2.0
