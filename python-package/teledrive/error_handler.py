@@ -36,6 +36,7 @@ TRANSIENT_MARKERS = (
     # DOC M45-T01 literal marker for Telethon server-side resend wording.
     "request was unsuccessful", "internal server error", "server error",
     "serverresent",
+    "readonly database", "database is locked", "disk i/o error",
 )
 
 PERMANENT_MARKERS = (

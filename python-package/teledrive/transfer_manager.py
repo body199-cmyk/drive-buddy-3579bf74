@@ -500,19 +500,16 @@ class TransferManager:
                 self._queue.try_transition(item.id, "Pending", reason="retry")
 
     async def _duplicate_precheck(self, item: MediaItem):
-        """Best-effort duplicate check that never queues behind an upload.
+        """Pre-download duplicate check interleaved between 8 MiB upload chunks.
 
-        The single googleapiclient service is serialized by ``_drive_gate``.
-        If that gate is busy (an upload, verification or checkpoint is in
-        flight) this returns None instead of blocking the download lane; the
-        upload stage performs the authoritative check later.
+        M45-T02: ``upload_resumable`` acquires ``_drive_lock`` per 8 MiB chunk
+        rather than holding ``_drive_gate`` across an entire multi-minute file
+        upload. Running ``dup_check`` under ``_drive_lock`` therefore waits at
+        most one chunk before catching a duplicate in ``Pending -> Skipped``
+        without downloading gigabytes from Telegram first.
         """
-        gate = self._drive_gate()
-        # No await between ``locked()`` and ``acquire()``: on one event loop
-        # this is atomic, so an idle gate is taken without suspending.
-        if gate.locked():
+        if self.drive is None:
             return None
-        await gate.acquire()
         try:
             def runner():
                 with self._drive_lock:
@@ -524,8 +521,6 @@ class TransferManager:
                 "duplicate pre-check failed for %s: %s", item.id, type(exc).__name__
             )
             return None
-        finally:
-            gate.release()
 
     async def _upload_stage(self, item: MediaItem) -> None:
         """Upload + verify + durable checkpoint with their own retry budget.
@@ -804,15 +799,31 @@ class TransferManager:
             )
 
         mime, _ = mimetypes.guess_type(safe)
-        result = await self._drive_call(
-            self.drive.upload_resumable,
-            file_path=str(actual),
-            drive_name=safe,
-            parent_id=self.drive_folder_id,
-            source_key=item.source_key,
-            progress_cb=up_cb,
-            mime_type=mime,
-        )
+
+        def _upload_with_chunk_lock():
+            try:
+                return self.drive.upload_resumable(
+                    file_path=str(actual),
+                    drive_name=safe,
+                    parent_id=self.drive_folder_id,
+                    source_key=item.source_key,
+                    progress_cb=up_cb,
+                    mime_type=mime,
+                    chunk_lock=self._drive_lock,
+                )
+            except TypeError:
+                with self._drive_lock:
+                    return self.drive.upload_resumable(
+                        file_path=str(actual),
+                        drive_name=safe,
+                        parent_id=self.drive_folder_id,
+                        source_key=item.source_key,
+                        progress_cb=up_cb,
+                        mime_type=mime,
+                    )
+
+        async with self._drive_gate():
+            result = await asyncio.to_thread(_upload_with_chunk_lock)
         file_id = result["id"]
 
         # VERIFY — Drive must prove id + size + parent + source key + not trashed.

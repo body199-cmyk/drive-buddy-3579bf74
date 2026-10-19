@@ -168,6 +168,12 @@ def restore_from_drive(drive) -> Optional[dict[str, Any]]:
             return None
         candidates.sort(key=lambda x: x.get("modifiedTime", ""), reverse=True)
         data = drive.download_bytes(candidates[0]["id"])
+        if len(candidates) > 15 and callable(getattr(drive, "delete_file", None)):
+            for stale in candidates[15:]:
+                try:
+                    drive.delete_file(stale["id"])
+                except Exception:
+                    break
         return json.loads(data.decode("utf-8"))
     except Exception as e:
         _log.warning("checkpoint restore failed: %s", e)

@@ -79,6 +79,8 @@ class TelegramService:
         # every small file opened its own unbounded GetFile stream, which is
         # exactly the "Request was unsuccessful 6 time(s)" flood.
         self._download_request_slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
+        self._media_clients: list[Any] = []
+        self._media_pool_lock: Optional[asyncio.Lock] = None
 
     def _request_slots(self) -> asyncio.Semaphore:
         """Lazily create the global GetFile budget.
@@ -92,6 +94,85 @@ class TelegramService:
             slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
             self._download_request_slots = slots
         return slots
+
+    async def _get_lane_client(self, lane: int) -> Any:
+        """Return an independent MTProto client for ``lane`` when possible.
+
+        M45-T03: a single TelegramClient multiplexes all GetFile requests over
+        one TCP socket, which caps Colab throughput at ~1-2 MB/s. Lane 0 uses
+        the primary client; lanes >= 1 use a lazily connected pool of in-memory
+        MemorySession clients sharing the authorized DC auth_key (with
+        ``receive_updates=False`` so neither the SQLite session file nor update
+        state is touched). If the session is a test double or secondary
+        connection setup fails, falls back transparently to ``self.client``.
+        """
+        if lane <= 0 or self.client is None:
+            return self.client
+        pool = getattr(self, "_media_clients", None)
+        if pool is None:
+            pool = []
+            self._media_clients = pool
+        idx = lane - 1
+        if idx < len(pool) and pool[idx] is not None:
+            return pool[idx]
+
+        session = getattr(self.client, "session", None)
+        auth_key = getattr(session, "auth_key", None)
+        dc_id = getattr(session, "dc_id", None)
+        server_address = getattr(session, "server_address", None)
+        port = getattr(session, "port", None)
+        if not (auth_key and getattr(auth_key, "key", None) and dc_id and server_address and port):
+            return self.client
+        if TelegramClient is None or not getattr(self, "api_id", None) or not getattr(self, "api_hash", None):
+            return self.client
+
+        lock = getattr(self, "_media_pool_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._media_pool_lock = lock
+
+        async with lock:
+            if idx < len(pool) and pool[idx] is not None:
+                return pool[idx]
+            try:
+                from telethon.sessions import MemorySession
+
+                while len(pool) <= idx:
+                    mem = MemorySession()
+                    mem.set_dc(dc_id, server_address, port)
+                    mem.auth_key = auth_key
+                    try:
+                        worker = TelegramClient(
+                            mem,
+                            self.api_id,
+                            self.api_hash,
+                            receive_updates=False,
+                            request_retries=5,
+                            connection_retries=5,
+                            retry_delay=1,
+                            flood_sleep_threshold=60,
+                            auto_reconnect=True,
+                        )
+                    except TypeError:
+                        worker = TelegramClient(mem, self.api_id, self.api_hash)
+                    await worker.connect()
+                    pool.append(worker)
+                _log.info("connected MTProto media worker lane=%s pool_size=%s", lane, len(pool))
+                return pool[idx]
+            except Exception as exc:
+                _log.debug("media worker lane=%s unavailable (%s); using primary client", lane, type(exc).__name__)
+                return self.client
+
+    async def _close_media_pool(self) -> None:
+        pool = list(getattr(self, "_media_clients", None) or [])
+        if hasattr(self, "_media_clients") and self._media_clients is not None:
+            self._media_clients.clear()
+        for worker in pool:
+            if worker is not None:
+                try:
+                    await worker.disconnect()
+                except Exception:
+                    pass
 
     async def connect(self) -> None:
         # M45-T01: retrying a timed-out GetFile is what turns one slow socket
@@ -151,6 +232,7 @@ class TelegramService:
         return await self.client.is_user_authorized()
 
     async def logout(self) -> None:
+        await self._close_media_pool()
         if self.client:
             try:
                 await self.client.log_out()
@@ -293,39 +375,68 @@ class TelegramService:
         pending: dict[int, bytes] = {}
         tasks: list[asyncio.Task] = []
 
-        async def produce(start: int, count: int) -> None:
-            offset = start
+        async def _stream_from_client(client_obj: Any, start_offset: int, remaining_count: int) -> int:
+            offset = start_offset
+            done_chunks = 0
+            stream = client_obj.iter_download(
+                media,
+                offset=start_offset,
+                stride=stride,
+                limit=remaining_count,
+                chunk_size=request_size,
+                request_size=request_size,
+                file_size=total,
+            )
+            async with stream:
+                iterator = stream.__aiter__()
+                for _ in range(remaining_count):
+                    await window.acquire()
+                    try:
+                        async with request_slots:
+                            chunk = await iterator.__anext__()
+                    except StopAsyncIteration as exc:
+                        window.release()
+                        raise RuntimeError("parallel Telegram stream ended early") from exc
+                    except BaseException:
+                        window.release()
+                        raise
+                    expected = min(request_size, total - offset)
+                    if len(chunk) != expected:
+                        window.release()
+                        raise RuntimeError(
+                            f"parallel Telegram chunk size mismatch: expected {expected}, got {len(chunk)}"
+                        )
+                    await queue.put(("chunk", offset, bytes(chunk)))
+                    offset += stride
+                    done_chunks += 1
+            return done_chunks
+
+        async def produce(lane: int, start: int, count: int) -> None:
             try:
-                stream = self.client.iter_download(
-                    media,
-                    offset=start,
-                    stride=stride,
-                    limit=count,
-                    chunk_size=request_size,
-                    request_size=request_size,
-                    file_size=total,
-                )
-                async with stream:
-                    iterator = stream.__aiter__()
-                    for _ in range(count):
-                        await window.acquire()
-                        try:
-                            async with request_slots:
-                                chunk = await iterator.__anext__()
-                        except StopAsyncIteration as exc:
-                            window.release()
-                            raise RuntimeError("parallel Telegram stream ended early") from exc
-                        except BaseException:
-                            window.release()
-                            raise
-                        expected = min(request_size, total - offset)
-                        if len(chunk) != expected:
-                            window.release()
-                            raise RuntimeError(
-                                f"parallel Telegram chunk size mismatch: expected {expected}, got {len(chunk)}"
+                lane_client = await self._get_lane_client(lane)
+                if lane_client is not self.client:
+                    done_chunks = 0
+                    try:
+                        done_chunks = await _stream_from_client(lane_client, start, count)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as worker_exc:
+                        # Secondary socket failed (e.g. foreign DC media);
+                        # seamlessly continue the remaining stripes on self.client!
+                        _log.debug(
+                            "lane=%s secondary client fallback after %s/%s chunks (%s)",
+                            lane,
+                            done_chunks,
+                            count,
+                            type(worker_exc).__name__,
+                        )
+                        rem = count - done_chunks
+                        if rem > 0:
+                            await _stream_from_client(
+                                self.client, start + done_chunks * stride, rem
                             )
-                        await queue.put(("chunk", offset, bytes(chunk)))
-                        offset += stride
+                else:
+                    await _stream_from_client(self.client, start, count)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -335,11 +446,14 @@ class TelegramService:
 
         path.parent.mkdir(parents=True, exist_ok=True)
         mode = "r+b" if start_at and path.exists() else "wb"
-        with open(path, mode) as handle:
+        with open(path, mode, buffering=4 * 1024 * 1024) as handle:
             if start_at:
                 handle.truncate(start_at)
                 handle.seek(start_at)
-            tasks = [asyncio.create_task(produce(start, count)) for start, count in work]
+            tasks = [
+                asyncio.create_task(produce(lane, start, count))
+                for lane, (start, count) in enumerate(work)
+            ]
             try:
                 while lanes_finished < len(work):
                     entry = await queue.get()
@@ -357,9 +471,11 @@ class TelegramService:
                         contiguous = pending.pop(next_offset)
                         handle.write(contiguous)
                         next_offset += len(contiguous)
+                        # Release the sliding window permit BEFORE progress_cb so
+                        # SQLite progress writes never stall producer lanes.
+                        window.release()
                         if progress_cb:
                             progress_cb(next_offset, total)
-                        window.release()
 
                 if next_offset != total or pending:
                     raise RuntimeError(
@@ -404,7 +520,7 @@ class TelegramService:
         start_at = max(0, int(start_at))
         written = start_at
         mode = "r+b" if start_at and path.exists() else "wb"
-        with open(path, mode) as handle:
+        with open(path, mode, buffering=4 * 1024 * 1024) as handle:
             if start_at:
                 handle.truncate(start_at)
                 handle.seek(start_at)
@@ -509,5 +625,6 @@ class TelegramService:
         return result
 
     async def disconnect(self) -> None:
+        await self._close_media_pool()
         if self.client:
             await self.client.disconnect()
