@@ -150,10 +150,15 @@ class ApplicationContext:
     def shutdown(self) -> None:
         if self.web_dashboard is not None:
             try:
-                self.web_dashboard.should_exit = True
+                # Stop the isolated HTTP thread BEFORE the app loop so no
+                # in-flight dashboard request can submit work to a closed
+                # loop during teardown (M46-T02).
+                from .web_dashboard import stop_web_dashboard
+
+                stop_web_dashboard(self)
             except Exception:  # pragma: no cover - defensive
                 _log.warning("web dashboard stop failed during shutdown")
-            self.web_dashboard = None
+                self.web_dashboard = None
         if self.ui is not None:
             try:
                 self.ui.close()

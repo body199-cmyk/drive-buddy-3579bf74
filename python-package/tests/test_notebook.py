@@ -138,6 +138,15 @@ def test_cell_4_offers_modern_web_dashboard_and_classic_gradio_backup():
     assert "launch(ctx, share=False, inline=False, blocking=False)" in cell4
     # A missing modern stack must fall back to Gradio, never to no UI.
     assert "falling back to Classic_Gradio_Backup" in cell4
+    # M46-T02: classic (the recovery surface) launches BEFORE modern, a
+    # stale package gets an actionable bilingual hint, and the selected
+    # mode is echoed so a screenshot alone can diagnose a run.
+    assert "Classic Gradio launches FIRST (M46-T02)" in cell4
+    assert cell4.index("launch(ctx, share=False") < cell4.index(
+        "launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)"
+    )
+    assert "Stale package without the web dashboard" in cell4
+    assert 'print("selected UI_MODE:", UI_MODE)' in cell4
     # The choice happens AFTER vault restore, on the same injected ctx.
     assert cell4.index("session_vault.restore_from_context") < cell4.index("UI_MODE")
 

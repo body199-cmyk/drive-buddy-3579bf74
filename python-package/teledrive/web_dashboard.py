@@ -5,10 +5,22 @@ Provenance: merged from the owner's Google Drive WebUI bridge payload
 (``TeleDrive_WebUI_GitHub_Bridge.ipynb``), then adapted to this package's
 Constitution instead of being copied verbatim:
 
-* **One ApplicationContext, one event loop.** The uvicorn server is
-  scheduled onto ``ctx.aio`` — the single shared ``AsyncRuntime`` loop.
-  This module never creates a second loop, Telegram client, Drive
-  service, or SQLite connection.
+* **One ApplicationContext, one *application* event loop.** All
+  Telegram/Drive/transfer work stays on ``ctx.aio`` — the single shared
+  ``AsyncRuntime`` loop. The HTTP server itself runs in its own daemon
+  thread with a framework-owned loop, exactly like Gradio's internal
+  server thread (M46-T02). This isolation is load-bearing, not
+  cosmetic: uvicorn calls ``sys.exit`` when startup fails (e.g. the
+  port is taken), and when ``serve()`` previously ran as a task on
+  ``ctx.aio`` that ``SystemExit`` tore down the whole application loop
+  — the web page never came up *and* the classic Gradio UI froze
+  because its handlers marshal work onto the now-dead loop (proven by
+  direct reproduction). In a dedicated thread, a dead web server is
+  just a dead web server; the application loop is untouched. The sync
+  HTTP endpoints still execute in a threadpool and reach application
+  coroutines only through the existing handlers, i.e. via
+  ``ctx.aio`` — this module never creates a second Telegram client,
+  Drive service, or SQLite connection.
 * **One transfer engine.** The Drive payload carried its own ad-hoc
   download runner that wrote files straight onto the mounted Drive
   folder and guessed state by scanning checkpoint files on disk. That
@@ -39,7 +51,10 @@ fallback — never depends on them. They are pinned in
 """
 from __future__ import annotations
 
+import html
 import json
+import socket
+import threading
 import time
 from typing import Any
 from uuid import uuid4
@@ -490,6 +505,67 @@ def create_web_app(ctx: Any):
     return app
 
 
+def _run_server_isolated(server: Any) -> None:
+    """Thread target: run uvicorn in THIS thread, capturing every exit.
+
+    uvicorn terminates startup failures with ``sys.exit``; catching
+    ``BaseException`` here keeps that ``SystemExit`` inside the server
+    thread where it belongs, and records it for the launcher to report
+    instead of letting it escape silently (M46-T02).
+    """
+    try:
+        server.run()
+    except BaseException as exc:  # noqa: BLE001 - includes SystemExit by design
+        server._td_error = exc
+        _log.error(
+            "web dashboard server thread exited: %s: %s",
+            type(exc).__name__,
+            redact(str(exc))[:300],
+        )
+
+
+def _wait_until_started(server: Any, thread: threading.Thread, timeout: float = 10.0) -> None:
+    """Block the *caller* briefly until the server really listens.
+
+    Raises RuntimeError with the captured thread exception when the
+    server dies during startup, so notebook Cell 4 can fall back to
+    Gradio with a visible reason instead of printing a dead link.
+    """
+    deadline = time.monotonic() + float(timeout)
+    while time.monotonic() < deadline:
+        if getattr(server, "started", False):
+            return
+        error = getattr(server, "_td_error", None)
+        if error is not None:
+            raise RuntimeError(
+                f"server thread failed during startup: "
+                f"{type(error).__name__}: {redact(str(error))[:300]}"
+            ) from error
+        if not thread.is_alive():
+            raise RuntimeError("server thread exited during startup without listening")
+        time.sleep(0.05)
+    raise RuntimeError(f"server did not start listening within {float(timeout):.0f}s")
+
+
+def _ensure_port_free(port: int) -> None:
+    """Fail fast with a clear message when the dashboard port is taken.
+
+    A stale server from an earlier Cell-4 run in the same Colab VM is
+    the classic trigger; the remedy is a runtime restart or a
+    different ``WEB_DASHBOARD_PORT`` — not a silent dead link.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((BIND_ADDRESS, int(port)))
+    except OSError as exc:
+        raise RuntimeError(
+            f"port {int(port)} is already in use ({exc.strerror or exc}); "
+            "restart the Colab runtime or change WEB_DASHBOARD_PORT in Cell 4"
+        ) from exc
+    finally:
+        probe.close()
+
+
 def stop_web_dashboard(ctx: Any) -> bool:
     """Ask the running dashboard server (if any) to exit. Idempotent."""
     server = getattr(ctx, "web_dashboard", None)
@@ -497,6 +573,13 @@ def stop_web_dashboard(ctx: Any) -> bool:
         return False
     try:
         server.should_exit = True
+        thread = getattr(server, "_td_thread", None)
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=5)
     finally:
         ctx.web_dashboard = None
     _log.info("web dashboard stop requested")
@@ -504,17 +587,29 @@ def stop_web_dashboard(ctx: Any) -> bool:
 
 
 def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bool = False):
-    """Serve the Modern Web Dashboard on the ONE shared event loop.
+    """Serve the Modern Web Dashboard in its own isolated server thread.
 
-    Non-blocking: ``server.serve()`` is scheduled via ``ctx.aio`` and
-    the handle is stored on ``ctx.web_dashboard`` (closed by
-    ``ApplicationContext.shutdown``). Calling launch twice returns the
-    already-running server — never a second HTTP server.
+    Non-blocking for notebook use after a short startup verification:
+    this returns only once the server is actually listening, and
+    raises RuntimeError when it is not — Cell 4 then falls back to the
+    classic Gradio UI with the reason printed. The handle is stored on
+    ``ctx.web_dashboard`` (closed by ``ApplicationContext.shutdown``).
+    Calling launch twice returns the already-running server; a stale
+    dead handle is discarded and relaunched instead of being returned.
     """
     existing = getattr(ctx, "web_dashboard", None)
-    if existing is not None and not getattr(existing, "should_exit", True):
-        _log.info("web dashboard already running; returning existing handle")
-        return existing
+    if existing is not None:
+        existing_thread = getattr(existing, "_td_thread", None)
+        if (
+            getattr(existing, "started", False)
+            and not getattr(existing, "should_exit", True)
+            and (existing_thread is None or existing_thread.is_alive())
+        ):
+            _log.info("web dashboard already running; returning existing handle")
+            return existing
+        # Stale/dead handle (e.g. its startup failed earlier): never
+        # hand it back as if it were serving.
+        ctx.web_dashboard = None
     try:
         import uvicorn
     except ImportError as exc:  # pragma: no cover - lock installs it
@@ -522,22 +617,57 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
 
     from .app import _ensure_localhost_bypasses_proxy, colab_proxy_url, is_colab
 
+    _ensure_port_free(int(port))
     app = create_web_app(ctx)
     config = uvicorn.Config(
         app, host=BIND_ADDRESS, port=int(port), log_level="warning", access_log=False
     )
     server = uvicorn.Server(config)
+    server._td_error = None
     _ensure_localhost_bypasses_proxy()
     if not ctx.aio.is_running:
         ctx.aio.start()
-    server._td_future = ctx.aio.schedule(server.serve())  # one loop, by contract
+    thread = threading.Thread(
+        target=_run_server_isolated,
+        args=(server,),
+        name="teledrive-web-dashboard",
+        daemon=True,
+    )
+    server._td_thread = thread
     ctx.web_dashboard = server
-    _log.info("web dashboard scheduled port=%s", int(port))
+    thread.start()
+    try:
+        _wait_until_started(server, thread)
+    except BaseException:
+        try:
+            server.should_exit = True
+        finally:
+            ctx.web_dashboard = None
+        raise
+    _log.info("web dashboard listening port=%s thread=%s", int(port), thread.name)
 
     if is_colab():
         proxy_url = colab_proxy_url(int(port))
         if proxy_url:
             print(f"TeleDrive Web Dashboard URL: {proxy_url}")
+            try:  # pragma: no cover - Colab-only display path
+                from IPython.display import HTML, display
+
+                display(
+                    HTML(
+                        '<div style="border:2px solid #3b82f6;border-radius:14px;'
+                        'padding:16px;margin:10px 0;direction:rtl;text-align:right;'
+                        'font-family:sans-serif">'
+                        "<h3 style=\"margin:0 0 10px\">⚡ واجهة الويب الحديثة جاهزة "
+                        "(TeleDrive Web Dashboard)</h3>"
+                        f'<a href="{html.escape(proxy_url, quote=True)}" target="_blank" '
+                        'style="display:inline-block;background:#2563eb;color:#fff;'
+                        'padding:11px 22px;border-radius:10px;text-decoration:none;'
+                        'font-weight:bold">🌐 افتح لوحة التحكم الحديثة ↗️</a></div>'
+                    )
+                )
+            except Exception:
+                pass
         else:  # pragma: no cover - Colab-only branch
             print(
                 f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "

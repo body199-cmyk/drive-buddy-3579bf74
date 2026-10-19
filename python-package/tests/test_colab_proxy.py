@@ -151,6 +151,20 @@ def test_launch_blocking_flips_prevent_thread_lock(ctx, fake_demo):
     assert fake_demo.kwargs["prevent_thread_lock"] is False
 
 
+def test_launch_rerun_is_idempotent_while_ui_is_running(ctx, fake_demo, capsys):
+    # M46-T02: re-running notebook Cell 4 while Gradio already serves must
+    # re-print the URL instead of building a second Blocks that crashes
+    # with "Cannot find empty port" and orphans the first server.
+    app.launch(ctx)
+    first_kwargs = dict(fake_demo.kwargs)
+    fake_demo.is_running = True  # what a real launched Blocks reports
+    app.launch(ctx)
+    assert fake_demo.kwargs == first_kwargs  # launch() not called again
+    out = capsys.readouterr().out
+    assert "already running (re-run ignored)" in out
+    assert ctx.ui is fake_demo
+
+
 def test_launch_passes_proxy_url_as_root_path(ctx, fake_demo, fake_colab):
     app.launch(ctx)
     # root_path is keyword-only in Gradio 6.20.0; it must be the proxy origin so

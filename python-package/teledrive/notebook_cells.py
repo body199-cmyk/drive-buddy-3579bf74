@@ -111,6 +111,11 @@ PKG_RELEASE_BASE = (
     "/releases/download/" + PKG_RELEASE_TAG + "/"
 )
 PKG_MANIFEST_URL = PKG_RELEASE_BASE + "teledrive_manifest.json"
+PKG_LATEST_API_URL = (
+    "https://api.github.com/repos/body199-cmyk/drive-buddy-3579bf74"
+    "/releases/latest"
+)
+_PKG_TAG_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
 PKG_ARCHIVE_ROOT = "teledrive-v4.5"
 PKG_INNER_NAME = "teledrive_v4.5.zip"
 PKG_STATE_NAME = "teledrive_package_state.json"
@@ -149,19 +154,55 @@ def _pkg_load_manifest(fetch, manifest_url):
     return manifest
 
 
-def _pkg_manifest_is_trusted(manifest):
+def _pkg_release_base(tag):
+    return (
+        "https://github.com/body199-cmyk/drive-buddy-3579bf74"
+        "/releases/download/" + tag + "/"
+    )
+
+
+def _pkg_tag_is_valid(tag):
+    return (
+        isinstance(tag, str)
+        and tag.startswith("pkg-")
+        and 4 < len(tag) <= 80
+        and all(char in _PKG_TAG_CHARS for char in tag)
+    )
+
+
+def _pkg_latest_manifest_url(fetch, api_url):
+    """Resolve the newest pkg-* release via the public GitHub API.
+
+    Returns (manifest_url, tag) with the URL CONSTRUCTED from the validated
+    tag — never taken from the API payload. Raises on anything unexpected so
+    the caller falls back to the pinned release."""
+    with fetch(api_url) as response:
+        payload = response.read(1024 * 1024 + 1)
+    if len(payload) > 1024 * 1024:
+        raise ValueError("latest-release payload too large")
+    info = json.loads(payload.decode("utf-8"))
+    tag = info.get("tag_name") if isinstance(info, dict) else None
+    if not _pkg_tag_is_valid(tag):
+        raise ValueError("latest release is not a pkg-* release")
+    return _pkg_release_base(tag) + "teledrive_manifest.json", tag
+
+
+def _pkg_manifest_is_trusted(manifest, expected_tag=None):
     digest = manifest.get("sha256")
     url = manifest.get("archive_url")
     size = manifest.get("size_bytes")
+    release = manifest.get("release")
+    if expected_tag is None:
+        expected_tag = PKG_RELEASE_TAG
     return (
         manifest.get("schema") == 1
-        and isinstance(manifest.get("release"), str)
-        and bool(manifest.get("release"))
+        and _pkg_tag_is_valid(release)
+        and release == expected_tag
         and isinstance(digest, str)
         and len(digest) == 64
         and all(char in "0123456789abcdef" for char in digest)
         and isinstance(url, str)
-        and url.startswith(PKG_RELEASE_BASE)
+        and url.startswith(_pkg_release_base(release))
         and isinstance(size, int)
         and 0 < size <= PKG_MAX_ARCHIVE_BYTES
     )
@@ -303,11 +344,15 @@ def _pkg_refused(reason, emit):
     return {"outcome": "refused", "reason": reason, "line": line}
 
 
-def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None, emit=print):
+def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None,
+                   emit=print, latest_api_url=PKG_LATEST_API_URL):
     """One fail-closed update check; always prints exactly ONE redacted line.
 
-    Outcomes: 'already-current' | 'success' | 'refused'. Nothing mutates the
-    installed package unless the bytes matched the pinned manifest digest.
+    Manifest resolution order: the newest pkg-* GitHub release first (so a
+    freshly published package reaches Colab without editing this notebook),
+    then the pinned release as fallback. Outcomes: 'already-current' |
+    'success' | 'refused'. Nothing mutates the installed package unless the
+    bytes matched the chosen manifest's digest.
     """
     local_root = pathlib.Path(local_root)
     fetch = fetch or _pkg_fetch
@@ -316,12 +361,22 @@ def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None, emit=p
     reason = _pkg_runtime_refusal_reason()
     if reason is not None:
         return _pkg_refused(reason + "; restart the runtime, then re-run Cell 1", emit)
-    try:
-        manifest = _pkg_load_manifest(fetch, manifest_url)
-    except Exception:
-        return _pkg_refused("update endpoint unreachable", emit)
-    if not _pkg_manifest_is_trusted(manifest):
-        return _pkg_refused("untrusted or incomplete manifest", emit)
+    manifest = None
+    if latest_api_url:
+        try:
+            latest_url, latest_tag = _pkg_latest_manifest_url(fetch, latest_api_url)
+            candidate = _pkg_load_manifest(fetch, latest_url)
+            if _pkg_manifest_is_trusted(candidate, latest_tag):
+                manifest = candidate
+        except Exception:
+            manifest = None  # API down / rate-limited: pinned fallback below
+    if manifest is None:
+        try:
+            manifest = _pkg_load_manifest(fetch, manifest_url)
+        except Exception:
+            return _pkg_refused("update endpoint unreachable", emit)
+        if not _pkg_manifest_is_trusted(manifest, PKG_RELEASE_TAG):
+            return _pkg_refused("untrusted or incomplete manifest", emit)
 
     release = manifest["release"]
     digest = manifest["sha256"]
@@ -650,8 +705,11 @@ print("telegram credentials: loaded from", cred_source)
 '''
 
 CELL_4 = '''# ==== Cell 4: inject into the ONE context, attempt restore, launch the UI ====
-# No second context, no second event loop, no second Telegram client, no second
-# Drive service. Everything below reuses the objects created in cells 2 and 3.
+# No second context, no second application event loop, no second Telegram
+# client, no second Drive service. Everything below reuses the objects
+# created in cells 2 and 3; each UI's HTTP server stays isolated in its
+# own framework thread so a web-server failure can never take the
+# Telegram/transfer loop down with it (M46-T02).
 # Drive is adopted FIRST so the session vault can restore telegram.session
 # before set_credentials; an existing session skips phone / OTP / 2FA.
 from teledrive.app import launch
@@ -697,20 +755,39 @@ WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 # (handoff, tests, maintenance) stay runnable while the interface keeps
 # serving. The Gradio handle lives on ctx.ui, the Web Dashboard handle on
 # ctx.web_dashboard; both are closed by ctx.shutdown() in cell 7.
+# Classic Gradio launches FIRST (M46-T02): it is the recovery surface, so
+# nothing the modern dashboard does during its own startup can ever delay
+# or prevent it. launch() is idempotent — re-running this cell while the
+# UI is already serving re-prints its URL instead of crashing on the port.
+print("selected UI_MODE:", UI_MODE)
+_classic_launched = False
+if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
+    launch(ctx, share=False, inline=False, blocking=False)
+    _classic_launched = True
+
 web_server = None
 if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
     try:
         from teledrive.web_dashboard import launch_web_dashboard
 
+        # Returns only after the server is really listening; on failure it
+        # raises with the concrete reason (missing module / busy port / ...).
         web_server = launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)
+        print("web dashboard: OK on port", WEB_DASHBOARD_PORT)
     except Exception as _web_exc:  # never leave the user with no UI at all
-        print("web dashboard unavailable:", type(_web_exc).__name__, _web_exc)
-        if UI_MODE == "Modern_Web_Dashboard":
+        print("⚠️ web dashboard unavailable:", type(_web_exc).__name__, _web_exc)
+        if isinstance(_web_exc, ModuleNotFoundError):
+            print(
+                "⚠️ الحزمة المثبتة قديمة ولا تحتوي الواجهة الحديثة. "
+                "الحل: Runtime > Restart runtime ثم أعد تشغيل الخلايا 1-4 من الأول "
+                "(لا تشغّل هذه الخلية وحدها) بعد نشر أحدث حزمة. "
+                "Stale package without the web dashboard: restart the runtime "
+                "and re-run cells 1-4 from the top."
+            )
+        if not _classic_launched:
             print("falling back to Classic_Gradio_Backup")
-            UI_MODE = "Classic_Gradio_Backup"
-
-if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
-    launch(ctx, share=False, inline=False, blocking=False)
+            launch(ctx, share=False, inline=False, blocking=False)
+            _classic_launched = True
 
 print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
 '''

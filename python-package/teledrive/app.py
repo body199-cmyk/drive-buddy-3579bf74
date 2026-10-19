@@ -209,6 +209,20 @@ def launch(
     # Loopback must bypass any VPN/HTTP proxy so Gradio's localhost probes pass.
     _ensure_localhost_bypasses_proxy()
 
+    # Idempotent re-run (M46-T02): notebook users naturally re-run Cell 4
+    # while troubleshooting. Building and launching a SECOND Blocks on the
+    # same fixed port raises "Cannot find empty port" mid-cell and leaves
+    # the first server as a confusing orphan. If the stored demo is still
+    # serving, re-print its URL and return the same context untouched.
+    existing_ui: Any = getattr(ctx, "ui", None)
+    if existing_ui is not None and getattr(existing_ui, "is_running", False):
+        _log.info("ui already running; launch re-run ignored port=%s", port)
+        print("TeleDrive UI: already running (re-run ignored)")
+        _print_primary_url(
+            proxy_url=proxy_url, port=port, share=share, on_colab=on_colab
+        )
+        return ctx
+
     demo: Any = build(ctx)
     ctx.ui = demo
     launch_kwargs = _launch_kwargs(
