@@ -196,3 +196,45 @@ The archive built from merge `8740243` (before this publication note) measured
 `aee30938f41f46360d3699f289b1db096d410c9867890c925ef5fa587ec1f2fb`. Any later
 docs-only commit changes the archive bytes, so the workflow's own freshly
 generated manifest — not this historical number — is the authoritative one.
+
+## 9. Resume addendum — Arena session 2026-10-19T16:32Z (RESUME_VERIFIED)
+
+A new coding session resumed this task from the owner's DOC, which was written
+against the older `db0f2a0` baseline and assumed M44-T01 was still unmerged.
+The §9.3 resume checks showed otherwise:
+
+- `main` HEAD is `d991cf4783545ee838d3c2eeaf3b98fc0c22cf6f` (merge of PR #100)
+  and **already contains the complete M45-T01 implementation**: the three-way
+  bound (`MAX_CONCURRENT_TG_DOWNLOADS`/`PARALLEL_DOWNLOAD_STREAMS`/
+  `TG_INFLIGHT_REQUESTS`/`MAX_PENDING_UPLOADS`), the two-stage pipeline with
+  `_tg_semaphore()`, 512 KiB offset alignment, `.part` preservation,
+  `_has_downloadable_media()`, the error markers, and all M45 tests in
+  `tests/test_fast_download.py` and `tests/test_m27_hardening.py`.
+- `git status --short` was clean; the working tree matched HEAD exactly.
+- The release `pkg-2026.08.09-m15t07` **exists again**, built from `d991cf4`
+  by workflow run 39278373927 — the owner performed the one-click recovery
+  recorded in §8. KNOWN_ISSUES #79 is closed.
+
+Per the resume protocol ("what is present and verified is not redone"), no
+merged code was re-applied. The single literal gap versus the DOC was closed:
+`"serverresent"` added to `TRANSIENT_MARKERS` in `error_handler.py` (the DOC's
+§3.5 literal marker; the substantive Telethon markers were already present),
+with a classification test added to `tests/test_fast_download.py`.
+
+Re-run gates after that change (real output):
+
+```text
+python -m compileall teledrive                      PASS
+python -m pytest -q tests                              809 passed
+python teledrive_launcher.py --check                   binding check ok: 54/54 ready actions resolve
+python -m teledrive.notebook_cells --check             notebooks are in sync
+cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb PASS
+python -m teledrive.package_service --build --output teledrive_v4.5.zip
+                                                       archive 594716 bytes, sha256 aee30938…fb
+node --test tests/teledrive-sandbox.contract.test.mjs  34 pass / 0 fail
+bun run lint / bun run build                           NOT RUN: bun not installed; no frontend change
+```
+
+Honest boundary: no live Telegram/Drive/Colab measurement exists in this
+session either. The speed fix remains a code-complete candidate with fake-test
+proof; the live benchmark and Cell 1 confirmation stay with the owner.

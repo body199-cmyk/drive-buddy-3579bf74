@@ -657,3 +657,7 @@ def test_telethon_error_strings_are_classified_instead_of_unknown():
     missing = classify(RuntimeError("downloaded file missing"))
     assert missing.code == "PERMANENT"
     assert missing.retryable is False
+
+    server_resent = classify(RuntimeError("serverresent"))
+    assert server_resent.code == "TRANSIENT"
+    assert server_resent.retryable is True

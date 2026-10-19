@@ -1,3 +1,33 @@
+# بطاقة التسليم — M45-T01 (استئناف Arena): تحقق وإغلاق الفجوة الحرفية الوحيدة
+
+| الحقل | القيمة |
+|---|---|
+| Updated (UTC) | `2026-10-19T16:32Z` |
+| Session type | New Coding Session after Arena closure (استئناف DOC M45-T01) |
+| Resume status | **RESUME_VERIFIED** |
+| Base SHA | `d991cf4783545ee838d3c2eeaf3b98fc0c22cf6f` (main بعد دمج PR #100) |
+| الفرع | `arena/3befa0b6-drive-buddy-3579bf74` |
+| الحالة | **VERIFIED COMPLETE** — DOC كُتب ضد baseline `db0f2a0` وافتراضه («M44-T01 غير مدمج») غير صحيح للشجرة الحية |
+
+## نتيجة الاستئناف
+
+- فحص §9 أظهر أن **كل** بنود DOC §3 موجودة ومدمجة أصلًا في `main` عبر PRs
+  #93/#95/#98/#100: الحدود الثلاثة، `_tg_semaphore`، خط الأنابيب مرحلتين، محاذاة
+  512 KiB، حفظ `.part` عند ≥512 KiB، `_has_downloadable_media()`، مصنّفات الأخطاء،
+  وكل اختبارات M45 في `test_fast_download.py` و`test_m27_hardening.py`.
+- الفجوة الحرفية الوحيدة: marker `serverresent` المطلوب في §3.5 — أُضيف إلى
+  `TRANSIENT_MARKERS` مع اختبار تصنيف في `test_fast_download.py`.
+- `pkg-2026.08.09-m15t07` **منشور حاليًا** من `d991cf4` (run 39278373927) — المالك
+  نفّذ خطوة الاسترداد المطلوبة في بطاقة M45-T01 السابقة؛ KNOWN_ISSUES #79 أُغلقت.
+- البوابات: `809 passed` · compileall PASS · launcher `54/54` · notebook check + cmp
+  PASS · package build PASS (`594716` bytes، SHA-256 `aee30938…fb`) · `node --test`
+  34/34. `bun` غير مثبت (لا تغيير frontend).
+- ما لم يُثبت: قياس Colab/Telegram حي (بيد المالك)، و`workflow_dispatch` للنشر الآلي
+  (403 سابقًا — أُعيدت المحاولة وسُجّلت النتيجة الفعلية).
+- التفاصيل والأدلة: `docs/PHASE_REPORTS/PHASE_M45_T01_TELEGRAM_SPEED_AND_STABILITY.md` §9.
+
+---
+
 # بطاقة التسليم — M45-T01: خط أنابيب تنزيل/رفع، محاذاة 512 KiB، ووسائط حقيقية فقط
 
 | الحقل | القيمة |
