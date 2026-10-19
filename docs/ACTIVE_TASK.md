@@ -6,7 +6,10 @@
 | العنوان | تنزيل Telegram كبير الحجم بمسارين MTProto متوازيين ومحدودين، مع حفظ `.part` صالح واسترجاع legacy آمن |
 | الأساس | `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` — main/PR #94 merge |
 | الفرع | `arena/360d78bc-drive-buddy-3579bf74` |
-| الحالة | **IMPLEMENTED + LOCAL-TESTED — candidate only; not merged/published and no real Telegram benchmark** |
+| code commit / merge | PR [#95](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/95): `8c7df03` → `a032caf3be5f0b55b8b85af64dc134de2fb6a006` |
+| الحالة | **MERGED + CI-PASSED; candidate package saved to owner Drive; GitHub Release not updated; no real Telegram benchmark** |
+| CI | [#39271630415](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39271630415) SUCCESS (Python package + Frontend) |
+| candidate archive | `583226` bytes · SHA-256 `d77a4e29e63ae17b48b2720ddce52a443eee5302bd26f256fb9c9103b0480dd3`; matching manifest 378 bytes |
 | دليل المستخدم | صورة Colab: ملف Telegram حجمه 1.3 GB، قرابة 41% بعد نحو 10 دقائق؛ تقدير تقريبي 0.9 MB/s، لا قياس مستقل. |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M44_T02_BOUNDED_PARALLEL_TELEGRAM_DOWNLOAD.md` |
 
@@ -24,7 +27,7 @@
 ## ما لم يثبت / المطلوب قبل إغلاق المهمة
 
 - لا اختبار حي على Telegram أو Colab ولا قياس مقارنة قبل/بعد؛ اختبارات الشبكة الوهمية تثبت العقود فقط.
-- يجب دمج التغيير ونشر ZIP/manifest متطابقين عبر Runner، ثم Restart Colab وتشغيل ملف ≥100 MB مع ملاحظة `telethon crypto backend=cryptg`، throughput، الحجم النهائي، Pause/Resume، ومرور الملف إلى Drive.
+- التغيير مدموج؛ تبقى إعادة نشر ZIP/manifest المتطابقين عبر Runner، ثم Restart Colab وتشغيل ملف ≥100 MB مع ملاحظة `telethon crypto backend=cryptg`، throughput، الحجم النهائي، Pause/Resume، ومرور الملف إلى Drive.
 - لا توصف المهمة بأنها Colab-ready أو Complete قبل الاختبار الحي. لا ترفع concurrency ولا عدد المسارات فوق 2 بدون موافقة/قياس إضافيين.
 
 ## التراجع

@@ -5,7 +5,9 @@
 | Updated (UTC) | `2026-10-19` |
 | Base SHA | `db0f2a02502b94d2975fa23d7bce5d6af9b24e52` |
 | الفرع | `arena/360d78bc-drive-buddy-3579bf74` |
-| الحالة | **IMPLEMENTED + LOCAL-TESTED — candidate only؛ لم يندمج/ينشر ولم يُختبر على Telegram/Colab حقيقي** |
+| merge | PR [#95](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/95) merged: `8c7df03` → `a032caf3be5f0b55b8b85af64dc134de2fb6a006` |
+| CI | [#39271630415](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39271630415) SUCCESS |
+| الحالة | **MERGED + CI-PASSED; candidate package in owner Drive; release/Colab live proof pending** |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M44_T02_BOUNDED_PARALLEL_TELEGRAM_DOWNLOAD.md` |
 
 ## النتيجة
