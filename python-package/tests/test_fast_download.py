@@ -784,3 +784,39 @@ def test_database_recovers_from_readonly_sqlite_connection(monkeypatch):
     db.set_setting("recovered_key", "recovered_val")
     assert calls["count"] == 1
     assert db.get_setting("recovered_key") == "recovered_val"
+
+
+# ---------------------------------------------------------------------------
+# M45-T03 — Multi-connection MTProto pool + non-stalling sliding window
+# ---------------------------------------------------------------------------
+
+
+def test_parallel_download_uses_independent_media_clients_and_falls_back_cleanly(tmp_path, monkeypatch):
+    """Lanes >= 1 use dedicated media clients from _media_clients, and if a
+    secondary client fails mid-stream, that lane seamlessly falls back to
+    self.client without failing the download."""
+    import teledrive.telegram_client as telegram_module
+
+    request = DOWNLOAD_REQUEST_SIZE
+    payload = bytes((i % 251 for i in range(request * 4)))
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_MIN_BYTES", 1)
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_STREAMS", 2)
+
+    primary = _StripedClient(payload)
+    # Secondary client fails on its first chunk so fallback to primary is tested!
+    secondary_failing = _StripedClient(payload, fail_lane=0)
+
+    service = _service(primary)
+    service._media_clients = [secondary_failing]
+    target = tmp_path / "pooled.bin"
+
+    result = asyncio.run(
+        service.download_media_fast(
+            SimpleNamespace(media=object()), str(target), len(payload)
+        )
+    )
+
+    assert result == str(target)
+    assert target.read_bytes() == payload
+    assert len(secondary_failing.calls) == 1, "lane 1 tried secondary client first"
+    assert len(primary.calls) == 2, "lane 0 used primary and lane 1 fell back to primary"
