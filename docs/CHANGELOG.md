@@ -9,6 +9,7 @@
 - أُضيف `cryptg==0.6.0` إلى `requirements.txt` و`requirements.lock` (AES-IGE بلغة C، wheels لـ cp310–cp314 manylinux x86_64). يسجّل `telegram_client.crypto_backend()` أي تطبيق AES فعّال عند الاتصال: `cryptg` ثم `libssl` ثم `pyaes`.
 
 ### Gates and local verification
+- CI push [#39246461893](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39246461893) SUCCESS (Python + Frontend).
 - `795 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS · React contracts `34/34` · lint 0 errors (8 تحذيرات baseline) · package build PASS (`578225` bytes، `e4723b02…15f6`).
 - `bun run build` لم يُشغَّل في sandbox هذه الجلسة لأن مرآة npm رفضت `@lovable.dev/vite-tanstack-config@2.8.5`؛ `tsc --noEmit` يشتكي من هذا الموديول فقط. CI يثبته من `bun.lock`.
 - لا تغيير في notebook cells أو `.github/workflows` أو schema SQLite. `auto_refresh_ms` اختياري؛ غيابه يعيد الافتراضي 1000.

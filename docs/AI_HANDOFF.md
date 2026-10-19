@@ -4,8 +4,8 @@
 |---|---|
 | Updated (UTC) | `2026-10-19` |
 | code commit / merge | غير مدموج بعد (العمل على `arena/1a507b63-drive-buddy-3579bf74`) |
-| الحالة | **IMPLEMENTED + LOCAL-TESTED — ليس مدموجًا/منشورًا، ولا Colab live** |
-| CI | لم يُشغَّل بعد؛ البوابات المحلية في التقرير |
+| الحالة | **IMPLEMENTED + LOCAL-TESTED + BRANCH-CI-PASSED — ليس مدموجًا/منشورًا، ولا Colab live** |
+| CI | push [#39246461893](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39246461893) SUCCESS — Python package + Frontend build |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M44_T01_UI_HEARTBEAT_AND_DOWNLOAD_SPEED.md` |
 
 ## النتيجة
