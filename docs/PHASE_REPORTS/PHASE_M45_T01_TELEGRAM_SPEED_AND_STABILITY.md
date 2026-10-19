@@ -191,6 +191,8 @@ current `main` and runs its own public verification. Until then Cell 1 prints
 `Package update: REFUSED update endpoint unreachable; current package unchanged`
 and keeps running from the restored archive — no crash, no silent mutation.
 
-The archive built from the merged tree is `594716` bytes with SHA-256
-`aee30938f41f46360d3699f289b1db096d410c9867890c925ef5fa587ec1f2fb`; the
-workflow rebuild is deterministic and must produce the same bytes.
+The archive built from merge `8740243` (before this publication note) measured
+`594716` bytes with SHA-256
+`aee30938f41f46360d3699f289b1db096d410c9867890c925ef5fa587ec1f2fb`. Any later
+docs-only commit changes the archive bytes, so the workflow's own freshly
+generated manifest — not this historical number — is the authoritative one.
