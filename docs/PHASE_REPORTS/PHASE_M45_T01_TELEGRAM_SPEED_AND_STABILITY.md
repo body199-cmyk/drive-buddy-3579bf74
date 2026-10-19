@@ -235,6 +235,36 @@ node --test tests/teledrive-sandbox.contract.test.mjs  34 pass / 0 fail
 bun run lint / bun run build                           NOT RUN: bun not installed; no frontend change
 ```
 
+While the PR (#104) was open, `main` advanced twice under it (M45-T02,
+M45-T03, then M45-T04 merged in parallel sessions). The branch was
+re-synced by merging `origin/main` twice; the two real conflicts were
+resolved by keeping both sides (`TRANSIENT_MARKERS` gains both
+`serverresent` and the M45-T02 SQLite-recovery markers; the test file
+keeps the `serverresent` classification plus the new M45-T02/T03/T04
+tests; the `teledrive_v4.5.zip` blob that those sessions started tracking
+was kept as main had it). Final gates on the merged tree:
+
+```text
+python -m pytest -q tests                              813 passed
+python teledrive_launcher.py --check                   binding check ok: 54/54 ready actions resolve
+python -m teledrive.notebook_cells --check             notebooks are in sync
+cmp notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb PASS
+python -m teledrive.package_service --build --output teledrive_v4.5.zip
+                                                       archive sha256 c64aca0a…
+node --test tests/teledrive-sandbox.contract.test.mjs  34 pass / 0 fail
+```
+
+PR #104 CI: Python package + Frontend build both SUCCESS; merged into
+`main` at `337c19e7d69a903c1b7c5060e572d17f09ff8f86` (2026-10-19T19:24Z).
+
+Release republish attempt from this session: `gh workflow run
+release-current.yml --ref main` → **HTTP 403 "Resource not accessible by
+integration"** (the same sandbox-token limitation recorded in §8). The
+release `pkg-2026.08.09-m15t07` is currently published from `33bf50d`
+(sha256 `7774a340…`, 600312 bytes) by a parallel session and already
+contains the full M45-T01 fix; republishing from `337c19e` is the one
+remaining owner click.
+
 Honest boundary: no live Telegram/Drive/Colab measurement exists in this
 session either. The speed fix remains a code-complete candidate with fake-test
 proof; the live benchmark and Cell 1 confirmation stay with the owner.
