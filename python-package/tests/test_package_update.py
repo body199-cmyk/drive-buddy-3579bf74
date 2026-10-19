@@ -115,6 +115,9 @@ def clean_modules(monkeypatch):
 
 
 def _try(content, **kwargs):
+    # Legacy pinned-release tests opt out of the latest-release hop; the
+    # dedicated latest tests below pass latest_api_url explicitly.
+    kwargs.setdefault("latest_api_url", None)
     lines: list[str] = []
     result = NS["pkg_try_update"](content, emit=lines.append, **kwargs)
     return result, lines
@@ -405,3 +408,116 @@ def test_secret_looking_manifest_fields_never_leak(tmp_path, clean_modules):
     assert "S3cr3tV4lu3" not in line and "hunter2" not in line
     state_text = (tmp_path / "teledrive_package_state.json").read_text(encoding="utf-8")
     assert "S3cr3tV4lu3" not in state_text and "hunter2" not in state_text
+
+
+# ---- M46-T02: latest pkg-* release first, pinned fallback ---------------------
+
+LATEST_API_URL = NS["PKG_LATEST_API_URL"]
+LATEST_TAG = "pkg-42424242424"
+LATEST_BASE = NS["_pkg_release_base"](LATEST_TAG)
+LATEST_MANIFEST_URL = LATEST_BASE + "teledrive_manifest.json"
+LATEST_ARCHIVE_URL = LATEST_BASE + "teledrive_v4.5.zip"
+
+
+def _latest_api_payload(tag=LATEST_TAG) -> bytes:
+    return json.dumps({"tag_name": tag, "assets": []}).encode()
+
+
+def _latest_manifest(**overrides) -> dict:
+    return _manifest(
+        release=LATEST_TAG, archive_url=LATEST_ARCHIVE_URL, **overrides
+    )
+
+
+def test_latest_release_wins_over_pinned(tmp_path, clean_modules):
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: _latest_api_payload(),
+            LATEST_MANIFEST_URL: json.dumps(_latest_manifest()).encode(),
+            LATEST_ARCHIVE_URL: PKG_BYTES,
+            MANIFEST_URL: json.dumps(_manifest()).encode(),
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert LATEST_TAG in lines[0]
+    # Pinned manifest never consulted once the latest one is trusted.
+    assert calls == [LATEST_API_URL, LATEST_MANIFEST_URL, LATEST_ARCHIVE_URL]
+    state = json.loads((tmp_path / "teledrive_package_state.json").read_text())
+    assert state["release"] == LATEST_TAG
+
+
+def test_latest_api_failure_falls_back_to_pinned(tmp_path, clean_modules):
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: urllib.error.URLError("rate limited"),
+            MANIFEST_URL: json.dumps(_manifest()).encode(),
+            ARCHIVE_URL: PKG_BYTES,
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert RELEASE in lines[0]
+    assert calls == [LATEST_API_URL, MANIFEST_URL, ARCHIVE_URL]
+
+
+def test_latest_non_pkg_tag_falls_back_to_pinned(tmp_path, clean_modules):
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: _latest_api_payload("v9.9.9-unrelated"),
+            MANIFEST_URL: json.dumps(_manifest()).encode(),
+            ARCHIVE_URL: PKG_BYTES,
+        },
+        calls,
+    )
+    result, _ = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert LATEST_MANIFEST_URL not in calls
+
+
+def test_latest_manifest_from_another_tag_is_not_trusted(tmp_path, clean_modules):
+    # API says LATEST_TAG, but the manifest claims (and points at) another
+    # release: untrusted -> pinned fallback, archive of latest never fetched.
+    foreign = _manifest(
+        release="pkg-11111111111",
+        archive_url=NS["_pkg_release_base"]("pkg-11111111111") + "teledrive_v4.5.zip",
+    )
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: _latest_api_payload(),
+            LATEST_MANIFEST_URL: json.dumps(foreign).encode(),
+            MANIFEST_URL: json.dumps(_manifest()).encode(),
+            ARCHIVE_URL: PKG_BYTES,
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert RELEASE in lines[0]
+    assert LATEST_ARCHIVE_URL not in calls

@@ -1,9 +1,15 @@
-"""Modern Web Dashboard (FastAPI + AJAX Polling) — M46-T01 contracts.
+"""Modern Web Dashboard (FastAPI + AJAX Polling) — M46-T01/T02 contracts.
 
 The dashboard is an adapter over the one ApplicationContext: these tests
 prove it serves live (never fabricated) metrics, dispatches only through
-the validated React bridge, refuses secret-bearing actions, needs no
-second event loop, and really serves HTTP when launched on ctx.aio.
+the validated React bridge, refuses secret-bearing actions, and really
+serves HTTP from its isolated server thread.
+
+M46-T02 regression pinned here: uvicorn answers a startup failure with
+``sys.exit``. When the dashboard previously ran as a task on ``ctx.aio``
+that ``SystemExit`` killed the whole application loop (web page absent
++ Gradio frozen). A failed dashboard launch must now raise cleanly,
+leave ``ctx.web_dashboard`` empty, and leave ``ctx.aio`` fully alive.
 """
 from __future__ import annotations
 
@@ -42,9 +48,13 @@ def test_module_imports_without_web_framework_at_top_level():
     assert "import uvicorn" not in SOURCE.split("def launch_web_dashboard")[0]
 
 
-def test_no_second_event_loop_or_wildcard_cors_or_fake_engine():
+def test_no_ad_hoc_application_loop_or_wildcard_cors_or_fake_engine():
+    # The application loop stays AsyncRuntime's alone; the HTTP server
+    # runs in its dedicated thread via server.run() (M46-T02 isolation).
     for needle in ("asyncio.new_event_loop(", "asyncio.run(", "run_until_complete("):
         assert needle not in SOURCE
+    assert "server.run()" in SOURCE
+    assert "ctx.aio.schedule(server.serve())" not in SOURCE
     assert 'allow_origins=["*"]' not in SOURCE
     # The Drive payload's private download runner must not come back:
     # transfers belong to QueueManager/TransferManager only.
@@ -136,7 +146,31 @@ def test_queue_routes_are_allowlisted(ctx):
     assert "metrics" in paused.json()
 
 
-def test_launch_serves_on_the_one_shared_loop_and_is_idempotent(ctx):
+def test_busy_port_raises_cleanly_and_the_application_loop_survives(ctx):
+    """M46-T02: a dead dashboard must never take ctx.aio down with it."""
+    pytest.importorskip("uvicorn")
+    blocker = socket.socket()
+    blocker.bind(("127.0.0.1", 0))
+    blocker.listen(1)
+    port = int(blocker.getsockname()[1])
+    try:
+        assert ctx.aio.is_running
+        with pytest.raises(RuntimeError, match="already in use"):
+            launch_web_dashboard(ctx, port=port)
+        # No zombie handle, and the one application loop is untouched:
+        # this is exactly what kept Gradio responsive in the live bug.
+        assert ctx.web_dashboard is None
+        assert ctx.aio.is_running
+
+        async def _ping() -> str:
+            return "pong"
+
+        assert ctx.aio.run(_ping(), timeout=5) == "pong"
+    finally:
+        blocker.close()
+
+
+def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
     pytest.importorskip("uvicorn")
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
