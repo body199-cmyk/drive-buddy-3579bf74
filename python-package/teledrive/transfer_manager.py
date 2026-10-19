@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import checkpoint_manager, database as db
-from .config import CONFIG
+from .config import CONFIG, FAST_DOWNLOAD_MIN_BYTES
 from .duplicate_detector import check as dup_check
 from .drive_quota import preflight_or_raise
 from .error_handler import classify
-from .errors import TransferPaused, TransferStopped
+from .errors import TransferControlSignal, TransferPaused, TransferStopped
 from .logging_config import get_logger
 from .models import MediaItem
 from .progress_tracker import PROGRESS
@@ -439,6 +439,38 @@ class TransferManager:
                 {"offset": offset, "total": declared},
             )
             return await partial(msg, str(temp), declared, progress_cb=progress_cb)
+
+        # Fresh, sizeable non-photo media: request the MTProto maximum in one
+        # sequential stream. Telethon's public download_media() uses 128 KiB
+        # requests for files <= 100 MB, which is the main throughput ceiling on
+        # Colab. The .part file stays a valid prefix at every chunk boundary.
+        fast = getattr(self.telegram, "download_media_fast", None)
+        if (
+            callable(fast)
+            and offset == 0
+            and declared >= FAST_DOWNLOAD_MIN_BYTES
+            and item.media_type != "photo"
+        ):
+            try:
+                return await fast(msg, str(temp), declared, progress_cb=progress_cb)
+            except TransferControlSignal:
+                # Pause/Stop is an operator decision, never a transport failure.
+                raise
+            except Exception as exc:  # noqa: BLE001 - fallback path is the point
+                # One clean fallback: the legacy path rewrites the file from
+                # byte zero, so a partially fast-written .part is never
+                # appended to or trusted.
+                db.add_event(
+                    item.id,
+                    "RECOVERY",
+                    "fast download failed; legacy path used",
+                    {"error": f"{type(exc).__name__}: {exc}"[:400]},
+                )
+                _log.warning(
+                    "fast download failed for %s (%s); using legacy path",
+                    item.id,
+                    type(exc).__name__,
+                )
         return await self.telegram.download_media(msg, str(temp), progress_cb=progress_cb)
 
     def _record_progress(

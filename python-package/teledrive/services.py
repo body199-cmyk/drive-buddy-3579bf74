@@ -11,6 +11,8 @@ from typing import Any, Iterable
 
 from . import checkpoint_manager, database as db, drive_quota
 from .config import (
+    AUTO_REFRESH_DEFAULT_MS,
+    AUTO_REFRESH_OPTIONS,
     CONCURRENCY_LEVELS,
     CONCURRENCY_MIN,
     CONCURRENCY_WARN_ABOVE,
@@ -595,6 +597,8 @@ class LiveUiStateService:
             },
             "engine": str(ctx.queue_manager.status_label()),
             "concurrency": int(ctx.settings.current()),
+            # M44-T01: the browser owns the timer, Python owns the preference.
+            "autoRefreshMs": int(ctx.settings.auto_refresh_ms()),
             "analyze": {
                 "sourceLink": ctx.scanner.remembered_link(),
             },
@@ -736,6 +740,51 @@ class SettingsService:
                 self._apply(int(saved))
             except (TypeError, ValueError, TeleDriveError):
                 pass
+        # M44-T01: persisted auto-refresh heartbeat. An unknown/legacy value
+        # falls back to the default instead of inventing a new interval.
+        self._auto_refresh_ms = AUTO_REFRESH_DEFAULT_MS
+        saved_refresh = db.get_setting("auto_refresh_ms")
+        if saved_refresh is not None:
+            try:
+                value = int(saved_refresh)
+            except (TypeError, ValueError):
+                value = AUTO_REFRESH_DEFAULT_MS
+            if value in AUTO_REFRESH_OPTIONS:
+                self._auto_refresh_ms = value
+
+    def auto_refresh_ms(self) -> int:
+        """Current heartbeat interval in milliseconds; 0 means disabled."""
+        return int(self._auto_refresh_ms)
+
+    def set_auto_refresh(self, value: "str | int | float") -> dict[str, Any]:
+        """Persist the React heartbeat interval (0 = off).
+
+        Only the declared options are accepted. Rejecting instead of clamping
+        keeps the UI honest: the interval on screen is the interval the browser
+        will actually use.
+        """
+        if isinstance(value, bool):
+            raise TeleDriveError(
+                "invalid auto-refresh value", "settings.auto_refresh.invalid"
+            )
+        try:
+            ms = int(value)
+        except (TypeError, ValueError):
+            raise TeleDriveError(
+                "invalid auto-refresh value", "settings.auto_refresh.invalid"
+            )
+        if ms not in AUTO_REFRESH_OPTIONS:
+            raise TeleDriveError(
+                f"auto-refresh interval must be one of {AUTO_REFRESH_OPTIONS}",
+                "settings.auto_refresh.invalid",
+            )
+        self._auto_refresh_ms = ms
+        db.set_setting("auto_refresh_ms", str(ms))
+        return {
+            "auto_refresh_ms": ms,
+            "enabled": ms > 0,
+            "options": list(AUTO_REFRESH_OPTIONS),
+        }
 
     def _apply(self, n: int) -> int:
         n = int(n)

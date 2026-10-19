@@ -525,6 +525,19 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         proof_test="tests/test_settings_concurrency.py::test_one_and_four_accepted_out_of_range_rejected",
     ),
     ActionSpec(
+        action_id="settings.set_auto_refresh",
+        handler_name="h_settings_set_auto_refresh",
+        service_path="settings.set_auto_refresh",
+        label_key="settings.auto_refresh.label",
+        section="settings",
+        implemented=True,
+        tested=True,
+        proof_test=(
+            "tests/test_settings_auto_refresh.py::"
+            "test_set_auto_refresh_persists_and_snapshot_reports_it"
+        ),
+    ),
+    ActionSpec(
         action_id="settings.toggle_language",
         handler_name="h_settings_toggle_language",
         service_path="preferences.toggle_language",

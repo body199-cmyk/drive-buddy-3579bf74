@@ -2,6 +2,9 @@
 # Generated in Phase 0 from requirements.txt. The notebook installs from THIS file.
 # Every version below is an exact pin resolved from PyPI on 2026-07-29.
 telethon==1.44.0
+# Optional but strongly recommended by Telethon: AES-IGE in C
+# (cp310-cp314 manylinux x86_64 wheels published on PyPI).
+cryptg==0.6.0
 google-api-python-client==2.198.0
 google-auth-oauthlib==1.4.0
 google-auth-httplib2==0.4.0

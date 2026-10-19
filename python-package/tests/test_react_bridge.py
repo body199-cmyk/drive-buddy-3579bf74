@@ -38,6 +38,22 @@ def test_react_bridge_rejects_blocked_action(ctx):
     assert response["errorKey"] == "bridge.secure_gradio_only"
 
 
+def test_react_bridge_persists_auto_refresh_and_returns_the_new_snapshot(ctx):
+    response = _bridge(ctx).handle(
+        _request("settings.set_auto_refresh", {"value": 0}, "refresh-off")
+    )
+    assert response["status"] == "ok"
+    assert response["state"]["autoRefreshMs"] == 0
+    assert db.get_setting("auto_refresh_ms") == "0"
+
+    # A rejected interval must be an error response, not a silent clamp.
+    rejected = _bridge(ctx).handle(
+        _request("settings.set_auto_refresh", {"value": 1500}, "refresh-bad")
+    )
+    assert rejected["status"] == "error"
+    assert rejected["state"]["autoRefreshMs"] == 0
+
+
 def test_react_bridge_calls_existing_registered_handler(ctx, monkeypatch):
     calls = []
 

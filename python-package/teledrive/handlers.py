@@ -133,6 +133,7 @@ ERROR_ARITY: dict[str, int] = {
     "logs.download": 2,      # (file_component, status)
     "dashboard.refresh": 1,  # (dashboard_json)
     "settings.set_concurrency": 2,  # (slider_value, status)
+    "settings.set_auto_refresh": 2,  # (radio_value, status)
     "settings.toggle_language": 1,  # (lang_state)
     "settings.set_theme": 2,        # (theme_style_html, status)
     "export.build_zip": 2,          # (message, file)
@@ -668,6 +669,37 @@ class Handlers:
             )
         return (component_update(value=workers), status_ok(line))
 
+    @action("settings.set_auto_refresh")
+    def h_settings_set_auto_refresh(self, value):
+        # The browser owns the heartbeat; Python owns the persisted preference.
+        # Reject anything outside the declared options so the UI value is the
+        # value the next page load will really use.
+        from .config import AUTO_REFRESH_OPTIONS
+
+        current = self.ctx.settings.auto_refresh_ms()
+        if isinstance(value, bool):
+            return (
+                component_update(value=current),
+                status_error(t("settings.auto_refresh.invalid")),
+            )
+        try:
+            ms = int(value)
+        except (TypeError, ValueError):
+            return (
+                component_update(value=current),
+                status_error(t("settings.auto_refresh.invalid")),
+            )
+        if ms not in AUTO_REFRESH_OPTIONS:
+            return (
+                component_update(value=current),
+                status_error(t("settings.auto_refresh.invalid")),
+            )
+        result = self.call("settings.set_auto_refresh", ms)
+        return (
+            component_update(value=result["auto_refresh_ms"]),
+            status_ok(t("settings.auto_refresh.saved")),
+        )
+
     @action("settings.toggle_language")
     def h_settings_toggle_language(self):
         return self.call("settings.toggle_language")
@@ -801,4 +833,5 @@ def shell_seed(ctx) -> dict[str, Any]:
         "quota_line": quota_line,
         "quota_payload": quota_payload,
         "concurrency": ctx.config.concurrency_value(),
+        "auto_refresh_ms": ctx.settings.auto_refresh_ms(),
     }

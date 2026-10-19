@@ -1,5 +1,23 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M44-T01] — 2026-10-19 — مفتاح التحديث التلقائي وسرعة تنزيل Telegram
+
+### Changed
+- أُضيف إعداد محفوظ `auto_refresh_ms` (الإيقاف `0`، أو `1000/2000/5000`) عبر `SettingsService`، ويظهر في `LiveUiStateService.snapshot()` باسم `autoRefreshMs`. React يبني `setInterval` على القيمة الحقيقية ويتوقف تمامًا عند `0`؛ زر التحديث اليدوي يظل متاحًا، والـrefresh الأحادي بعد كل إجراء ناجح يظل يعمل. Gradio shell يعرض نفس الإعداد عبر `gr.Radio`، ولا يوجد `localStorage` أو حالة وهمية.
+- أُضيف فعل حقيقي `settings.set_auto_refresh` إلى registry مع handler وservice وproof test، ووُصل في React وGradio، فأصبح `launcher --check` يعرض `54/54`.
+- مسار تنزيل جديد `TelegramService.download_media_fast()` يستعمل `iter_download` بطلب `512 KiB` (الحد الأقصى في MTProto) للملفات ≥1 MiB غير المصوّرة. Telethon كان يستعمل `128 KiB` للملفات ≤100 MB. أي فشل غير تحكّمي يكتب حدث `RECOVERY` ويعود للمسار القديم الذي يعيد كتابة الملف من الصفر؛ إشارات Pause/Stop تُعاد ولا تُبتلع. الاستئناف من offset صار يعلن `512 KiB` و`file_size` صراحةً.
+- أُضيف `cryptg==0.6.0` إلى `requirements.txt` و`requirements.lock` (AES-IGE بلغة C، wheels لـ cp310–cp314 manylinux x86_64). يسجّل `telegram_client.crypto_backend()` أي تطبيق AES فعّال عند الاتصال: `cryptg` ثم `libssl` ثم `pyaes`.
+
+### Gates and local verification
+- CI push [#39246461893](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39246461893) SUCCESS (Python + Frontend).
+- `795 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS · React contracts `34/34` · lint 0 errors (8 تحذيرات baseline) · package build PASS (`578225` bytes، `e4723b02…15f6`).
+- `bun run build` لم يُشغَّل في sandbox هذه الجلسة لأن مرآة npm رفضت `@lovable.dev/vite-tanstack-config@2.8.5`؛ `tsc --noEmit` يشتكي من هذا الموديول فقط. CI يثبته من `bun.lock`.
+- لا تغيير في notebook cells أو `.github/workflows` أو schema SQLite. `auto_refresh_ms` اختياري؛ غيابه يعيد الافتراضي 1000.
+
+### Open / not proven
+- لا قياس Colab/Telegram/Drive حي بعد. يلزم نشر الحزمة وCell 1 (لتثبيت cryptg) ثم قياس السرعة في Logs (`telethon crypto backend=cryptg`) وشاشة Dashboard.
+- رفع Drive ما زال متسلسلًا عبر `_drive_lock` لأن service object ليس thread-safe؛ توازي الرفع يحتاج ADR لأنه يخالف قاعدة «Drive service واحد». التنزيل متعدد الجداول مؤجل لاختبار حي.
+
 ## [M43] — 2026-08-24 — Vault Drive-managed ورابط فحص محفوظ
 
 ### Changed
