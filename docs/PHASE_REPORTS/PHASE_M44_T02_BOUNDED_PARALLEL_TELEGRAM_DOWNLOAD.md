@@ -3,7 +3,9 @@
 **Date (UTC):** 2026-10-19  
 **Task:** `M44-T02`  
 **Base:** `db0f2a02502b94d2975fa23d7bce5d6af9b24e52`  
-**Branch:** `arena/360d78bc-drive-buddy-3579bf74`
+**Branch:** `arena/360d78bc-drive-buddy-3579bf74`  
+**PR/merge:** [#95](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/95), merged as `a032caf3be5f0b55b8b85af64dc134de2fb6a006`  
+**CI:** [#39271630415](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39271630415) SUCCESS
 
 ## Trigger and measured report
 
@@ -35,7 +37,7 @@ archive SHA-256                                            d77a4e29e63ae17b48b27
 
 Targeted download tests: `8 passed`; they cover exact ordered reassembly, overlapping range requests capped at two, contiguous-prefix integrity on Pause, and transport failure propagation. The full suite includes legacy fallback and control-signal tests.
 
-`bun run lint` was attempted from repository root and could not start: `/bin/bash: bun: command not found`. There are no frontend changes. GitHub CI, PR, merge, package publication, real Colab/Telegram/Drive transfer, and live before/after benchmark have NOT been run for M44-T02.
+`bun run lint` was attempted from repository root and could not start: `/bin/bash: bun: command not found`. There are no frontend changes. PR #95 is merged and both CI jobs passed. The candidate ZIP and matching manifest were uploaded to the owner's private Drive folder. The GitHub Release has NOT yet been updated; no real Colab/Telegram/Drive transfer or live before/after benchmark has been run for M44-T02.
 
 ## Risks and acceptance boundary
 
