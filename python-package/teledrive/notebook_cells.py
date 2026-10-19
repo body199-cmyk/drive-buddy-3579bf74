@@ -50,6 +50,11 @@ HEADER_MARKDOWN = f"""# {TITLE}
 Run the cells top to bottom after every **new** Colab VM (cells 1–4).
 A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 
+> 💡 **واجهة مبسطة لغير المبرمجين / Friendly view for non-coders**
+> كل خلية الآن تظهر كـ **كارت بعنوان واضح** والكود مخفي افتراضيًا — سترى فقط الوظيفة (مثل \"تثبيت الحزمة\" أو \"تشغيل الواجهة\").
+> اضغط زر التشغيل ▶️ بجانب كل عنوان لتنفيذه بالترتيب. إذا أردت رؤية الكود، اضغط **Show code / عرض الكود** بجانب العنوان — لا تحتاج لإخفائه يدويًا كل مرة، فهو يبقى مخفيًا تلقائيًا عند فتح النوت‌بوك.
+> Every cell now shows as a **titled card** with the code hidden by default — you only see what it does. Press ▶️ to run in order; click **Show code** near the title only if you want to inspect the code.
+
 * Store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` once in Colab Secrets
   (left sidebar key icon). Cell 3 reads them; it only prompts if a secret
   is missing **and** this Drive account has no saved Telegram session.
@@ -719,6 +724,34 @@ ctx.shutdown()      # closes the UI handle, stops the async runtime, closes SQLi
 print("runtime closed")
 '''
 
+# Friendly, non-technical titles shown in Colab's collapsed form view.
+# These are what non-coders see; the original `teledrive_title` stays in
+# metadata for tracing and never changes logic.
+FRIENDLY_TITLES: tuple[str, ...] = (
+    "📦 الخطوة 1 — تثبيت وتحديث الحزمة | Install & Update Package",
+    "⚙️ الخطوة 2 — تجهيز النظام وقاعدة البيانات | Bootstrap System",
+    "🔐 الخطوة 3 — ربط Google Drive و Telegram | Connect Accounts",
+    "🚀 الخطوة 4 — تشغيل واجهة TeleDrive | Launch App",
+    "📋 الخطوة 5 — تقرير الجلسة (اختياري) | Session Report (optional)",
+    "✅ الخطوة 6 — فحص النظام (اختياري) | Health Check (optional)",
+    "🧹 الخطوة 7 — تنظيف وإغلاق | Cleanup & Shutdown",
+)
+
+def _title_line(friendly_title: str) -> str:
+    # Colab form title: shown as a card header when `cellView: form`.
+    # The `{ display-mode: "form" }` suffix is optional but makes the intent
+    # explicit for Colab's parser and is harmless elsewhere.
+    return f'#@title {friendly_title} {{ display-mode: "form" }}\n'
+
+
+def _wrap_with_friendly_title(code: str, friendly_title: str) -> str:
+    # Prepend the form title comment without touching any logic.
+    # The title line is a Python comment, so execution is identical.
+    if code.startswith("#@title"):
+        return code
+    return _title_line(friendly_title) + code
+
+
 CELLS: tuple[dict[str, str], ...] = (
     {"title": "Verify/update the package, restore and install pinned dependencies", "code": CELL_1},
     {"title": "Bootstrap directories, logging, SQLite migrations and WAL", "code": CELL_2},
@@ -773,14 +806,27 @@ def build_notebook() -> dict[str, Any]:
             "source": _source_lines(HEADER_MARKDOWN),
         }
     ]
-    for cell in CELLS:
+    for idx, cell in enumerate(CELLS):
+        friendly = FRIENDLY_TITLES[idx] if idx < len(FRIENDLY_TITLES) else cell["title"]
+        wrapped_code = _wrap_with_friendly_title(cell["code"], friendly)
         cells.append(
             {
                 "cell_type": "code",
                 "execution_count": None,
-                "metadata": {"teledrive_title": cell["title"]},
+                # Persistent friendly UX for non-coders:
+                # - `cellView: form`  -> Colab shows the `#@title` card with code hidden.
+                # - `jupyter.source_hidden` + `collapsed` -> JupyterLab/VS Code respect it.
+                # - `tags: hide-input` -> JupyterBook/nbconvert compatibility.
+                # The code itself never changes; output stays visible.
+                "metadata": {
+                    "teledrive_title": cell["title"],
+                    "cellView": "form",
+                    "collapsed": True,
+                    "jupyter": {"source_hidden": True},
+                    "tags": ["hide-input"],
+                },
                 "outputs": [],
-                "source": _source_lines(cell["code"]),
+                "source": _source_lines(wrapped_code),
             }
         )
     return {
