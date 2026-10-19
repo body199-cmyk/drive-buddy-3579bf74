@@ -658,6 +658,10 @@ def test_telethon_error_strings_are_classified_instead_of_unknown():
     assert missing.code == "PERMANENT"
     assert missing.retryable is False
 
+    server_resent = classify(RuntimeError("serverresent"))
+    assert server_resent.code == "TRANSIENT"
+    assert server_resent.retryable is True
+
 
 # ---------------------------------------------------------------------------
 # M45-T02 — per-chunk Drive lock for duplicate precheck + SQLite recovery

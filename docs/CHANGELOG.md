@@ -1,5 +1,24 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M45-T01] — 2026-10-19 — استئناف Arena: تحقق وإغلاق الفجوة الحرفية الوحيدة
+
+### Fixed
+- `error_handler.py`: أُضيف marker `serverresent` الحرفي المطلوب في DOC M45-T01 §3.5
+  إلى `TRANSIENT_MARKERS` (الباقي كان موجودًا مسبقًا ومثبتًا). اختبار تصنيف جديد في
+  `tests/test_fast_download.py`.
+
+### Gates and local verification
+- Resume audit §9: كل بنود DOC §3 موجودة أصلًا في `main` (`d991cf4`) عبر PRs
+  #93/#95/#98/#100 — لا إعادة تطبيق.
+- `809 passed` (بعد إضافة الاختبار) · compileall PASS · launcher `54/54` ·
+  notebook check + cmp PASS · package build PASS (`594716` bytes،
+  SHA-256 `aee30938…fb`) · `node --test` 34/34. `bun` غير مثبت (لا تغيير frontend).
+
+### Release status
+- `pkg-2026.08.09-m15t07` منشور حاليًا من `d991cf4` عبر run 39278373927 — أُغلقت
+  KNOWN_ISSUES #79. نشر مجدد بعد دمج هذه الإضافة التوثيقية محاولة مسجلة (إن نجح
+  `workflow_dispatch`؛ وإلا بخطوة واحدة من المالك كما في §8 من تقرير المرحلة).
+
 ## [M45-T01] — 2026-10-19 — خط أنابيب تنزيل/رفع وحل جذري لسرعة Telegram
 
 ### Changed

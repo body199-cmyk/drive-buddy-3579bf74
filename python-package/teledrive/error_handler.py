@@ -32,8 +32,10 @@ TRANSIENT_MARKERS = (
     "429", "500", "502", "503", "504", "floodwait", "flood wait",
     # Telethon's own wording when a saturated MTProto socket drops a GetFile
     # request. Retrying with backoff is correct; the old UNKNOWN default made
-    # this look identical to a real protocol error.
+    # this look identical to a real protocol error. "serverresent" is the
+    # DOC M45-T01 literal marker for Telethon server-side resend wording.
     "request was unsuccessful", "internal server error", "server error",
+    "serverresent",
     "readonly database", "database is locked", "disk i/o error",
 )
 
