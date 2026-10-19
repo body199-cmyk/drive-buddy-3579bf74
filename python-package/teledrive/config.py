@@ -122,8 +122,12 @@ AUTO_REFRESH_OPTIONS = (0, 1000, 2000, 5000)
 # The fast path requests the protocol maximum; see telegram_client.py.
 # ---------------------------------------------------------------------------
 DOWNLOAD_REQUEST_SIZE = 512 * 1024
-# Below this size the extra path is not worth the branch; photos never use it.
+# Keep ordinary media on the simple sequential path; a second MTProto reader is
+# only worthwhile for larger files where request latency dominates.
 FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
+PARALLEL_DOWNLOAD_MIN_BYTES = 32 * 1024 * 1024
+PARALLEL_DOWNLOAD_STREAMS = 2
+PARALLEL_DOWNLOAD_WINDOW_CHUNKS = 4
 
 RETRY_MAX_ATTEMPTS = 5
 RETRY_BASE_SECONDS = 2.0

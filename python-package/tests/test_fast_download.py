@@ -39,6 +39,7 @@ class _FastClient:
 def _service(client) -> TelegramService:
     service = object.__new__(TelegramService)
     service.client = client
+    service._download_request_slots = asyncio.Semaphore(2)
     return service
 
 
@@ -62,6 +63,141 @@ def test_fast_download_requests_the_mtproto_maximum_and_reports_progress(tmp_pat
     assert client.kwargs["request_size"] == DOWNLOAD_REQUEST_SIZE
     assert client.kwargs["file_size"] == 1024
     assert ticks == [(512, 1024), (1024, 1024)]
+
+
+class _RangeStream:
+    def __init__(self, data: bytes, *, offset: int, stride: int, request_size: int, limit: int, owner=None, fail_at=None):
+        self.data = data
+        self.offset = offset
+        self.stride = stride
+        self.request_size = request_size
+        self.limit = limit
+        self.owner = owner
+        self.fail_at = fail_at
+        self.index = 0
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.fail_at is not None and self.index == self.fail_at:
+            raise RuntimeError("range stream reset")
+        if self.index >= self.limit:
+            raise StopAsyncIteration
+        start = self.offset + self.index * self.stride
+        if start >= len(self.data):
+            raise StopAsyncIteration
+        if self.owner:
+            self.owner.active += 1
+            self.owner.max_active = max(self.owner.max_active, self.owner.active)
+        try:
+            await asyncio.sleep(0.005)
+            self.index += 1
+            return self.data[start:start + self.request_size]
+        finally:
+            if self.owner:
+                self.owner.active -= 1
+
+
+class _StripedClient:
+    def __init__(self, data: bytes, fail_lane=None):
+        self.data = data
+        self.fail_lane = fail_lane
+        self.calls = []
+        self.active = 0
+        self.max_active = 0
+
+    def iter_download(self, _media, **kwargs):
+        lane = len(self.calls)
+        self.calls.append(kwargs)
+        return _RangeStream(
+            self.data,
+            offset=kwargs["offset"],
+            stride=kwargs["stride"],
+            request_size=kwargs["request_size"],
+            limit=kwargs["limit"],
+            owner=self,
+            fail_at=0 if lane == self.fail_lane else None,
+        )
+
+
+def test_large_fast_download_uses_two_ranges_and_reassembles_ordered_prefix(tmp_path, monkeypatch):
+    import teledrive.telegram_client as telegram_module
+
+    request = DOWNLOAD_REQUEST_SIZE
+    payload = bytes((i % 251 for i in range(request * 2 + 17)))
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_MIN_BYTES", 1)
+    client = _StripedClient(payload)
+    target = tmp_path / "large.bin"
+    ticks = []
+
+    result = asyncio.run(
+        _service(client).download_media_fast(
+            SimpleNamespace(media=object()), str(target), len(payload),
+            lambda current, total: ticks.append((current, total)),
+        )
+    )
+
+    assert result == str(target)
+    assert target.read_bytes() == payload
+    assert len(client.calls) == 2
+    assert client.max_active == 2, "the two ranges should make requests concurrently"
+    assert [call["offset"] for call in client.calls] == [0, request]
+    assert all(call["stride"] == request * 2 for call in client.calls)
+    assert all(call["request_size"] == request for call in client.calls)
+    assert ticks[-1] == (len(payload), len(payload))
+    assert [current for current, _ in ticks] == sorted(current for current, _ in ticks)
+
+
+def test_parallel_download_pause_keeps_only_a_valid_contiguous_prefix(tmp_path, monkeypatch):
+    import teledrive.telegram_client as telegram_module
+
+    request = DOWNLOAD_REQUEST_SIZE
+    payload = bytes((i % 251 for i in range(request * 4)))
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_MIN_BYTES", 1)
+    client = _StripedClient(payload)
+    target = tmp_path / "paused.bin"
+
+    def pause_after_first_chunk(current, _total):
+        if current >= request:
+            raise TransferPaused("operator pause")
+
+    with pytest.raises(TransferPaused):
+        asyncio.run(
+            _service(client).download_media_fast(
+                SimpleNamespace(media=object()), str(target), len(payload), pause_after_first_chunk
+            )
+        )
+
+    partial = target.read_bytes()
+    assert partial == payload[:len(partial)]
+    assert len(partial) == request
+
+
+def test_parallel_download_transport_failure_raises_for_clean_legacy_fallback(tmp_path, monkeypatch):
+    import teledrive.telegram_client as telegram_module
+
+    request = DOWNLOAD_REQUEST_SIZE
+    payload = b"x" * (request * 4)
+    monkeypatch.setattr(telegram_module, "PARALLEL_DOWNLOAD_MIN_BYTES", 1)
+    client = _StripedClient(payload, fail_lane=1)
+    target = tmp_path / "failed.bin"
+
+    with pytest.raises(RuntimeError, match="range stream reset"):
+        asyncio.run(
+            _service(client).download_media_fast(
+                SimpleNamespace(media=object()), str(target), len(payload)
+            )
+        )
+
+    partial = target.read_bytes()
+    assert partial == payload[:len(partial)]
 
 
 def _item(queue: QueueManager, kind: str = "document", size: int = 2 * 1024 * 1024) -> MediaItem:

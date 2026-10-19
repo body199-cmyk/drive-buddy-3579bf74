@@ -5,7 +5,13 @@ import asyncio
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from .config import DOWNLOAD_REQUEST_SIZE, TELEGRAM_SESSION
+from .config import (
+    DOWNLOAD_REQUEST_SIZE,
+    PARALLEL_DOWNLOAD_MIN_BYTES,
+    PARALLEL_DOWNLOAD_STREAMS,
+    PARALLEL_DOWNLOAD_WINDOW_CHUNKS,
+    TELEGRAM_SESSION,
+)
 from .logging_config import get_logger
 
 _log = get_logger("teledrive.telegram")
@@ -64,6 +70,9 @@ class TelegramService:
         self.client: Optional[TelegramClient] = None
         self._connected = False
         self._entity_cache_warmed = False
+        # The whole context shares one Telegram client. Cap outstanding media
+        # requests globally even when several queue workers are active.
+        self._download_request_slots = asyncio.Semaphore(PARALLEL_DOWNLOAD_STREAMS)
 
     async def connect(self) -> None:
         self.client = TelegramClient(self.session_path, self.api_id, self.api_hash)
@@ -189,30 +198,143 @@ class TelegramService:
         )
         return path or file_path
 
-    async def download_media_fast(
+    async def _download_media_parallel(
         self,
-        message: Any,
-        file_path: str,
-        total_size: int,
-        progress_cb: Optional[Callable[[int, int], None]] = None,
+        media: Any,
+        path: Path,
+        total: int,
+        progress_cb: Optional[Callable[[int, int], None]],
     ) -> str:
-        """Download a fresh media file at the MTProto maximum request size.
+        """Fetch a large file with two bounded MTProto range readers.
 
-        Telethon's public :meth:`download_media` picks 128 KiB requests for
-        files up to 100 MB, which leaves most of a Colab transfer waiting on
-        round trips. ``upload.getFile`` accepts 512 KiB, so this path asks for
-        the maximum and writes chunks sequentially (the partial file is always
-        a valid prefix, so pause/stop/resume semantics are unchanged).
-
-        The caller owns the fallback: :class:`TransferManager` retries the
-        legacy path if this raises. A control signal raised by ``progress_cb``
-        is never caught here.
+        Each reader requests disjoint 512 KiB stripes. A bounded reorder window
+        writes only the contiguous prefix to the .part file, so pause/stop leaves
+        a normal resumable prefix rather than sparse/out-of-order bytes. Any
+        transport/validation error propagates to the caller's legacy fallback.
         """
-        assert self.client
-        path = Path(file_path)
+        request_size = DOWNLOAD_REQUEST_SIZE
+        streams = min(PARALLEL_DOWNLOAD_STREAMS, (total + request_size - 1) // request_size)
+        if streams < 2:
+            return await self._download_media_sequential(media, path, total, progress_cb)
+
+        stride = streams * request_size
+        work: list[tuple[int, int]] = []
+        for lane in range(streams):
+            start = lane * request_size
+            if start >= total:
+                continue
+            count = (total - start + stride - 1) // stride
+            work.append((start, count))
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=PARALLEL_DOWNLOAD_WINDOW_CHUNKS)
+        window = asyncio.Semaphore(PARALLEL_DOWNLOAD_WINDOW_CHUNKS)
+        request_slots = self._download_request_slots
+        _log.info(
+            "parallel download start bytes=%s streams=%s request_size=%s",
+            total,
+            len(work),
+            request_size,
+        )
+        sentinel = object()
+        lanes_finished = 0
+        next_offset = 0
+        pending: dict[int, bytes] = {}
+        tasks: list[asyncio.Task] = []
+
+        async def produce(start: int, count: int) -> None:
+            offset = start
+            try:
+                stream = self.client.iter_download(
+                    media,
+                    offset=start,
+                    stride=stride,
+                    limit=count,
+                    chunk_size=request_size,
+                    request_size=request_size,
+                    file_size=total,
+                )
+                async with stream:
+                    iterator = stream.__aiter__()
+                    for _ in range(count):
+                        await window.acquire()
+                        try:
+                            async with request_slots:
+                                chunk = await iterator.__anext__()
+                        except StopAsyncIteration as exc:
+                            window.release()
+                            raise RuntimeError("parallel Telegram stream ended early") from exc
+                        except BaseException:
+                            window.release()
+                            raise
+                        expected = min(request_size, total - offset)
+                        if len(chunk) != expected:
+                            window.release()
+                            raise RuntimeError(
+                                f"parallel Telegram chunk size mismatch: expected {expected}, got {len(chunk)}"
+                            )
+                        await queue.put(("chunk", offset, bytes(chunk)))
+                        offset += stride
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                await queue.put(("error", exc))
+                return
+            await queue.put(("done", sentinel))
+
         path.parent.mkdir(parents=True, exist_ok=True)
-        media = getattr(message, "media", None) or message
-        total = int(total_size or 0)
+        with open(path, "wb") as handle:
+            tasks = [asyncio.create_task(produce(start, count)) for start, count in work]
+            try:
+                while lanes_finished < len(work):
+                    entry = await queue.get()
+                    if entry[0] == "error":
+                        raise entry[1]
+                    if entry[0] == "done":
+                        lanes_finished += 1
+                        continue
+
+                    _, offset, chunk = entry
+                    if offset < next_offset or offset in pending:
+                        raise RuntimeError("parallel Telegram stream returned overlapping ranges")
+                    pending[offset] = chunk
+                    while next_offset in pending:
+                        contiguous = pending.pop(next_offset)
+                        handle.write(contiguous)
+                        next_offset += len(contiguous)
+                        if progress_cb:
+                            progress_cb(next_offset, total)
+                        window.release()
+
+                if next_offset != total or pending:
+                    raise RuntimeError(
+                        f"parallel Telegram download incomplete: wrote {next_offset} of {total} bytes"
+                    )
+                handle.flush()
+            except BaseException:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                raise
+            else:
+                await asyncio.gather(*tasks)
+
+        _log.info(
+            "parallel download complete bytes=%s streams=%s request_size=%s",
+            total,
+            streams,
+            request_size,
+        )
+        return str(path)
+
+    async def _download_media_sequential(
+        self,
+        media: Any,
+        path: Path,
+        total: int,
+        progress_cb: Optional[Callable[[int, int], None]],
+    ) -> str:
+        """One ordered reader used for small media and safe fallback."""
         written = 0
         with open(path, "wb") as handle:
             async for chunk in self.client.iter_download(
@@ -225,12 +347,41 @@ class TelegramService:
                 if progress_cb:
                     progress_cb(written, total or written)
             handle.flush()
+        return str(path)
+
+    async def download_media_fast(
+        self,
+        message: Any,
+        file_path: str,
+        total_size: int,
+        progress_cb: Optional[Callable[[int, int], None]] = None,
+    ) -> str:
+        """Download a fresh media file at the MTProto maximum request size.
+
+        Telethon's public :meth:`download_media` picks 128 KiB requests for
+        files up to 100 MB. This path always uses the 512 KiB MTProto maximum;
+        files >= 32 MiB use two bounded, interleaved range readers while the
+        writer commits only contiguous bytes to the partial file. Smaller media
+        stays sequential. Pause/stop therefore leaves a valid prefix.
+
+        The caller owns the fallback: :class:`TransferManager` retries the
+        legacy path if this raises. A control signal raised by ``progress_cb``
+        is never caught here.
+        """
+        assert self.client
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        media = getattr(message, "media", None) or message
+        total = int(total_size or 0)
+        if total >= PARALLEL_DOWNLOAD_MIN_BYTES:
+            return await self._download_media_parallel(media, path, total, progress_cb)
+        result = await self._download_media_sequential(media, path, total, progress_cb)
         _log.info(
             "fast download complete bytes=%s request_size=%s",
-            written,
+            path.stat().st_size,
             DOWNLOAD_REQUEST_SIZE,
         )
-        return str(path)
+        return result
 
     async def download_partial(
         self,
