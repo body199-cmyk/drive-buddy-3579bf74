@@ -235,7 +235,7 @@ def test_dashboard_uses_separate_navigable_sections_on_desktop_and_mobile():
 
     sections = (
         "overview", "connections", "destination", "analyze", "results",
-        "transfer", "settings", "logs", "maintenance",
+        "transfer", "universal", "settings", "logs", "maintenance",
     )
     panels = re.findall(r'<section\b[^>]*data-tab-panel="([a-z]+)"[^>]*>', HTML_PAGE)
     assert panels == list(sections)
