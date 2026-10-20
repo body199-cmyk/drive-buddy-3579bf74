@@ -18,9 +18,11 @@ import socket
 import time
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from teledrive import telegram_auth as telegram_auth_module
 from teledrive import web_dashboard
 from teledrive.web_dashboard import (
     HTML_PAGE,
@@ -80,12 +82,21 @@ def test_page_exposes_the_missing_controls_without_moving_telegram_secrets():
         "telegramLoginLink", "btnTelegramLogout", "selectedFolderName",
         "folderList", "newFolderName", "themeIn", "concurrencyIn",
         "autoRefreshIn", "btnRecovery", "btnCheckpoint", "btnBuildZip",
+        "btnRememberLink", "btnClearRememberedLink", "candidateSearchIn",
+        "btnApplyFilters", "btnResetFilters", "btnSelectRange",
+        "btnSelectGroup", "selectGroupIn", "btnQueueRefresh",
+        "btnClearCompleted", "btnClearIncomplete",
     ):
         assert f'id="{element_id}"' in HTML_PAGE
     for action_id in (
         "drive.list_folders", "drive.create_folder", "drive.select_folder",
         "settings.set_theme", "settings.set_concurrency",
         "settings.set_auto_refresh", "telegram.logout",
+        "analyze.remember_link", "analyze.clear_remembered_link",
+        "analyze.apply_filters", "analyze.select_range",
+        "analyze.select_group", "queue.refresh", "queue.clear_completed",
+        "queue.clear_incomplete", "queue.pause_item", "queue.resume_item",
+        "queue.stop_item", "queue.retry_item",
     ):
         assert f'"{action_id}"' in HTML_PAGE
     # Secret-bearing Telegram login actions must stay outside the HTTP page.
@@ -97,35 +108,47 @@ def test_page_exposes_the_missing_controls_without_moving_telegram_secrets():
 
 
 def test_page_analyze_modes_are_the_canonical_scanner_modes():
-    """M46-T03 regression: the page offered mode ``channel``, which the
-    scanner has never accepted (``SCAN_MODES`` = message/range/latest/
-    chat), so "whole channel" analyze always failed after login; the
-    range option also shipped without any start/end inputs, so it could
-    only ever fail validation too."""
+    """M46-T03/M47-T02 regressions: ``channel`` is not a scanner mode, and
+    defaulting to ``message`` made a bare channel link always fail. The
+    page now defaults to a browser-side Auto choice that resolves to a
+    canonical scanner mode before the bridge is called, while every
+    manual scanner mode and its inputs remain available."""
     import re
 
     from teledrive.media_scanner import SCAN_MODES
 
-    mode_select = re.search(r'<select id="modeIn">(.*?)</select>', HTML_PAGE, re.S)
+    mode_select = re.search(r'<select id="modeIn"[^>]*>(.*?)</select>', HTML_PAGE, re.S)
     assert mode_select, "mode dropdown missing"
     offered = re.findall(r'<option value="([a-z_]+)"', mode_select.group(1))
-    assert offered, "mode dropdown missing"
-    assert set(offered) <= set(SCAN_MODES), f"non-canonical modes: {offered}"
-    assert set(offered) == set(SCAN_MODES), "every scanner mode must be offered"
+    assert offered[0] == "auto", "Auto must be the safe default for channel links"
+    assert 'value="auto" selected' in mode_select.group(1)
+    assert set(offered) == {"auto", *SCAN_MODES}
+    assert "function inspectTelegramLink" in HTML_PAGE
+    assert "function resolveAnalyzeMode" in HTML_PAGE
+    assert 'return info.kind==="message" ? "message" : "chat"' in HTML_PAGE
+    assert 'mode:mode,mediaTypes:selectedMediaTypes()' in HTML_PAGE
     # The inputs each mode consumes exist and are actually sent.
     for element_id in ("messageIdIn", "startIdIn", "endIdIn", "limitIn"):
         assert f'id="{element_id}"' in HTML_PAGE
     for payload_key in ("messageId", "startId", "endId", "limit"):
         assert f"{payload_key}:" in HTML_PAGE or f"{payload_key}=" in HTML_PAGE
     assert "syncModeFields" in HTML_PAGE
+    assert 'mode==="auto" || mode==="latest" || mode==="chat"' in HTML_PAGE
 
 
 def test_page_renders_analyze_candidates_with_selection():
-    """M46-T03: analyze results were invisible in the Web UI (candidates
-    existed in the snapshot but the page never rendered them), so
-    select/enqueue from the modern UI was blind."""
+    """M46-T03/M47-T02: analyze results must be visible and selectable in
+    their own internally scrolling pane (about ten rows high), rather
+    than stretching the whole page for a large channel."""
     assert 'id="cBody"' in HTML_PAGE
+    assert 'id="candidatePane"' in HTML_PAGE
+    assert 'class="scroll-pane candidate-pane"' in HTML_PAGE
+    assert ".candidate-pane{height:430px;max-height:62vh}" in HTML_PAGE
+    assert "overscroll-behavior:contain" in HTML_PAGE
+    assert "visibleRows.slice(0,1000)" in HTML_PAGE
     assert "state.candidates" in HTML_PAGE
+    assert "item.messageId" in HTML_PAGE
+    assert "item.groupId" in HTML_PAGE
     assert '"analyze.toggle_row"' in HTML_PAGE
     assert "sourceId:item.sourceId" in HTML_PAGE
     assert '"analyze.clear_selection"' in HTML_PAGE
@@ -136,6 +159,75 @@ def test_page_script_has_no_escaped_quote_artifacts():
     in the embedded JS is a browser SyntaxError that kills the whole
     script (caught by `node --check` during M46-T03)."""
     assert '\\"' not in HTML_PAGE
+
+
+def test_page_dom_references_and_prior_controls_survive_the_redesign():
+    """M47-T02 guardrail: reorganizing the page must not lose a control or
+    leave JavaScript pointing at a missing element."""
+    import re
+
+    ids = re.findall(r'id="([^"]+)"', HTML_PAGE)
+    assert len(ids) == len(set(ids)), "duplicate element ids would break wiring"
+    refs = set(re.findall(r'\$\("([^"]+)"\)', HTML_PAGE))
+    refs.update(re.findall(r'setText\("([^"]+)"', HTML_PAGE))
+    refs.update(re.findall(r'(?:numOrNull|floatOrNull)\("([^"]+)"', HTML_PAGE))
+    assert refs <= set(ids), f"missing DOM ids: {sorted(refs - set(ids))}"
+
+    for element_id in (
+        "btnRefreshMetrics", "telegramLoginLink", "btnTelegramStatus",
+        "btnTelegramLogout", "btnDriveConnect", "btnDriveReconnect",
+        "btnDriveStatus", "btnDriveQuota", "btnFolderUp",
+        "btnFolderRefresh", "btnCreateFolder", "btnAnalyze",
+        "btnSelectAll", "btnClearSel", "btnEnqueue", "btnStart",
+        "btnPause", "btnResume", "btnStop", "btnRetry", "btnConcurrency",
+        "btnLogsRefresh", "btnLogsSearch", "btnLogsDownload",
+        "btnRecovery", "btnCheckpoint", "btnBuildZip", "btnColabCells",
+        "newFolderName", "linkIn", "modeIn", "messageIdIn", "startIdIn",
+        "endIdIn", "limitIn", "themeIn", "concurrencyIn", "autoRefreshIn",
+        "logsLevel", "logsQuery",
+    ):
+        assert element_id in ids
+
+    for action_id in (
+        "telegram.status", "telegram.logout", "drive.connect",
+        "drive.reconnect", "drive.status", "drive.refresh_quota",
+        "drive.list_folders", "drive.create_folder", "drive.select_folder",
+        "analyze.run", "analyze.toggle_row", "analyze.select_all",
+        "analyze.clear_selection", "analyze.enqueue_selected",
+        "settings.set_theme", "settings.set_concurrency",
+        "settings.set_auto_refresh", "logs.refresh", "logs.search",
+        "logs.download", "recovery.restore", "maintenance.checkpoint",
+        "export.build_zip", "export.colab_cells",
+    ):
+        assert f'"{action_id}"' in HTML_PAGE
+
+
+def test_page_has_three_themes_clear_workflow_and_independent_panes():
+    import re
+
+    theme_select = re.search(r'<select id="themeIn"[^>]*>(.*?)</select>', HTML_PAGE, re.S)
+    assert theme_select
+    assert re.findall(r'<option value="([a-z]+)"', theme_select.group(1)) == [
+        "light", "dim", "dark",
+    ]
+    for theme in ("light", "dim", "dark"):
+        assert f'data-theme-choice="{theme}"' in HTML_PAGE
+    assert '--bg:#15202b' in HTML_PAGE  # X Dim background
+    assert '--blue:#1d9bf0' in HTML_PAGE  # X blue action colour
+    assert 'const THEMES=["light","dim","dark"]' in HTML_PAGE
+    assert "function saveTheme" in HTML_PAGE
+    assert "if(THEMES.includes(st.webTheme)) applyTheme(st.webTheme)" in HTML_PAGE
+    assert "st.analyze.sourceLink" in HTML_PAGE
+
+    for step_id in (
+        "stepLinkConnect", "stepLinkDestination", "stepLinkAnalyze",
+        "stepLinkResults", "stepLinkTransfer", "nextStepText",
+    ):
+        assert f'id="{step_id}"' in HTML_PAGE
+    assert "function updateWorkflow" in HTML_PAGE
+    assert 'class="scroll-pane queue-pane"' in HTML_PAGE
+    assert ".queue-pane{height:350px;max-height:54vh}" in HTML_PAGE
+    assert "queue.pause_item" in HTML_PAGE and "queue.retry_item" in HTML_PAGE
 
 
 def test_metrics_reflect_the_real_empty_runtime(ctx):
@@ -167,6 +259,98 @@ def test_http_endpoints(ctx):
     state = client.get("/api/state")
     assert state.status_code == 200
     assert state.json()["actionId"] == "bridge.snapshot"
+
+
+class _FakeScanDocument:
+    def __init__(self, message_id: int):
+        self.id = f"doc-{message_id}"
+        self.file_unique_id = self.id
+        self.size = 1000 + message_id
+        self.mime_type = "video/mp4"
+        self.attributes = [SimpleNamespace(file_name=f"video{message_id}.mp4")]
+
+
+class _FakeScanMessage:
+    def __init__(self, message_id: int):
+        self.id = message_id
+        self.date = "2026-01-01T00:00:00+00:00"
+        self.media = object()
+        self.photo = None
+        self.video = _FakeScanDocument(message_id)
+        self.voice = None
+        self.audio = None
+        self.sticker = None
+        self.gif = None
+        self.animation = None
+        self.document = None
+
+
+class _FakeScanTelegram:
+    def __init__(self):
+        self.messages = [_FakeScanMessage(1), _FakeScanMessage(2)]
+
+    async def get_entity(self, _chat):
+        return SimpleNamespace(
+            id=12345, title="TestChat", username="testchat", broadcast=True
+        )
+
+    async def get_message(self, _chat, message_id):
+        return next(item for item in self.messages if item.id == int(message_id))
+
+    async def iter_messages(self, _chat, limit=None, **_kwargs):
+        for item in self.messages[:limit]:
+            yield item
+
+
+def test_http_analyze_channel_and_message_links(ctx):
+    """The exact HTTP bridge payload used by the redesigned page must
+    return real candidates for both a channel and a direct message, and
+    must name the reason when manual message mode is used incorrectly."""
+    ctx.telegram_auth.state = telegram_auth_module.AUTHORIZED
+    ctx.telegram_auth.client = _FakeScanTelegram()
+    client = _client(ctx)
+
+    def analyze(link, mode, message_id=None):
+        response = client.post(
+            "/api/action",
+            json={
+                "actionId": "analyze.run",
+                "payload": {
+                    "link": link,
+                    "mode": mode,
+                    "mediaTypes": ["all"],
+                    "messageId": message_id,
+                    "startId": None,
+                    "endId": None,
+                    "limit": 200,
+                },
+                "language": "ar",
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    channel = analyze("https://t.me/testchat", "chat")
+    assert channel["status"] == "ok"
+    candidates = channel["state"]["candidates"]
+    assert [item["name"] for item in candidates] == ["video1.mp4", "video2.mp4"]
+    assert [item["messageId"] for item in candidates] == [1, 2]
+    assert {item["groupId"] for item in candidates} == {"-10012345"}
+
+    message = analyze("https://t.me/testchat/2", "message")
+    assert message["status"] == "ok"
+    assert [item["messageId"] for item in message["state"]["candidates"]] == [2]
+
+    wrong_mode = analyze("https://t.me/testchat", "message")
+    assert wrong_mode["status"] == "error"
+    assert "وضع الرسالة يحتاج رقم رسالة موجبًا" in wrong_mode["message"]
+
+
+def test_index_and_metrics_render_saved_dim_theme(ctx):
+    ctx.handlers.h_settings_set_theme("dim")
+    client = _client(ctx)
+    assert 'data-theme="dim"' in client.get("/").text
+    assert client.get("/api/metrics").json()["state"]["webTheme"] == "dim"
 
 
 def test_index_renders_saved_theme_and_escaped_secure_gradio_handoff(ctx):

@@ -46,6 +46,9 @@ from .utils import human_bytes, human_duration, now_iso, safe_disk_free
 
 #: M20-T02 — the shell is light-only, so the persisted default is light too.
 DEFAULT_THEME = "light"
+#: M47-T02 — one shared preference across both UIs: light, X-style dim,
+#: and the original full-dark palette.
+SUPPORTED_THEMES = ("light", "dim", "dark")
 
 _log = get_logger("teledrive.services")
 
@@ -565,6 +568,8 @@ class LiveUiStateService:
                 "name": self._safe_label(item.safe_name) or "",
                 "mediaType": str(item.media_type),
                 "sizeBytes": int(item.size_bytes) if item.size_bytes else None,
+                "messageId": int(item.message_id) if item.message_id else None,
+                "groupId": str(item.chat_id) if item.chat_id else None,
                 "groupLabel": self._safe_label(item.chat_title),
                 "dateLabel": self._safe_label(item.message_date),
                 "selected": item.id in selected_ids,
@@ -839,11 +844,11 @@ class PreferencesService:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
         # Restore persisted theme/language on boot (best-effort). The first-run
-        # default remains LIGHT. Gradio intentionally stays light-only; the
-        # modern web dashboard paints both persisted light and dark preferences.
-        saved_theme = db.get_setting("theme") or DEFAULT_THEME
+        # default remains LIGHT. Both UIs consume the same supported set:
+        # light, X-style dim, and full dark.
+        saved_theme = str(db.get_setting("theme") or DEFAULT_THEME).strip().lower()
         self.ctx.ui_state.extra["theme"] = (
-            saved_theme if saved_theme in ("dark", "light") else DEFAULT_THEME
+            saved_theme if saved_theme in SUPPORTED_THEMES else DEFAULT_THEME
         )
         saved_lang = db.get_setting("language")
         if saved_lang in SUPPORTED_LANGUAGES:
@@ -865,13 +870,15 @@ class PreferencesService:
         return language
 
     def set_theme(self, theme: str) -> str:
-        theme = theme if str(theme).lower() in ("dark", "light") else DEFAULT_THEME
+        normalized = str(theme or "").strip().lower()
+        theme = normalized if normalized in SUPPORTED_THEMES else DEFAULT_THEME
         self.ctx.ui_state.extra["theme"] = theme
         db.set_setting("theme", theme)
         return theme
 
     def current_theme(self) -> str:
-        return self.ctx.ui_state.extra.get("theme", DEFAULT_THEME)
+        current = str(self.ctx.ui_state.extra.get("theme", DEFAULT_THEME)).strip().lower()
+        return current if current in SUPPORTED_THEMES else DEFAULT_THEME
 
 
 # --------------------------------------------------------------------------

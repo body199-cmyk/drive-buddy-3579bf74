@@ -89,6 +89,10 @@ QUEUE_ACTIONS: dict[str, str] = {
 
 _NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate"}
 
+#: The three persisted appearance choices shared with the classic UI:
+#: light, X-style dim (moderate blue-grey dark), and full dark.
+WEB_THEMES = {"light", "dim", "dark"}
+
 
 def _missing_deps_message() -> str:
     return (
@@ -153,7 +157,7 @@ class TeleDriveWebBridge:
         state = self._live_state()
         preferences = getattr(self.ctx, "preferences", None)
         web_theme = preferences.current_theme() if preferences is not None else "light"
-        state["webTheme"] = web_theme if web_theme in {"light", "dark"} else "light"
+        state["webTheme"] = web_theme if web_theme in WEB_THEMES else "light"
         return {
             "ok": True,
             "version": __version__,
@@ -222,105 +226,218 @@ HTML_PAGE = r"""<!DOCTYPE html>
 :root{
   color-scheme:light;
   --bg:#f3f6fb; --card:rgba(255,255,255,.96); --border:rgba(15,23,42,.12);
-  --text:#172033; --muted:#64748b; --blue:#2563eb; --green:#15803d;
+  --text:#172033; --muted:#64748b; --blue:#2563eb; --primary-2:#4f46e5; --green:#15803d;
   --red:#b91c1c; --amber:#b45309; --input:#fff; --surface-2:#e9eef6;
   --log-bg:#f8fafc; --bar-bg:#dbe3ee; --glow:rgba(59,130,246,.12);
-  --radius:14px;
+  --header-bg:rgba(255,255,255,.90); --selected:rgba(37,99,235,.09);
+  --shadow:0 10px 28px rgba(15,23,42,.07); --radius:16px;
+}
+:root[data-theme="dim"]{
+  /* X/Twitter Dim: a moderate blue-grey dark, intentionally not near-black. */
+  color-scheme:dark;
+  --bg:#15202b; --card:rgba(27,40,54,.97); --border:#38444d;
+  --text:#f7f9f9; --muted:#8b98a5; --blue:#1d9bf0; --primary-2:#0f7ae5; --green:#00ba7c;
+  --red:#f4212e; --amber:#ffad1f; --input:#22303c; --surface-2:#22303c;
+  --log-bg:#1b2836; --bar-bg:#38444d; --glow:rgba(29,155,240,.16);
+  --header-bg:rgba(21,32,43,.92); --selected:rgba(29,155,240,.13);
+  --shadow:0 12px 30px rgba(0,0,0,.22);
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#070b14; --card:rgba(15,23,42,.94); --border:rgba(255,255,255,.10);
-  --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --green:#22c55e;
+  --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --primary-2:#2563eb; --green:#22c55e;
   --red:#ef4444; --amber:#f59e0b; --input:#0b1222; --surface-2:#1e293b;
   --log-bg:#020617; --bar-bg:#1e293b; --glow:rgba(30,58,138,.34);
+  --header-bg:rgba(7,11,20,.94); --selected:rgba(59,130,246,.14);
+  --shadow:0 12px 30px rgba(0,0,0,.28);
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:16px}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
+html{scroll-behavior:smooth;scroll-padding-top:118px}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.55;
   background:radial-gradient(1200px 600px at 80% -10%,var(--glow),transparent),var(--bg);color:var(--text)}
-.wrap{max-width:1120px;margin:0 auto;padding:18px 14px 40px}
-header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:8px 0 12px}
-h1{font-size:22px;margin:0}
-.sub{color:var(--muted);font-size:12.5px}
-.pill{border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12.5px;background:var(--card)}
+.wrap{max-width:1180px;margin:0 auto;padding:14px 14px 44px}
+.app-header{position:sticky;top:10px;z-index:40;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  margin:2px 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:18px;background:var(--header-bg);
+  box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.brand-block{min-width:min(100%,330px);flex:1 1 330px}
+h1{font-size:21px;line-height:1.35;margin:0}
+h2{font-size:18px;line-height:1.4;margin:0}
+.sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+.header-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.pill{border:1px solid var(--border);border-radius:999px;padding:7px 12px;font-size:12.5px;background:var(--card);white-space:nowrap}
+.theme-switch{display:inline-flex;gap:3px;align-items:center;border:1px solid var(--border);border-radius:999px;padding:3px;background:var(--surface-2)}
+.theme-switch button{background:transparent;color:var(--muted);border-radius:999px;padding:7px 9px;font-size:12px;box-shadow:none}
+.theme-switch button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.theme-swatch{width:13px;height:13px;border-radius:50%;border:1px solid var(--border);display:inline-block;flex:0 0 auto}
+.sw-light{background:#f8fafc}.sw-dim{background:#15202b}.sw-dark{background:#020617}
+.workflow{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:8px;margin:10px 0}
+.workflow-step{display:flex;gap:9px;align-items:center;min-height:62px;color:var(--text);text-decoration:none;
+  border:1px solid var(--border);border-radius:14px;padding:9px 10px;background:var(--card)}
+.workflow-step strong{display:block;font-size:13px;line-height:1.35}
+.workflow-step small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45;margin-top:1px}
+.step-number{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  background:var(--surface-2);color:var(--muted);font-weight:800;border:1px solid var(--border)}
+.workflow-step.is-current{border-color:var(--blue)}
+.workflow-step.is-current .step-number{background:var(--blue);border-color:var(--blue);color:#fff}
+.workflow-step.is-done .step-number{background:var(--green);border-color:var(--green);color:#fff}
+.next-step{border:1px solid var(--border);border-radius:14px;padding:10px 13px;background:var(--selected);font-size:13.5px;margin:8px 0 12px}
+.next-step strong{color:var(--blue)}
+.quick-links{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 2px}
+.quick-links a{color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:var(--card);font-size:12px}
+.quick-links a:hover{color:var(--text);border-color:var(--blue)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:9px;margin:10px 0 14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:10px;margin:10px 0}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
-.card h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600}
-.big{font-size:24px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:15px}
+.step-card{margin-top:14px;box-shadow:var(--shadow);scroll-margin-top:118px}
+.step-card .feature-grid{margin-bottom:0}
+.stat-card{min-height:84px}
+.card h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:700}
+.section-head{display:flex;gap:11px;align-items:flex-start;margin-bottom:12px}
+.section-head p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.step-badge{width:34px;height:34px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  background:linear-gradient(135deg,var(--blue),var(--primary-2));color:#fff;font-weight:900;box-shadow:0 6px 16px var(--glow)}
+.section-status{margin-inline-start:auto;border:1px solid var(--border);border-radius:999px;padding:5px 10px;color:var(--muted);font-size:12px;white-space:nowrap;background:var(--surface-2)}
+.big{font-size:23px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 input,select{background:var(--input);color:var(--text);border:1px solid var(--border);
   border-radius:10px;padding:10px 12px;font-size:14px;min-width:0}
-input[type=text]{flex:1 1 280px}
+input[type=text],input[type=search],input[type=url]{flex:1 1 280px}
 input[type=range]{accent-color:var(--blue);padding:0;min-width:180px;flex:1 1 220px}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue);padding:0}
 button,.link-btn{cursor:pointer;border:0;border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:700;
-  background:linear-gradient(90deg,#2563eb,#4f46e5);color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  background:linear-gradient(90deg,var(--blue),var(--primary-2));color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 button.alt,.link-btn.alt{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
 button.warn{background:linear-gradient(90deg,#b45309,#d97706)}
 button.danger{background:linear-gradient(90deg,#b91c1c,#dc2626)}
-button:disabled,.link-btn.disabled{opacity:.55;cursor:not-allowed;pointer-events:none}
-button:focus-visible,.link-btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.section-nav{display:flex;gap:7px;overflow:auto;padding:4px 0 10px;margin-bottom:4px;scrollbar-width:thin}
-.section-nav a{white-space:nowrap;color:var(--text);text-decoration:none;border:1px solid var(--border);border-radius:999px;padding:7px 11px;background:var(--card);font-size:12.5px}
-.section-nav a:hover{border-color:var(--blue)}
+button.small{padding:7px 9px;font-size:12px;border-radius:8px}
+button:disabled,.link-btn.disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+button:focus-visible,.link-btn:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.scroll-pane:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.analyze-main{display:grid;grid-template-columns:minmax(260px,1fr) minmax(210px,280px) auto;gap:9px;align-items:stretch}
+.analyze-main input,.analyze-main select,.analyze-main button{width:100%;height:100%}
+.mode-fields{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.mode-fields label{display:flex;flex-direction:column;gap:4px}
+.mode-fields input{width:160px;max-width:100%}
+.ltr-input{direction:ltr;text-align:left}
+.link-hint{border:1px solid var(--border);border-radius:12px;padding:9px 11px;margin-top:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px}
+.media-types{border:1px solid var(--border);border-radius:12px;margin:11px 0 0;padding:9px 11px 11px}
+.media-types legend{color:var(--muted);font-size:12px;font-weight:700;padding:0 5px}
+.chip-check{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:999px;padding:6px 9px;margin:3px;background:var(--input);font-size:12.5px;cursor:pointer}
+.tool-details{border:1px solid var(--border);border-radius:12px;margin-top:11px;background:var(--surface-2);overflow:hidden}
+.tool-details summary{cursor:pointer;padding:10px 12px;font-weight:800;font-size:13px}
+.tool-details-body{border-top:1px solid var(--border);padding:11px;background:var(--card)}
+.filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}
+.filter-grid label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:12px}
+.filter-grid input,.filter-grid select{width:100%}
 .detail-line{margin:5px 0;overflow-wrap:anywhere}
 .feature-actions{margin-top:10px}
 .destination-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface-2)}
 .destination-summary strong{overflow-wrap:anywhere}
-.folder-list{display:grid;gap:8px;margin:10px 0;max-height:340px;overflow:auto}
+.folder-list{display:grid;gap:8px;margin:10px 0;height:300px;max-height:48vh;overflow:auto;overscroll-behavior:contain;padding-inline-end:3px}
 .folder-row{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--surface-2)}
 .folder-name{min-width:0;flex:1;overflow-wrap:anywhere;font-weight:600}
 .folder-actions{display:flex;flex-wrap:wrap;gap:6px}
 .folder-actions button{padding:7px 10px;font-size:12px}
+.results-toolbar,.queue-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.results-toolbar input[type=search]{flex:1 1 260px}
+.results-summary{color:var(--muted);font-size:12.5px}
+.scroll-pane{overflow:auto;border:1px solid var(--border);border-radius:13px;background:var(--input);
+  overscroll-behavior:contain;scrollbar-gutter:stable}
+.candidate-pane{height:430px;max-height:62vh}
+.queue-pane{height:350px;max-height:54vh}
+.scroll-pane table{min-width:780px}
+.scroll-pane thead th{position:sticky;top:0;z-index:3;background:var(--surface-2);box-shadow:0 1px 0 var(--border)}
+.scroll-pane tbody tr:hover{background:var(--selected)}
+.scroll-pane tbody tr.is-selected{background:var(--selected)}
+.pane-footer{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:7px}
+.file-name{font-weight:650;overflow-wrap:anywhere;max-width:460px}
+.mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+.queue-actions{display:flex;flex-wrap:wrap;gap:5px;min-width:190px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertical-align:middle}
 .bar{height:7px;border-radius:99px;background:var(--bar-bg);overflow:hidden;min-width:110px}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#3b82f6)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--blue))}
 #logsBox,.output-box{background:var(--log-bg);border:1px solid var(--border);border-radius:10px;padding:10px;
   font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.7;
-  max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;direction:ltr;text-align:left}
+  max-height:280px;overflow:auto;overscroll-behavior:contain;white-space:pre-wrap;word-break:break-word;direction:ltr;text-align:left}
 .output-box{max-height:300px}
 .note{color:var(--muted);font-size:12px;line-height:1.8}
-.msg{min-height:20px;font-size:13px}
+.msg{min-height:20px;font-size:13px;overflow-wrap:anywhere}
 .ok{color:var(--green)} .err{color:var(--red)} .warnT{color:var(--amber)}
-@media(max-width:620px){.wrap{padding:12px 9px 28px}h1{font-size:19px}.folder-row{align-items:flex-start;flex-direction:column}.folder-actions{width:100%}.feature-grid{grid-template-columns:1fr}}
+.settings-card label{font-weight:750}
+.secondary-section{margin-top:14px;scroll-margin-top:118px}
+@media(max-width:960px){
+  .workflow{grid-template-columns:repeat(2,minmax(150px,1fr))}
+  .stats-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
+}
+@media(max-width:720px){
+  html{scroll-padding-top:150px}
+  .wrap{padding:10px 9px 32px}
+  .app-header{top:6px;padding:10px}
+  .header-actions{justify-content:flex-start}
+  h1{font-size:18px}
+  .analyze-main{grid-template-columns:1fr}
+  .candidate-pane{height:390px;max-height:58vh}
+  .queue-pane{height:330px}
+  .folder-row{align-items:flex-start;flex-direction:column}.folder-actions{width:100%}
+  .feature-grid{grid-template-columns:1fr}
+  .section-head{flex-wrap:wrap}.section-status{margin-inline-start:45px}
+}
+@media(max-width:480px){
+  .workflow{grid-template-columns:1fr 1fr}
+  .workflow-step{min-height:58px;padding:8px}.step-number{width:27px;height:27px}
+  .theme-switch button{padding:6px 7px}.theme-switch .theme-name{display:none}
+  .stats-grid{gap:7px}.big{font-size:19px}
+}
 </style>
+
 </head>
 <body data-gradio-available="__GRADIO_AVAILABLE__">
 <div class="wrap">
-  <header>
-    <div>
+  <header class="app-header">
+    <div class="brand-block">
       <h1>⚡ TeleDrive v5.0 Turbo — لوحة التحكم الحية</h1>
-      <div class="sub">FastAPI + تحديث مباشر بالإعدادات المحفوظة — نفس محرك النقل والطابور، بلا أي بيانات وهمية</div>
+      <div class="sub">نفس محرك النقل والطابور الحقيقي، بلا أي بيانات وهمية</div>
     </div>
-    <div class="row">
+    <div class="header-actions">
+      <div class="theme-switch" role="group" aria-label="اختيار لون الواجهة">
+        <button type="button" data-theme-choice="light" aria-pressed="false" title="المظهر الفاتح"><span class="theme-swatch sw-light"></span><span class="theme-name">فاتح</span></button>
+        <button type="button" data-theme-choice="dim" aria-pressed="false" title="خافت بأسلوب X — داكن معتدل"><span class="theme-swatch sw-dim"></span><span class="theme-name">X خافت</span></button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false" title="المظهر الداكن الكامل"><span class="theme-swatch sw-dark"></span><span class="theme-name">داكن</span></button>
+      </div>
       <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الآن</button>
       <div class="pill" id="syncClock">⏳ الاتصال…</div>
     </div>
   </header>
 
-  <nav class="section-nav" aria-label="أقسام لوحة التحكم">
-    <a href="#connections">الحسابات</a>
-    <a href="#destination">وجهة Drive</a>
-    <a href="#analyze">التحليل</a>
-    <a href="#queue">الطابور</a>
+  <nav class="workflow" aria-label="خطوات العمل بالترتيب">
+    <a class="workflow-step is-current" id="stepLinkConnect" href="#connections"><span class="step-number">1</span><span><strong>الاتصال بالحسابات</strong><small id="stepConnectHint">Telegram وDrive</small></span></a>
+    <a class="workflow-step" id="stepLinkDestination" href="#destination"><span class="step-number">2</span><span><strong>اختيار مجلد Drive</strong><small id="stepDestinationHint">وجهة الحفظ</small></span></a>
+    <a class="workflow-step" id="stepLinkAnalyze" href="#analyze"><span class="step-number">3</span><span><strong>تحليل الرابط</strong><small id="stepAnalyzeHint">رسالة أو قناة</small></span></a>
+    <a class="workflow-step" id="stepLinkResults" href="#results"><span class="step-number">4</span><span><strong>تحديد الملفات</strong><small id="stepResultsHint">راجع واختر المطلوب</small></span></a>
+    <a class="workflow-step" id="stepLinkTransfer" href="#transfer"><span class="step-number">5</span><span><strong>النقل والمتابعة</strong><small id="stepTransferHint">الطابور والتقدم</small></span></a>
+  </nav>
+  <div class="next-step" id="nextStep" role="status"><strong>الخطوة التالية:</strong> <span id="nextStepText">جارٍ قراءة الحالة الحية…</span></div>
+  <div class="quick-links" aria-label="أقسام إضافية">
     <a href="#settings">الإعدادات</a>
     <a href="#logs">السجلات</a>
-    <a href="#maintenance">أدوات إضافية</a>
-  </nav>
-
-  <div class="grid">
-    <div class="card"><h3>حالة المحرك</h3><div class="big" id="mState">—</div></div>
-    <div class="card"><h3>السرعة اللحظية</h3><div class="big"><span id="mSpeed">0</span> <small>MB/s</small></div></div>
-    <div class="card"><h3>اكتمل</h3><div class="big" id="mDone">0</div></div>
-    <div class="card"><h3>فشل / تم تخطيه</h3><div class="big"><span id="mFail">0</span> / <span id="mSkip">0</span></div></div>
-    <div class="card"><h3>في الانتظار</h3><div class="big" id="mPending">0</div></div>
-    <div class="card"><h3>مساحة حرة</h3><div class="big"><span id="mDisk">—</span></div></div>
-    <div class="card"><h3>Telegram</h3><div class="big" id="mTg" style="font-size:16px">—</div></div>
-    <div class="card"><h3>Google Drive</h3><div class="big" id="mDrive" style="font-size:16px">—</div></div>
+    <a href="#maintenance">الاستعادة والصيانة</a>
   </div>
 
-  <div class="feature-grid" id="connections">
+  <div class="stats-grid" aria-label="نظرة سريعة على الحالة">
+    <div class="card stat-card"><h3>حالة المحرك</h3><div class="big" id="mState">—</div></div>
+    <div class="card stat-card"><h3>السرعة اللحظية</h3><div class="big"><span id="mSpeed">0</span> <small>MB/s</small></div></div>
+    <div class="card stat-card"><h3>اكتمل</h3><div class="big" id="mDone">0</div></div>
+    <div class="card stat-card"><h3>فشل / تم تخطيه</h3><div class="big"><span id="mFail">0</span> / <span id="mSkip">0</span></div></div>
+    <div class="card stat-card"><h3>في الانتظار</h3><div class="big" id="mPending">0</div></div>
+    <div class="card stat-card"><h3>مساحة حرة</h3><div class="big"><span id="mDisk">—</span></div></div>
+    <div class="card stat-card"><h3>Telegram</h3><div class="big" id="mTg" style="font-size:16px">—</div></div>
+    <div class="card stat-card"><h3>Google Drive</h3><div class="big" id="mDrive" style="font-size:16px">—</div></div>
+  </div>
+
+  <section class="card step-card" id="connections" aria-labelledby="connectionsTitle">
+    <div class="section-head"><span class="step-badge">1</span><div><h2 id="connectionsTitle">الاتصال بالحسابات</h2><p>تأكد أن Telegram وGoogle Drive متصلان قبل التحليل والنقل.</p></div><span class="section-status" id="connectionsStatus">جارٍ التحقق…</span></div>
+    <div class="feature-grid">
     <section class="card" aria-labelledby="telegramTitle">
       <h3 id="telegramTitle">🔐 حساب Telegram</h3>
       <p class="detail-line">الحالة: <strong id="telegramStatus">—</strong></p>
@@ -347,10 +464,11 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
       </div>
       <div class="msg" id="driveMsg"></div>
     </section>
-  </div>
+    </div>
+  </section>
 
-  <section class="card" id="destination" aria-labelledby="destinationTitle">
-    <h3 id="destinationTitle">📁 وجهة الحفظ في Google Drive</h3>
+  <section class="card step-card" id="destination" aria-labelledby="destinationTitle">
+    <div class="section-head"><span class="step-badge">2</span><div><h2 id="destinationTitle">اختيار مجلد الحفظ في Google Drive</h2><p>حدّد المكان الذي ستصل إليه الملفات بعد اكتمال النقل.</p></div><span class="section-status" id="destinationStatus">لم يتم الاختيار</span></div>
     <div class="destination-summary">
       <span>المجلد المحدد للنقل:</span>
       <strong id="selectedFolderName" class="err">لم يتم اختيار مجلد</strong>
@@ -369,70 +487,134 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
     <div class="msg" id="folderMsg"></div>
   </section>
 
-  <div class="card" id="analyze">
-    <h3>🔍 تحليل رابط تيليجرام (نفس خدمة Scanner الرسمية)</h3>
-    <div class="row">
-      <input type="text" id="linkIn" placeholder="الصق رابط رسالة/قناة تيليجرام… مثال: https://t.me/channel/123">
-      <select id="modeIn">
-        <option value="message">رسالة واحدة</option>
+  <section class="card step-card" id="analyze" aria-labelledby="analyzeTitle">
+    <div class="section-head"><span class="step-badge">3</span><div><h2 id="analyzeTitle">تحليل رابط تيليجرام</h2><p>الصق رابط قناة أو مجموعة أو رسالة. الوضع التلقائي يتعرف على نوع الرابط ويختار طريقة الفحص المناسبة.</p></div><span class="section-status" id="analyzeStatus">بانتظار رابط</span></div>
+    <div class="analyze-main">
+      <input class="ltr-input" type="text" id="linkIn" dir="ltr" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://t.me/channel أو https://t.me/channel/123 أو @channel" aria-label="رابط تيليجرام">
+      <select id="modeIn" aria-label="وضع التحليل">
+        <option value="auto" selected>تلقائي — يتعرف على الرابط (موصى به)</option>
+        <option value="message">رسالة محددة</option>
         <option value="range">نطاق رسائل</option>
         <option value="latest">أحدث رسائل</option>
-        <option value="chat">قناة/محادثة كاملة</option>
+        <option value="chat">قناة/محادثة حتى حد الرسائل</option>
       </select>
-      <button id="btnAnalyze">تحليل</button>
-      <button class="alt" id="btnSelectAll">تحديد الكل</button>
-      <button class="alt" id="btnClearSel">مسح التحديد</button>
-      <button class="alt" id="btnEnqueue">إضافة للطابور</button>
+      <button id="btnAnalyze" type="button">🔍 تحليل الرابط</button>
     </div>
     <div class="row" style="margin-top:8px">
-      <label class="note" id="fldMessageId">رقم الرسالة (اختياري إن كان في الرابط)
-        <input type="number" id="messageIdIn" min="1" style="width:150px"></label>
+      <button class="alt small" id="btnRememberLink" type="button">💾 تذكّر هذا الرابط</button>
+      <button class="alt small" id="btnClearRememberedLink" type="button">مسح الرابط المحفوظ</button>
+    </div>
+    <div class="link-hint" id="linkHint" role="status">الصق رابطًا وسيظهر هنا ما سيتم تحليله بالضبط قبل التنفيذ.</div>
+    <div class="mode-fields">
+      <label class="note" id="fldMessageId">رقم الرسالة (اختياري إن كان داخل الرابط)
+        <input type="number" id="messageIdIn" min="1"></label>
       <label class="note" id="fldStartId">من رسالة رقم
-        <input type="number" id="startIdIn" min="1" style="width:130px"></label>
+        <input type="number" id="startIdIn" min="1"></label>
       <label class="note" id="fldEndId">إلى رسالة رقم
-        <input type="number" id="endIdIn" min="1" style="width:130px"></label>
-      <label class="note" id="fldLimit">حد الرسائل (1–1000)
-        <input type="number" id="limitIn" min="1" max="1000" value="200" style="width:130px"></label>
+        <input type="number" id="endIdIn" min="1"></label>
+      <label class="note" id="fldLimit">أقصى عدد رسائل للفحص (1–1000)
+        <input type="number" id="limitIn" min="1" max="1000" value="200"></label>
     </div>
-    <div class="msg note" id="analyzeMsg"></div>
-    <div style="overflow:auto;margin-top:8px">
-      <table><thead><tr><th>تحديد</th><th>نتيجة التحليل (<span id="cCount">0</span> · محدد <span id="cSel">0</span>)</th><th>النوع</th><th>الحجم</th><th>المصدر</th></tr></thead>
-      <tbody id="cBody"><tr><td colspan="5" class="note">لا نتائج بعد — الصق رابطًا واضغط «تحليل» وستظهر الملفات هنا لتحديدها قبل الإضافة للطابور.</td></tr></tbody></table>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button id="btnStart">▶️ بدء النقل</button>
-      <button class="warn" id="btnPause">⏸️ إيقاف مؤقت</button>
-      <button class="alt" id="btnResume">⏩ استئناف</button>
-      <button class="danger" id="btnStop">🛑 إيقاف</button>
-      <button class="alt" id="btnRetry">🔁 إعادة الفاشل</button>
-    </div>
-    <div class="msg" id="actionMsg"></div>
-    <p class="note">بيانات الدخول السرية لا تمر عبر هذه الواجهة. حالة Telegram وإدارة مجلد وجهة Drive متاحتان أعلاه؛ يجب اختيار مجلد قبل إضافة العناصر إلى الطابور.</p>
-  </div>
+    <fieldset class="media-types">
+      <legend>أنواع الملفات المطلوبة في التحليل والتصفية</legend>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="all" checked> الكل</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="video"> فيديو</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="audio"> صوت</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="document"> مستندات</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="photo"> صور</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="voice"> رسائل صوتية</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="animation"> متحركة</label>
+      <label class="chip-check"><input type="checkbox" class="media-type-in" value="sticker"> ملصقات</label>
+    </fieldset>
+    <div class="msg" id="analyzeMsg" role="status"></div>
+  </section>
 
-  <div class="card" id="queue" style="margin-top:12px">
-    <h3>📦 طابور النقل الحي (<span id="qCount">0</span>)</h3>
-    <div style="overflow:auto">
-      <table><thead><tr><th>الملف</th><th>الحالة</th><th>التقدم</th><th>الحجم</th></tr></thead>
-      <tbody id="qBody"><tr><td colspan="4" class="note">لا توجد عناصر بعد — هذا يعكس قاعدة البيانات الحقيقية.</td></tr></tbody></table>
+  <section class="card step-card" id="results" aria-labelledby="resultsTitle">
+    <div class="section-head"><span class="step-badge">4</span><div><h2 id="resultsTitle">نتائج التحليل وتحديد الملفات</h2><p>النتيجة <strong id="cCount">0</strong> ملف · المحدد <strong id="cSel">0</strong> · حجم المحدد <strong id="cSelectedSize">—</strong></p></div><span class="section-status" id="resultsStatus">لا توجد نتائج</span></div>
+    <div class="results-toolbar">
+      <input type="search" id="candidateSearchIn" placeholder="ابحث داخل النتائج بالاسم أو النوع أو رقم الرسالة…" aria-label="بحث داخل نتائج التحليل">
+      <button class="alt" id="btnSelectAll" type="button">تحديد الكل</button>
+      <button class="alt" id="btnClearSel" type="button">مسح التحديد</button>
+      <button id="btnEnqueue" type="button">➕ إضافة المحدد للطابور</button>
     </div>
-  </div>
+    <div class="msg" id="selectionMsg" role="status"></div>
+    <div class="scroll-pane candidate-pane" id="candidatePane" tabindex="0" aria-label="قائمة نتائج التحليل القابلة للتمرير داخليًا">
+      <table><thead><tr><th>تحديد</th><th>الملف</th><th>رقم الرسالة</th><th>النوع</th><th>الحجم</th><th>المصدر والتاريخ</th></tr></thead>
+      <tbody id="cBody"><tr><td colspan="6" class="note">لا نتائج بعد — الصق رابطًا واضغط «تحليل الرابط» وستظهر الملفات هنا.</td></tr></tbody></table>
+    </div>
+    <div class="pane-footer"><span id="candidateVisible">عرض 0 من 0</span><span>القائمة تعرض نحو عشرة صفوف؛ مرّر داخل هذا الصندوق فقط، وتبقى بقية الصفحة ثابتة.</span></div>
+    <details class="tool-details" id="selectionTools">
+      <summary>أدوات تصفية وتحديد متقدمة</summary>
+      <div class="tool-details-body">
+        <div class="filter-grid">
+          <label>امتدادات مطلوبة (مثال: mp4,pdf)<input type="text" id="filterExtensionsIn" dir="ltr" placeholder="mp4,pdf"></label>
+          <label>الحد الأدنى للحجم (MB)<input type="number" id="filterMinSizeIn" min="0" step="0.1"></label>
+          <label>الحد الأقصى للحجم (MB)<input type="number" id="filterMaxSizeIn" min="0" step="0.1"></label>
+          <label>من تاريخ<input type="date" id="filterDateFromIn"></label>
+          <label>إلى تاريخ<input type="date" id="filterDateToIn"></label>
+          <label>يحتوي الاسم على<input type="text" id="filterIncludeIn"></label>
+          <label>استبعاد ما يحتوي على<input type="text" id="filterExcludeIn"></label>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <button class="alt" id="btnApplyFilters" type="button">تطبيق التصفية</button>
+          <button class="alt" id="btnResetFilters" type="button">إعادة تعيين التصفية</button>
+        </div>
+        <div class="filter-grid" style="margin-top:12px">
+          <label>تحديد من رسالة رقم<input type="number" id="selectStartIn" min="1"></label>
+          <label>تحديد إلى رسالة رقم<input type="number" id="selectEndIn" min="1"></label>
+          <label>المجموعة/القناة في النتائج<select id="selectGroupIn"><option value="">اختر مجموعة…</option></select></label>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <button class="alt" id="btnSelectRange" type="button">تحديد نطاق الرسائل</button>
+          <button class="alt" id="btnSelectGroup" type="button">تحديد المجموعة</button>
+        </div>
+      </div>
+    </details>
+  </section>
 
-  <section class="card" id="settings" style="margin-top:12px" aria-labelledby="settingsTitle">
-    <h3 id="settingsTitle">⚙️ الإعدادات</h3>
+  <section class="card step-card" id="transfer" aria-labelledby="transferTitle">
+    <div class="section-head"><span class="step-badge">5</span><div><h2 id="transferTitle">التحكم في النقل ومتابعة الطابور</h2><p>بعد إضافة الملفات للطابور ابدأ النقل وتابِع التقدم والحالة من هنا.</p></div><span class="section-status" id="transferStatus">الطابور فارغ</span></div>
+    <div class="row">
+      <button id="btnStart" type="button">▶️ بدء النقل</button>
+      <button class="warn" id="btnPause" type="button">⏸️ إيقاف مؤقت</button>
+      <button class="alt" id="btnResume" type="button">⏩ استئناف</button>
+      <button class="danger" id="btnStop" type="button">🛑 إيقاف</button>
+      <button class="alt" id="btnRetry" type="button">🔁 إعادة الفاشل</button>
+      <button class="alt" id="btnQueueRefresh" type="button">↻ تحديث الطابور</button>
+    </div>
+    <div class="msg" id="actionMsg" role="status"></div>
+    <div id="queue">
+      <div class="queue-toolbar">
+        <h3 style="margin:0">📦 طابور النقل الحي (<span id="qCount">0</span>)</h3>
+        <span style="flex:1"></span>
+        <button class="alt small" id="btnClearCompleted" type="button">مسح المكتمل</button>
+        <button class="alt small" id="btnClearIncomplete" type="button">مسح غير المكتمل</button>
+      </div>
+      <div class="scroll-pane queue-pane" id="queuePane" tabindex="0" aria-label="قائمة طابور النقل القابلة للتمرير داخليًا">
+        <table><thead><tr><th>الملف</th><th>الحالة</th><th>التقدم</th><th>الحجم</th><th>تحكم بالعنصر</th></tr></thead>
+        <tbody id="qBody"><tr><td colspan="5" class="note">لا توجد عناصر بعد — هذا يعكس قاعدة البيانات الحقيقية.</td></tr></tbody></table>
+      </div>
+      <div class="pane-footer"><span>قائمة الطابور تمرّر داخل صندوقها مستقلًا عن الصفحة.</span><span>أزرار كل صف تتحكم في ذلك العنصر وحده.</span></div>
+    </div>
+    <p class="note">بيانات الدخول السرية لا تمر عبر هذه الواجهة. يجب اختيار مجلد Drive قبل إضافة العناصر إلى الطابور.</p>
+  </section>
+
+  <section class="card secondary-section" id="settings" aria-labelledby="settingsTitle">
+    <div class="section-head"><span class="step-badge">⚙</span><div><h2 id="settingsTitle">الإعدادات</h2><p>المظهر وسرعة التحديث وعدد عمليات النقل المتوازية.</p></div></div>
     <div class="feature-grid">
-      <div class="card">
-        <label for="themeIn">المظهر</label>
+      <div class="card settings-card">
+        <label for="themeIn">لون الواجهة</label>
         <div class="row" style="margin-top:8px">
           <select id="themeIn" aria-label="المظهر">
             <option value="light">فاتح</option>
-            <option value="dark">داكن</option>
+            <option value="dim">خافت — داكن معتدل بأسلوب X</option>
+            <option value="dark">داكن كامل</option>
           </select>
         </div>
-        <p class="note">يُحفظ الاختيار ويُطبّق على لوحة الويب الحديثة.</p>
+        <p class="note">الثلاثة متاحة أيضًا من مبدّل الألوان أعلى الصفحة، ويُحفظ الاختيار ويُطبّق فورًا في لوحة الويب الحديثة.</p>
         <div class="msg" id="themeMsg"></div>
       </div>
-      <div class="card">
+      <div class="card settings-card">
         <label for="concurrencyIn">عدد عمليات النقل المتوازية (1–100): <strong id="concurrencyValue">2</strong></label>
         <div class="row" style="margin-top:8px">
           <input type="range" id="concurrencyIn" min="1" max="100" step="1" value="2">
@@ -441,7 +623,7 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
         <p class="note" id="concurrencyRisk">القيم الأعلى من 8 قد تزيد استهلاك الذاكرة واحتمال FloodWait.</p>
         <div class="msg" id="concurrencyMsg"></div>
       </div>
-      <div class="card">
+      <div class="card settings-card">
         <label for="autoRefreshIn">تحديث الحالة تلقائيًا</label>
         <div class="row" style="margin-top:8px">
           <select id="autoRefreshIn">
@@ -457,8 +639,8 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
     </div>
   </section>
 
-  <section class="card" id="logs" style="margin-top:12px" aria-labelledby="logsTitle">
-    <h3 id="logsTitle">🧾 السجلات الحية (منقّحة)</h3>
+  <section class="card secondary-section" id="logs" aria-labelledby="logsTitle">
+    <div class="section-head"><span class="step-badge">☰</span><div><h2 id="logsTitle">السجلات الحية (منقّحة)</h2><p>ابحث وصفِّ وصدّر السجل عند الحاجة للتشخيص.</p></div></div>
     <div class="row" style="margin-bottom:8px">
       <select id="logsLevel" aria-label="مستوى السجل">
         <option value="ALL">كل المستويات</option>
@@ -476,8 +658,8 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
     <div id="logsBox">…</div>
   </section>
 
-  <section class="card" id="maintenance" style="margin-top:12px" aria-labelledby="maintenanceTitle">
-    <h3 id="maintenanceTitle">🧰 الاستعادة والصيانة والتصدير</h3>
+  <section class="card secondary-section" id="maintenance" aria-labelledby="maintenanceTitle">
+    <div class="section-head"><span class="step-badge">✚</span><div><h2 id="maintenanceTitle">الاستعادة والصيانة والتصدير</h2><p>أدوات إضافية منفصلة عن خطوات النقل اليومية حتى لا تزحم سير العمل.</p></div></div>
     <div class="row">
       <button class="alt" id="btnRecovery" type="button">استعادة نقطة الحفظ</button>
       <button class="alt" id="btnCheckpoint" type="button">إنشاء نقطة حفظ</button>
@@ -501,11 +683,17 @@ function humanBytes(n){
   return v.toFixed(v>=100?0:1)+" "+u[i];
 }
 function setText(id, value){ const el=$(id); if(el) el.textContent = (value==null ? "—" : String(value)); }
+const THEMES=["light","dim","dark"];
+const THEME_LABELS={light:"الفاتح",dim:"الخافت بأسلوب X",dark:"الداكن الكامل"};
+function normalizeTheme(theme){ return THEMES.includes(theme)?theme:"light"; }
 function applyTheme(theme){
-  const chosen=theme==="dark"?"dark":"light";
+  const chosen=normalizeTheme(theme);
   document.documentElement.dataset.theme=chosen;
   const control=$("themeIn");
   if(control && document.activeElement!==control) control.value=chosen;
+  document.querySelectorAll("[data-theme-choice]").forEach(function(button){
+    button.setAttribute("aria-pressed",button.dataset.themeChoice===chosen?"true":"false");
+  });
 }
 applyTheme(document.documentElement.dataset.theme);
 function setMessage(el, text, ok){
@@ -514,28 +702,56 @@ function setMessage(el, text, ok){
   el.textContent=(ok?"✅ ":"⚠️ ")+String(text||"");
 }
 
+let queueSignature="";
+function queueButton(action,label,title,className,itemId){
+  const button=document.createElement("button");
+  button.type="button"; button.className=className||"alt small";
+  button.textContent=label; button.title=title;
+  button.dataset.queueAction=action; button.dataset.itemId=String(itemId||"");
+  return button;
+}
 function renderQueue(state){
-  const body=$("qBody"); body.textContent="";
   const rows=(state && state.queue) || [];
   setText("qCount", rows.length);
+  const signature=rows.map(function(item){
+    return [item.id,item.status,Number(item.progress||0).toFixed(1),item.sizeBytes,item.name].join(":");
+  }).join("|");
+  if(signature===queueSignature) return;
+  queueSignature=signature;
+  const body=$("qBody");
+  const pane=$("queuePane");
+  const previousScroll=pane?pane.scrollTop:0;
+  body.textContent="";
   if(!rows.length){
     const tr=document.createElement("tr"); const td=document.createElement("td");
-    td.colSpan=4; td.className="note"; td.textContent="لا توجد عناصر بعد — هذا يعكس قاعدة البيانات الحقيقية.";
+    td.colSpan=5; td.className="note"; td.textContent="لا توجد عناصر بعد — هذا يعكس قاعدة البيانات الحقيقية.";
     tr.appendChild(td); body.appendChild(tr); return;
   }
-  for(const item of rows.slice(0,80)){
+  const fragment=document.createDocumentFragment();
+  for(const item of rows.slice(0,500)){
     const tr=document.createElement("tr");
-    const name=document.createElement("td"); name.textContent=item.name||item.id||"";
+    const name=document.createElement("td"); name.className="file-name"; name.textContent=item.name||item.id||"";
     const status=document.createElement("td"); status.textContent=item.status||"";
     const prog=document.createElement("td");
     const bar=document.createElement("div"); bar.className="bar";
     const fill=document.createElement("i");
     const pct=Math.max(0,Math.min(100,Number(item.progress)||0));
     fill.style.width=pct+"%"; bar.appendChild(fill); prog.appendChild(bar);
-    const pctT=document.createElement("div"); pctT.textContent=pct.toFixed(1)+"%"; prog.appendChild(pctT);
-    const size=document.createElement("td"); size.textContent=humanBytes(item.sizeBytes);
-    tr.append(name,status,prog,size); body.appendChild(tr);
+    const pctT=document.createElement("div"); pctT.className="mono"; pctT.textContent=pct.toFixed(1)+"%"; prog.appendChild(pctT);
+    const size=document.createElement("td"); size.className="mono"; size.textContent=humanBytes(item.sizeBytes);
+    const actions=document.createElement("td");
+    const actionBox=document.createElement("div"); actionBox.className="queue-actions";
+    actionBox.append(
+      queueButton("pause","⏸","إيقاف هذا العنصر مؤقتًا","alt small",item.id),
+      queueButton("resume","▶","استئناف هذا العنصر","alt small",item.id),
+      queueButton("retry","↻","إعادة محاولة هذا العنصر","alt small",item.id),
+      queueButton("stop","■","إيقاف هذا العنصر","danger small",item.id)
+    );
+    actions.appendChild(actionBox);
+    tr.append(name,status,prog,size,actions); fragment.appendChild(tr);
   }
+  body.appendChild(fragment);
+  if(pane) pane.scrollTop=previousScroll;
 }
 
 // Raw state-machine strings -> friendly Arabic (raw kept as fallback).
@@ -599,41 +815,156 @@ async function refreshDriveFolders(btn){
 }
 
 // Analyze candidates: re-render ONLY when the visible signature changes,
-// so the 1s polling never clobbers a checkbox mid-click.
+// so polling never clobbers a checkbox mid-click or resets the inner
+// scroll position while the user is reviewing a long channel result.
 let candSignature="";
+let lastCandidates=[];
+let candidateSearch="";
+let groupSignature="";
+function candidateSignature(rows){
+  return candidateSearch+"\n"+rows.map(function(c){
+    return [c.sourceId,c.selected,c.status,c.name,c.mediaType,c.sizeBytes,c.messageId,c.groupId].join(":");
+  }).join("|");
+}
+function candidateMatches(item){
+  if(!candidateSearch) return true;
+  const haystack=[item.name,item.mediaType,item.groupLabel,item.dateLabel,item.messageId,item.status]
+    .filter(Boolean).join(" ").toLocaleLowerCase();
+  return haystack.includes(candidateSearch);
+}
+function updateCandidateSummary(rows,visibleCount){
+  const selected=rows.filter(function(c){return c.selected;});
+  setText("cCount", rows.length);
+  setText("cSel", selected.length);
+  const selectedBytes=selected.reduce(function(sum,item){return sum+(Number(item.sizeBytes)||0);},0);
+  setText("cSelectedSize", selected.length?humanBytes(selectedBytes):"—");
+  setText("candidateVisible", "عرض "+visibleCount+" من "+rows.length);
+  setText("resultsStatus", !rows.length?"لا توجد نتائج":(selected.length?selected.length+" محدد":"اختر الملفات المطلوبة"));
+  const all=$("btnSelectAll"), clear=$("btnClearSel"), enqueue=$("btnEnqueue");
+  if(all) all.disabled=!rows.length;
+  if(clear) clear.disabled=!selected.length;
+  if(enqueue) enqueue.disabled=!selected.length;
+}
+function renderGroupOptions(rows){
+  const select=$("selectGroupIn");
+  if(!select) return;
+  const seen=new Map();
+  for(const item of rows){
+    if(item.groupId) seen.set(String(item.groupId),String(item.groupLabel||item.groupId));
+  }
+  const signature=Array.from(seen.entries()).map(function(pair){return pair.join(":");}).join("|");
+  if(signature===groupSignature) return;
+  groupSignature=signature;
+  const previous=select.value;
+  select.replaceChildren();
+  const placeholder=document.createElement("option");
+  placeholder.value=""; placeholder.textContent="اختر مجموعة…"; select.appendChild(placeholder);
+  for(const [id,label] of seen){
+    const option=document.createElement("option");
+    option.value=id; option.textContent=label; select.appendChild(option);
+  }
+  if(seen.has(previous)) select.value=previous;
+}
 function renderCandidates(state){
   const rows=(state && state.candidates) || [];
-  const sig=rows.map(function(c){return [c.sourceId,c.selected,c.status].join(":");}).join("|");
-  setText("cCount", rows.length);
-  setText("cSel", rows.filter(function(c){return c.selected;}).length);
+  lastCandidates=rows;
+  const visibleRows=rows.filter(candidateMatches);
+  updateCandidateSummary(rows,visibleRows.length);
+  renderGroupOptions(rows);
+  const sig=candidateSignature(visibleRows);
   if(sig===candSignature) return;
   candSignature=sig;
-  const body=$("cBody"); body.textContent="";
-  if(!rows.length){
+  const body=$("cBody");
+  const pane=$("candidatePane");
+  const previousScroll=pane?pane.scrollTop:0;
+  body.textContent="";
+  if(!visibleRows.length){
     const tr=document.createElement("tr"); const td=document.createElement("td");
-    td.colSpan=5; td.className="note";
-    td.textContent="لا نتائج بعد — الصق رابطًا واضغط «تحليل» وستظهر الملفات هنا لتحديدها قبل الإضافة للطابور.";
+    td.colSpan=6; td.className="note";
+    td.textContent=rows.length
+      ? "لا توجد ملفات مطابقة لبحثك داخل النتائج الحالية."
+      : "لا نتائج بعد — الصق رابطًا واضغط «تحليل الرابط» وستظهر الملفات هنا لتحديدها قبل الإضافة للطابور.";
     tr.appendChild(td); body.appendChild(tr); return;
   }
-  for(const item of rows.slice(0,300)){
+  const fragment=document.createDocumentFragment();
+  for(const item of visibleRows.slice(0,1000)){
     const tr=document.createElement("tr");
+    tr.classList.toggle("is-selected",!!item.selected);
     const pick=document.createElement("td");
     const box=document.createElement("input");
     box.type="checkbox"; box.checked=!!item.selected;
-    box.addEventListener("change",function(){
-      bridgeAction("analyze.toggle_row",{sourceId:item.sourceId},$("analyzeMsg"),this);
+    box.setAttribute("aria-label","تحديد الملف "+(item.name||""));
+    box.addEventListener("change",async function(){
+      const desired=this.checked;
+      const result=await bridgeAction("analyze.toggle_row",{sourceId:item.sourceId},$("selectionMsg"),this);
+      if(result && result.status==="ok"){
+        item.selected=desired;
+        tr.classList.toggle("is-selected",desired);
+        candSignature=candidateSignature(lastCandidates.filter(candidateMatches));
+        updateCandidateSummary(lastCandidates,lastCandidates.filter(candidateMatches).length);
+      }else{
+        this.checked=!desired;
+      }
     });
     pick.appendChild(box);
-    const name=document.createElement("td"); name.textContent=item.name||item.sourceId||"";
+    const name=document.createElement("td"); name.className="file-name"; name.textContent=item.name||item.sourceId||"";
+    const message=document.createElement("td"); message.className="mono"; message.textContent=item.messageId==null?"—":String(item.messageId);
     const kind=document.createElement("td"); kind.textContent=item.mediaType||"";
-    const size=document.createElement("td"); size.textContent=humanBytes(item.sizeBytes);
+    const size=document.createElement("td"); size.className="mono"; size.textContent=humanBytes(item.sizeBytes);
     const src=document.createElement("td");
     src.textContent=[item.groupLabel,item.dateLabel].filter(Boolean).join(" · ");
-    tr.append(pick,name,kind,size,src); body.appendChild(tr);
+    tr.append(pick,name,message,kind,size,src); fragment.appendChild(tr);
   }
+  body.appendChild(fragment);
+  if(pane) pane.scrollTop=previousScroll;
 }
 
 let showFilteredLogs=false;
+let linkTouched=false;
+function setWorkflowStep(linkId,hintId,state,hint){
+  const link=$(linkId);
+  if(link){
+    link.classList.toggle("is-done",state==="done");
+    link.classList.toggle("is-current",state==="current");
+  }
+  if(hint!=null) setText(hintId,hint);
+}
+function updateWorkflow(state,data){
+  const telegram=state.telegram||{};
+  const drive=state.drive||{};
+  const telegramOk=["AUTHORIZED","CONNECTED"].includes(telegram.status);
+  const driveOk=drive.status==="CONNECTED";
+  const folder=state.folder||{};
+  const folderOk=!!(folder.id||folder.name);
+  const candidates=state.candidates||[];
+  const selected=candidates.filter(function(item){return item.selected;});
+  const queue=state.queue||[];
+  const running=!!data.is_running;
+  setText("connectionsStatus",telegramOk&&driveOk?"متصل بالحسابين":(telegramOk||driveOk?"متبقٍّ حساب واحد":"غير متصل"));
+  setText("destinationStatus",folderOk?("المجلد: "+(folder.name||"محدد")):"لم يتم الاختيار");
+  setText("analyzeStatus",candidates.length?("تم العثور على "+candidates.length+" ملف"):"بانتظار تحليل");
+  setText("transferStatus",running?"النقل جارٍ الآن":(queue.length?queue.length+" عنصر في الطابور":"الطابور فارغ"));
+  setWorkflowStep("stepLinkConnect","stepConnectHint",telegramOk&&driveOk?"done":"current",
+    telegramOk&&driveOk?"Telegram وDrive جاهزان":(!telegramOk?"سجّل Telegram أولًا":"اربط Google Drive"));
+  setWorkflowStep("stepLinkDestination","stepDestinationHint",folderOk?"done":(driveOk?"current":"todo"),
+    folderOk?(folder.name||"تم اختيار المجلد"):"اختر وجهة الحفظ");
+  setWorkflowStep("stepLinkAnalyze","stepAnalyzeHint",candidates.length?"done":(telegramOk?"current":"todo"),
+    candidates.length?candidates.length+" نتيجة جاهزة":"الصق رابط قناة أو رسالة");
+  setWorkflowStep("stepLinkResults","stepResultsHint",selected.length?"done":(candidates.length?"current":"todo"),
+    selected.length?selected.length+" ملف محدد":"راجع واختر المطلوب");
+  setWorkflowStep("stepLinkTransfer","stepTransferHint",running?"current":(queue.length?"current":"todo"),
+    running?"النقل جارٍ الآن":(queue.length?"جاهز للبدء أو المتابعة":"الطابور والتقدم"));
+  let next="جاهز لتحليل رابط جديد أو متابعة الطابور.";
+  if(!telegramOk) next="سجّل دخول Telegram من زر تسجيل الدخول الآمن في الخطوة 1.";
+  else if(!driveOk) next="اربط Google Drive في الخطوة 1.";
+  else if(!folderOk) next="اختر مجلد الحفظ في الخطوة 2 قبل إضافة الملفات للطابور.";
+  else if(!candidates.length) next="الصق رابط القناة أو الرسالة في الخطوة 3 واضغط «تحليل الرابط» — الوضع التلقائي سيتعرف عليه.";
+  else if(!selected.length) next="حدّد الملفات المطلوبة من صندوق نتائج التحليل في الخطوة 4.";
+  else if(running) next="النقل جارٍ الآن؛ تابع التقدم من الخطوة 5.";
+  else if(queue.length) next="أضف المحدد إن لم يكن في الطابور، ثم ابدأ النقل من الخطوة 5.";
+  else next="اضغط «إضافة المحدد للطابور» في الخطوة 4، ثم «بدء النقل» في الخطوة 5.";
+  setText("nextStepText",next);
+}
 function applyData(data){
   if(!data) return;
   setText("syncClock","🟢 متصل لحظياً • "+(data.server_time||""));
@@ -663,7 +994,12 @@ function applyData(data){
     folderLabel.classList.toggle("ok",!!folderName);
     folderLabel.classList.toggle("err",!folderName);
   }
-  if(st.webTheme==="light"||st.webTheme==="dark") applyTheme(st.webTheme);
+  if(THEMES.includes(st.webTheme)) applyTheme(st.webTheme);
+  const rememberedLink=st.analyze && st.analyze.sourceLink;
+  if(rememberedLink && !linkTouched && document.activeElement!==$("linkIn") && $("linkIn").value!==rememberedLink){
+    $("linkIn").value=rememberedLink;
+    updateLinkHint();
+  }
   if(Number.isFinite(Number(st.concurrency))){
     if(document.activeElement!==$("concurrencyIn")) $("concurrencyIn").value=String(st.concurrency);
     setText("concurrencyValue",st.concurrency);
@@ -689,6 +1025,7 @@ function applyData(data){
   }
   lastDriveConnected=driveConnected;
   renderFolderBreadcrumb();
+  updateWorkflow(st,data);
   renderCandidates(st);
   renderQueue(st);
   if(!showFilteredLogs){
@@ -729,6 +1066,7 @@ async function postJson(url, body){
   return await res.json().catch(()=>({}));
 }
 function showAction(el, data){
+  if(!el) return;
   const ok = data && (data.ok===true || data.status==="ok" || (data.result && data.result.status==="ok"));
   el.className="msg "+(ok?"ok":"err");
   const msg=(data && (data.message || (data.result && (data.result.message||data.result.errorKey)))) || "";
@@ -741,6 +1079,9 @@ async function bridgeAction(actionId, payload, el, btn){
     const data=await postJson("api/action",{actionId:actionId,payload:payload||{},language:"ar"});
     showAction(el,data);
     return data;
+  }catch(error){
+    setMessage(el,"تعذر الاتصال بخادم TeleDrive الآن. تأكد أن Colab ما زال يعمل ثم أعد المحاولة.",false);
+    return null;
   }finally{ if(btn) btn.disabled=false; }
 }
 async function queueAction(name, btn){
@@ -749,6 +1090,10 @@ async function queueAction(name, btn){
     const data=await postJson("api/queue/"+name,{});
     if(data && data.metrics) applyData(data.metrics);
     showAction($("actionMsg"),data);
+    return data;
+  }catch(error){
+    setMessage($("actionMsg"),"تعذر الاتصال بخادم TeleDrive الآن. تأكد أن Colab ما زال يعمل ثم أعد المحاولة.",false);
+    return null;
   }finally{ if(btn) btn.disabled=false; }
 }
 
@@ -799,13 +1144,17 @@ $("btnCreateFolder").addEventListener("click",async function(){
   }
 });
 
-$("themeIn").addEventListener("change",async function(){
-  const previous=document.documentElement.dataset.theme||"light";
-  const chosen=this.value==="dark"?"dark":"light";
-  applyTheme(chosen);
-  const result=await bridgeAction("settings.set_theme",{theme:chosen},$("themeMsg"),this);
-  if(result && result.status==="ok") setMessage($("themeMsg"),"تم حفظ المظهر "+(chosen==="dark"?"الداكن":"الفاتح")+".",true);
+async function saveTheme(chosen,control){
+  const previous=normalizeTheme(document.documentElement.dataset.theme||"light");
+  const next=normalizeTheme(chosen);
+  applyTheme(next);
+  const result=await bridgeAction("settings.set_theme",{theme:next},$("themeMsg"),control);
+  if(result && result.status==="ok") setMessage($("themeMsg"),"تم حفظ المظهر "+THEME_LABELS[next]+".",true);
   else applyTheme(previous);
+}
+$("themeIn").addEventListener("change",function(){ saveTheme(this.value,this); });
+document.querySelectorAll("[data-theme-choice]").forEach(function(button){
+  button.addEventListener("click",function(){ saveTheme(this.dataset.themeChoice,this); });
 });
 $("concurrencyIn").addEventListener("input",function(){ setText("concurrencyValue",this.value); });
 $("btnConcurrency").addEventListener("click",async function(){
@@ -865,51 +1214,252 @@ $("btnColabCells").addEventListener("click",async function(){
   }
 });
 
-// Mirror of the scanner's MODE_FIELDS: show only the inputs the chosen
-// canonical mode consumes (message / range / latest / chat).
+// Smart default for the common failure reported by the owner: a channel
+// link has no message id, so leaving the old default on "one message"
+// made channel analysis look broken. Auto resolves to a canonical
+// scanner mode from the link itself before anything reaches the bridge.
+function inspectTelegramLink(raw){
+  const original=String(raw||"").trim();
+  if(!original) return {kind:"empty",messageId:null};
+  if(/^(saved|me)$/i.test(original)) return {kind:"channel",messageId:null};
+  if(/^@[A-Za-z0-9_]+$/.test(original)) return {kind:"channel",messageId:null};
+  let path=original.replace(/^https?:\/\//i,"");
+  if(!/^(www\.)?(telegram\.me|t\.me)\//i.test(path)) return {kind:"unknown",messageId:null};
+  path=path.replace(/^(www\.)?(telegram\.me|t\.me)\//i,"");
+  path=path.split(/[?#]/)[0].replace(/\/+$/,"");
+  let parts=path.split("/").filter(Boolean);
+  if(parts[0]==="s") parts=parts.slice(1);
+  if(!parts.length) return {kind:"unknown",messageId:null};
+  if(parts[0]==="joinchat" || parts[0].startsWith("+")) return {kind:"invite",messageId:null};
+  const numeric=function(value){ return /^\d+$/.test(value||""); };
+  if(parts[0]==="c"){
+    if(parts.length>=3 && numeric(parts[parts.length-1])) return {kind:"message",messageId:Number(parts[parts.length-1])};
+    if(parts.length===2 && numeric(parts[1])) return {kind:"channel",messageId:null};
+    return {kind:"unknown",messageId:null};
+  }
+  if(parts.length>=2 && numeric(parts[parts.length-1])) return {kind:"message",messageId:Number(parts[parts.length-1])};
+  if(parts.length===1) return {kind:"channel",messageId:null};
+  return {kind:"unknown",messageId:null};
+}
+function resolveAnalyzeMode(selectedMode,info){
+  if(selectedMode!=="auto") return selectedMode;
+  return info.kind==="message" ? "message" : "chat";
+}
+function updateLinkHint(){
+  const hint=$("linkHint");
+  if(!hint) return;
+  const link=$("linkIn").value.trim();
+  const info=inspectTelegramLink(link);
+  const selected=$("modeIn").value;
+  const resolved=resolveAnalyzeMode(selected,info);
+  const limit=numOrNull("limitIn")||200;
+  let text="الصق رابط قناة أو مجموعة أو رسالة؛ الوضع التلقائي سيتعرف عليه ويختار الفحص المناسب.";
+  if(info.kind==="message"){
+    text=selected==="auto"
+      ? "تم التعرف على رابط رسالة مباشرة رقم "+info.messageId+" — سيتم تحليل هذه الرسالة فقط."
+      : "الرابط يحتوي رسالة رقم "+info.messageId+".";
+  }else if(info.kind==="channel"){
+    text=selected==="auto"
+      ? "تم التعرف على رابط قناة/مجموعة — سيتم فحص أحدث ما يصل إلى "+limit+" رسالة واستخراج الملفات القابلة للتنزيل."
+      : "هذا رابط قناة/مجموعة بلا رقم رسالة.";
+    if(selected==="message") text+=" وضع «رسالة محددة» لن يعمل وحده هنا؛ اختر «تلقائي» أو «قناة/محادثة» أو أدخل رقم رسالة.";
+  }else if(info.kind==="invite"){
+    text="تم التعرف على رابط دعوة خاصة — سيتم فحص المحادثة إذا كان حساب Telegram عضوًا فيها بالفعل.";
+  }else if(info.kind==="unknown" && link){
+    text="لم يتم التعرف على صيغة الرابط بعد. استخدم https://t.me/channel أو رابط رسالة أو @username.";
+  }
+  if(selected!=="auto" && info.kind!=="empty" && info.kind!=="unknown"){
+    const labels={message:"رسالة محددة",range:"نطاق رسائل",latest:"أحدث رسائل",chat:"قناة/محادثة حتى الحد"};
+    text+=" الوضع اليدوي الحالي: "+(labels[resolved]||resolved)+".";
+  }
+  hint.textContent=text;
+}
+// Mirror of the scanner's MODE_FIELDS, plus Auto which needs the bounded
+// limit because a channel link resolves to chat under that same bound.
 function syncModeFields(){
   const mode=$("modeIn").value;
   const show=function(id,on){ const el=$(id); if(el) el.style.display=on?"":"none"; };
   show("fldMessageId", mode==="message");
   show("fldStartId", mode==="range");
   show("fldEndId", mode==="range");
-  show("fldLimit", mode==="latest" || mode==="chat");
+  show("fldLimit", mode==="auto" || mode==="latest" || mode==="chat");
+  updateLinkHint();
 }
 $("modeIn").addEventListener("change",syncModeFields);
-syncModeFields();
 
 function numOrNull(id){
-  const raw=$(id).value.trim();
+  const input=$(id);
+  if(!input) return null;
+  const raw=input.value.trim();
   if(!raw) return null;
   const value=Number(raw);
   return Number.isFinite(value) ? Math.trunc(value) : null;
 }
-$("btnAnalyze").addEventListener("click",function(){
+function floatOrNull(id){
+  const input=$(id);
+  if(!input) return null;
+  const raw=input.value.trim();
+  if(!raw) return null;
+  const value=Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+function selectedMediaTypes(){
+  const values=Array.from(document.querySelectorAll(".media-type-in"))
+    .filter(function(box){return box.checked;})
+    .map(function(box){return box.value;});
+  return (!values.length || values.includes("all")) ? ["all"] : values;
+}
+function setAllMediaTypes(){
+  document.querySelectorAll(".media-type-in").forEach(function(box){ box.checked=box.value==="all"; });
+}
+document.querySelectorAll(".media-type-in").forEach(function(box){
+  box.addEventListener("change",function(){
+    if(this.value==="all" && this.checked){
+      document.querySelectorAll(".media-type-in").forEach(function(other){ if(other!==box) other.checked=false; });
+    }else if(this.checked){
+      const all=document.querySelector('.media-type-in[value="all"]');
+      if(all) all.checked=false;
+    }else if(!document.querySelector(".media-type-in:checked")){
+      setAllMediaTypes();
+    }
+  });
+});
+$("linkIn").addEventListener("input",function(){ linkTouched=true; updateLinkHint(); });
+$("linkIn").addEventListener("paste",function(){ linkTouched=true; window.setTimeout(updateLinkHint,0); });
+$("linkIn").addEventListener("keydown",function(event){
+  if(event.key==="Enter"){ event.preventDefault(); $("btnAnalyze").click(); }
+});
+$("limitIn").addEventListener("input",updateLinkHint);
+$("btnRememberLink").addEventListener("click",async function(){
+  const link=$("linkIn").value.trim();
+  if(!link){ setMessage($("analyzeMsg"),"الصق رابطًا أولًا ثم اضغط «تذكّر هذا الرابط».",false); return; }
+  const result=await bridgeAction("analyze.remember_link",{link:link},$("analyzeMsg"),this);
+  if(result && result.status==="ok") setMessage($("analyzeMsg"),"تم تذكّر الرابط لهذا الحساب.",true);
+});
+$("btnClearRememberedLink").addEventListener("click",async function(){
+  const result=await bridgeAction("analyze.clear_remembered_link",{},$("analyzeMsg"),this);
+  if(result && result.status==="ok"){
+    linkTouched=true; $("linkIn").value=""; updateLinkHint();
+    setMessage($("analyzeMsg"),"تم مسح الرابط المحفوظ.",true);
+  }
+});
+
+$("btnAnalyze").addEventListener("click",async function(){
   const msg=$("analyzeMsg");
-  const mode=$("modeIn").value;
-  const payload={link:$("linkIn").value.trim(),mode:mode,mediaTypes:["all"],
+  const selectedMode=$("modeIn").value;
+  const info=inspectTelegramLink($("linkIn").value);
+  const mode=resolveAnalyzeMode(selectedMode,info);
+  const payload={link:$("linkIn").value.trim(),mode:mode,mediaTypes:selectedMediaTypes(),
     messageId:numOrNull("messageIdIn"),startId:numOrNull("startIdIn"),
     endId:numOrNull("endIdIn"),limit:numOrNull("limitIn")};
-  const fail=function(text){ msg.className="msg err"; msg.textContent="⚠️ "+text; };
+  const fail=function(text){ setMessage(msg,text,false); };
   if(!payload.link) return fail("الصق رابط تيليجرام أولًا.");
+  if(info.kind==="unknown") return fail("صيغة الرابط غير معروفة. استخدم https://t.me/channel أو رابط رسالة كاملًا أو @username.");
   if(payload.messageId!=null && payload.messageId<=0) return fail("رقم الرسالة يجب أن يكون أكبر من صفر.");
+  if(mode==="message"){
+    if(payload.messageId==null) payload.messageId=info.messageId;
+    if(payload.messageId==null) return fail("هذا رابط قناة بلا رقم رسالة. اختر «تلقائي» أو «قناة/محادثة حتى حد الرسائل»، أو أدخل رقم الرسالة يدويًا.");
+  }
   if(mode==="range"){
     if(payload.startId==null || payload.endId==null) return fail("وضع النطاق يحتاج رقمي «من رسالة» و«إلى رسالة».");
     if(payload.startId<=0 || payload.endId<payload.startId) return fail("نطاق الرسائل غير صحيح: «إلى» يجب ألا تقل عن «من».");
     if(payload.endId-payload.startId+1>1000) return fail("النطاق أكبر من الحد الأقصى 1000 رسالة.");
   }
+  if(mode==="chat" || mode==="latest") payload.limit=payload.limit==null?200:payload.limit;
   if(payload.limit!=null && (payload.limit<1 || payload.limit>1000))
     return fail("حد الرسائل يجب أن يكون بين 1 و1000.");
-  bridgeAction("analyze.run",payload,msg,this);
+  msg.className="msg note";
+  msg.textContent="⏳ جارٍ تحليل الرابط الآن… قد يستغرق فحص القنوات الكبيرة بعض الوقت بحسب حد الرسائل.";
+  const result=await bridgeAction("analyze.run",payload,msg,this);
+  if(!result || result.status!=="ok") return;
+  const rows=(result.state && result.state.candidates)||[];
+  if(result.state) renderCandidates(result.state);
+  if(rows.length){
+    const bytes=rows.reduce(function(sum,item){return sum+(Number(item.sizeBytes)||0);},0);
+    const modeText=selectedMode==="auto" ? (mode==="message"?"رسالة مباشرة":"قناة/محادثة") : mode;
+    setMessage(msg,"اكتمل تحليل "+modeText+": وجدنا "+rows.length+" ملف قابل للتنزيل"+(bytes?" بحجم تقريبي "+humanBytes(bytes):"")+". حدّد المطلوب من صندوق النتائج في الخطوة 4.",true);
+    $("results").scrollIntoView({behavior:"smooth",block:"start"});
+  }else{
+    setMessage(msg,"اكتمل التحليل لكن لم نجد ملفات قابلة للتنزيل في النطاق المفحوص. جرّب زيادة حد الرسائل، أو تغيير الوضع/أنواع الملفات، وتأكد أن حسابك يستطيع فتح القناة.",false);
+  }
 });
-$("btnSelectAll").addEventListener("click",function(){ bridgeAction("analyze.select_all",{},$("analyzeMsg"),this); });
-$("btnClearSel").addEventListener("click",function(){ bridgeAction("analyze.clear_selection",{},$("analyzeMsg"),this); });
-$("btnEnqueue").addEventListener("click",function(){ bridgeAction("analyze.enqueue_selected",{},$("analyzeMsg"),this); });
+$("candidateSearchIn").addEventListener("input",function(){
+  candidateSearch=this.value.trim().toLocaleLowerCase();
+  candSignature="";
+  renderCandidates({candidates:lastCandidates});
+  const pane=$("candidatePane"); if(pane) pane.scrollTop=0;
+});
+$("btnSelectAll").addEventListener("click",function(){ bridgeAction("analyze.select_all",{},$("selectionMsg"),this); });
+$("btnClearSel").addEventListener("click",function(){ bridgeAction("analyze.clear_selection",{},$("selectionMsg"),this); });
+$("btnEnqueue").addEventListener("click",async function(){
+  const result=await bridgeAction("analyze.enqueue_selected",{},$("selectionMsg"),this);
+  if(result && result.status==="ok"){
+    setMessage($("selectionMsg"),"تمت إضافة الملفات المحددة إلى الطابور. ابدأ النقل من الخطوة 5.",true);
+    $("transfer").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+});
+function currentFilterPayload(){
+  return {
+    mediaTypes:selectedMediaTypes(),
+    extensions:$("filterExtensionsIn").value.trim(),
+    minSizeMb:floatOrNull("filterMinSizeIn"),
+    maxSizeMb:floatOrNull("filterMaxSizeIn"),
+    dateFrom:$("filterDateFromIn").value,
+    dateTo:$("filterDateToIn").value,
+    include:$("filterIncludeIn").value.trim(),
+    exclude:$("filterExcludeIn").value.trim()
+  };
+}
+$("btnApplyFilters").addEventListener("click",async function(){
+  const payload=currentFilterPayload();
+  if(payload.minSizeMb!=null && payload.minSizeMb<0) return setMessage($("selectionMsg"),"الحد الأدنى للحجم لا يمكن أن يكون سالبًا.",false);
+  if(payload.maxSizeMb!=null && payload.maxSizeMb<0) return setMessage($("selectionMsg"),"الحد الأقصى للحجم لا يمكن أن يكون سالبًا.",false);
+  if(payload.minSizeMb!=null && payload.maxSizeMb!=null && payload.maxSizeMb<payload.minSizeMb)
+    return setMessage($("selectionMsg"),"الحد الأقصى للحجم يجب ألا يقل عن الحد الأدنى.",false);
+  if(payload.dateFrom && payload.dateTo && payload.dateTo<payload.dateFrom)
+    return setMessage($("selectionMsg"),"تاريخ الانتهاء يجب ألا يسبق تاريخ البدء.",false);
+  const result=await bridgeAction("analyze.apply_filters",payload,$("selectionMsg"),this);
+  if(result && result.state) renderCandidates(result.state);
+});
+$("btnResetFilters").addEventListener("click",async function(){
+  ["filterExtensionsIn","filterMinSizeIn","filterMaxSizeIn","filterDateFromIn","filterDateToIn","filterIncludeIn","filterExcludeIn"]
+    .forEach(function(id){ $(id).value=""; });
+  setAllMediaTypes();
+  $("candidateSearchIn").value=""; candidateSearch=""; candSignature="";
+  const result=await bridgeAction("analyze.apply_filters",currentFilterPayload(),$("selectionMsg"),this);
+  if(result && result.state) renderCandidates(result.state);
+});
+$("btnSelectRange").addEventListener("click",function(){
+  const startId=numOrNull("selectStartIn"), endId=numOrNull("selectEndIn");
+  if(startId==null || endId==null) return setMessage($("selectionMsg"),"أدخل رقمي بداية ونهاية نطاق الرسائل المراد تحديده.",false);
+  if(startId<=0 || endId<startId) return setMessage($("selectionMsg"),"نطاق التحديد غير صحيح: النهاية يجب ألا تقل عن البداية.",false);
+  bridgeAction("analyze.select_range",{startId:startId,endId:endId},$("selectionMsg"),this);
+});
+$("btnSelectGroup").addEventListener("click",function(){
+  const groupId=$("selectGroupIn").value;
+  if(!groupId) return setMessage($("selectionMsg"),"اختر القناة/المجموعة من قائمة النتائج أولًا.",false);
+  bridgeAction("analyze.select_group",{groupId:groupId},$("selectionMsg"),this);
+});
+syncModeFields();
+
 $("btnStart").addEventListener("click",function(){ queueAction("start",this); });
 $("btnPause").addEventListener("click",function(){ queueAction("pause",this); });
 $("btnResume").addEventListener("click",function(){ queueAction("resume",this); });
 $("btnStop").addEventListener("click",function(){ queueAction("stop",this); });
 $("btnRetry").addEventListener("click",function(){ queueAction("retry_failed",this); });
+$("btnQueueRefresh").addEventListener("click",function(){ bridgeAction("queue.refresh",{},$("actionMsg"),this); });
+$("btnClearCompleted").addEventListener("click",function(){ bridgeAction("queue.clear_completed",{},$("actionMsg"),this); });
+$("btnClearIncomplete").addEventListener("click",function(){
+  if(!window.confirm("سيتم مسح العناصر غير المكتملة من الطابور. هل تريد المتابعة؟")) return;
+  bridgeAction("queue.clear_incomplete",{},$("actionMsg"),this);
+});
+$("qBody").addEventListener("click",function(event){
+  const button=event.target.closest ? event.target.closest("[data-queue-action]") : null;
+  if(!button) return;
+  const actions={pause:"queue.pause_item",resume:"queue.resume_item",stop:"queue.stop_item",retry:"queue.retry_item"};
+  const actionId=actions[button.dataset.queueAction];
+  if(actionId) bridgeAction(actionId,{itemId:button.dataset.itemId},$("actionMsg"),button);
+});
 </script>
 </body>
 </html>
@@ -939,7 +1489,7 @@ def create_web_app(ctx: Any):
     def index():
         preferences = getattr(ctx, "preferences", None)
         theme = preferences.current_theme() if preferences is not None else "light"
-        if theme not in {"light", "dark"}:
+        if theme not in WEB_THEMES:
             theme = "light"
         raw_gradio_url = str(getattr(ctx, "gradio_proxy_url", "") or "").strip()
         parsed_gradio_url = urlsplit(raw_gradio_url)

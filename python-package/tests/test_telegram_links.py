@@ -37,3 +37,33 @@ def test_invalid():
         parse("http://example.com/x")
     with pytest.raises(InvalidLink):
         parse("")
+
+
+@pytest.mark.parametrize(
+    ("value", "kind", "chat", "message_id"),
+    [
+        ("@somechannel", "username_only", "somechannel", None),
+        ("t.me/somechannel/123?single", "public", "somechannel", 123),
+        (
+            "https://www.telegram.me/s/somechannel/123#comment",
+            "public",
+            "somechannel",
+            123,
+        ),
+        ("https://t.me/somechannel?boost=1", "username_only", "somechannel", None),
+        ("https://telegram.me/joinchat/abcdef", "invite", "abcdef", None),
+        ("https://t.me/c/1234567890", "private", -1001234567890, None),
+        ("https://t.me/c/1234567890/50?comment=1", "private", -1001234567890, 50),
+    ],
+)
+def test_common_copied_link_spellings(value, kind, chat, message_id):
+    parsed = parse(value)
+    assert parsed.kind == kind
+    assert parsed.chat == chat
+    assert parsed.message_id == message_id
+    assert parsed.raw == value
+
+
+def test_lookalike_host_is_still_refused():
+    with pytest.raises(InvalidLink):
+        parse("https://t.me.example.com/somechannel/123")

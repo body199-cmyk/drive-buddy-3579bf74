@@ -865,6 +865,7 @@ def _advanced(ctx, binder, seed, lang) -> dict[str, Any]:
             theme_ready = binder.is_ready("settings.set_theme")
             theme_radio = gr.Radio(
                 choices=[(t("settings.theme.light"), "light"),
+                         (t("settings.theme.dim"), "dim"),
                          (t("settings.theme.dark"), "dark")],
                 value=seed["theme"], label=t("btn.theme"),
                 interactive=theme_ready, visible=True,

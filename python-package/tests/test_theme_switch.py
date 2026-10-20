@@ -9,16 +9,18 @@ PROVES = ("settings.set_theme",)
 
 def test_dark_differs_from_light_and_invalid_falls_back():
     dark = theme_style_block("dark")
+    dim = theme_style_block("dim")
     light = theme_style_block("light")
-    assert dark != light
+    assert len({dark, dim, light}) == 3
     assert "data-td-theme=\"dark\"" in dark
+    assert "data-td-theme=\"dim\"" in dim
     assert "data-td-theme=\"light\"" in light
     # invalid -> dark
     assert "data-td-theme=\"dark\"" in theme_style_block("banana")
 
 
-def test_all_tokens_present_for_both_themes():
-    for theme_name in ("dark", "light"):
+def test_all_tokens_present_for_all_themes():
+    for theme_name in ("dark", "dim", "light"):
         block = theme_style_block(theme_name)
         for key in _all_token_keys():
             css_var = f"--td-{key}"
@@ -33,6 +35,10 @@ def test_set_theme_handler_returns_style_block(ctx):
     assert "✅" in status
     # Preference persisted.
     assert ctx.preferences.current_theme() == "dark"
+    html_update, status = ctx.handlers.h_settings_set_theme("dim")
+    assert html_update["value"] == theme_style_block("dim")
+    assert "خافت (X)" in status
+    assert ctx.preferences.current_theme() == "dim"
     html_update, status = ctx.handlers.h_settings_set_theme("light")
     assert html_update["value"] == theme_style_block("light")
     assert ctx.preferences.current_theme() == "light"
