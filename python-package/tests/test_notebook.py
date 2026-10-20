@@ -130,7 +130,9 @@ def test_cell_3_uses_drive_managed_vault_before_optional_secret_migration():
 def test_cell_4_offers_modern_web_dashboard_and_classic_gradio_backup():
     cell4 = notebook_cells.CELLS[3]["code"]
     # M46-T01: one dropdown, two interfaces, same ONE context/loop/clients.
-    assert 'UI_MODE = "Modern_Web_Dashboard"' in cell4
+    # M46-T03: Run_Both_Together is the DEFAULT — modern-only is a dead end
+    # before a saved Telegram session exists (login fields live in Gradio).
+    assert 'UI_MODE = "Run_Both_Together"' in cell4
     assert '"Classic_Gradio_Backup"' in cell4
     assert '"Run_Both_Together"' in cell4
     assert "from teledrive.web_dashboard import launch_web_dashboard" in cell4
@@ -147,6 +149,15 @@ def test_cell_4_offers_modern_web_dashboard_and_classic_gradio_backup():
     )
     assert "Stale package without the web dashboard" in cell4
     assert 'print("selected UI_MODE:", UI_MODE)' in cell4
+    # M46-T03: failure of Gradio's port/startup must not abort the modern
+    # server in Run_Both_Together; a Web failure still tries Gradio, and
+    # the cell must say explicitly if neither interface is serving.
+    classic_try = cell4.index("try:\n        launch(ctx, share=False")
+    web_start = cell4.index("launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)")
+    assert classic_try < web_start
+    assert "Classic Gradio unavailable:" in cell4
+    assert "Classic Gradio fallback unavailable:" in cell4
+    assert "no UI is serving" in cell4
     # The choice happens AFTER vault restore, on the same injected ctx.
     assert cell4.index("session_vault.restore_from_context") < cell4.index("UI_MODE")
 

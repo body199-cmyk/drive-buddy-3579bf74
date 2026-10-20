@@ -281,13 +281,29 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
       <select id="modeIn">
         <option value="message">رسالة واحدة</option>
         <option value="range">نطاق رسائل</option>
-        <option value="channel">قناة كاملة</option>
+        <option value="latest">أحدث رسائل</option>
+        <option value="chat">قناة/محادثة كاملة</option>
       </select>
       <button id="btnAnalyze">تحليل</button>
       <button class="alt" id="btnSelectAll">تحديد الكل</button>
+      <button class="alt" id="btnClearSel">مسح التحديد</button>
       <button class="alt" id="btnEnqueue">إضافة للطابور</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <label class="note" id="fldMessageId">رقم الرسالة (اختياري إن كان في الرابط)
+        <input type="number" id="messageIdIn" min="1" style="width:150px"></label>
+      <label class="note" id="fldStartId">من رسالة رقم
+        <input type="number" id="startIdIn" min="1" style="width:130px"></label>
+      <label class="note" id="fldEndId">إلى رسالة رقم
+        <input type="number" id="endIdIn" min="1" style="width:130px"></label>
+      <label class="note" id="fldLimit">حد الرسائل (1–1000)
+        <input type="number" id="limitIn" min="1" max="1000" value="200" style="width:130px"></label>
+    </div>
     <div class="msg note" id="analyzeMsg"></div>
+    <div style="overflow:auto;margin-top:8px">
+      <table><thead><tr><th>تحديد</th><th>نتيجة التحليل (<span id="cCount">0</span> · محدد <span id="cSel">0</span>)</th><th>النوع</th><th>الحجم</th><th>المصدر</th></tr></thead>
+      <tbody id="cBody"><tr><td colspan="5" class="note">لا نتائج بعد — الصق رابطًا واضغط «تحليل» وستظهر الملفات هنا لتحديدها قبل الإضافة للطابور.</td></tr></tbody></table>
+    </div>
     <div class="row" style="margin-top:8px">
       <button id="btnStart">▶️ بدء النقل</button>
       <button class="warn" id="btnPause">⏸️ إيقاف مؤقت</button>
@@ -349,6 +365,49 @@ function renderQueue(state){
   }
 }
 
+// Raw state-machine strings -> friendly Arabic (raw kept as fallback).
+const TG_LABELS={AUTHORIZED:"✅ متصل",CONNECTED:"✅ متصل",DISCONNECTED:"غير متصل",
+  READY_FOR_PHONE:"بانتظار تسجيل الدخول (من Gradio)",SENDING_CODE:"جارٍ إرسال الكود…",
+  CODE_REQUESTED:"بانتظار إدخال الكود (من Gradio)",VERIFYING_CODE:"جارٍ التحقق من الكود…",
+  PASSWORD_REQUIRED:"بانتظار كلمة سر 2FA (من Gradio)",VERIFYING_PASSWORD:"جارٍ التحقق…",
+  REAUTH_REQUIRED:"يلزم إعادة تسجيل الدخول",ERROR:"خطأ — راجع Gradio"};
+function friendlyStatus(raw){ return TG_LABELS[raw] || raw || "—"; }
+
+// Analyze candidates: re-render ONLY when the visible signature changes,
+// so the 1s polling never clobbers a checkbox mid-click.
+let candSignature="";
+function renderCandidates(state){
+  const rows=(state && state.candidates) || [];
+  const sig=rows.map(function(c){return [c.sourceId,c.selected,c.status].join(":");}).join("|");
+  setText("cCount", rows.length);
+  setText("cSel", rows.filter(function(c){return c.selected;}).length);
+  if(sig===candSignature) return;
+  candSignature=sig;
+  const body=$("cBody"); body.textContent="";
+  if(!rows.length){
+    const tr=document.createElement("tr"); const td=document.createElement("td");
+    td.colSpan=5; td.className="note";
+    td.textContent="لا نتائج بعد — الصق رابطًا واضغط «تحليل» وستظهر الملفات هنا لتحديدها قبل الإضافة للطابور.";
+    tr.appendChild(td); body.appendChild(tr); return;
+  }
+  for(const item of rows.slice(0,300)){
+    const tr=document.createElement("tr");
+    const pick=document.createElement("td");
+    const box=document.createElement("input");
+    box.type="checkbox"; box.checked=!!item.selected;
+    box.addEventListener("change",function(){
+      bridgeAction("analyze.toggle_row",{sourceId:item.sourceId},$("analyzeMsg"),this);
+    });
+    pick.appendChild(box);
+    const name=document.createElement("td"); name.textContent=item.name||item.sourceId||"";
+    const kind=document.createElement("td"); kind.textContent=item.mediaType||"";
+    const size=document.createElement("td"); size.textContent=humanBytes(item.sizeBytes);
+    const src=document.createElement("td");
+    src.textContent=[item.groupLabel,item.dateLabel].filter(Boolean).join(" · ");
+    tr.append(pick,name,kind,size,src); body.appendChild(tr);
+  }
+}
+
 function applyData(data){
   if(!data) return;
   setText("syncClock","🟢 متصل لحظياً • "+(data.server_time||""));
@@ -361,8 +420,9 @@ function applyData(data){
   setText("mPending", data.pending || 0);
   setText("mDisk", humanBytes(data.free_disk_bytes));
   const st=data.state||{};
-  setText("mTg", (st.telegram && st.telegram.status) || "—");
-  setText("mDrive", (st.drive && st.drive.status) || "—");
+  setText("mTg", friendlyStatus(st.telegram && st.telegram.status));
+  setText("mDrive", friendlyStatus(st.drive && st.drive.status));
+  renderCandidates(st);
   renderQueue(st);
   const lb=$("logsBox");
   lb.textContent=(data.logs||[]).join("\n");
@@ -412,11 +472,45 @@ async function queueAction(name, btn){
     showAction($("actionMsg"),data);
   }finally{ if(btn) btn.disabled=false; }
 }
+// Mirror of the scanner's MODE_FIELDS: show only the inputs the chosen
+// canonical mode consumes (message / range / latest / chat).
+function syncModeFields(){
+  const mode=$("modeIn").value;
+  const show=function(id,on){ const el=$(id); if(el) el.style.display=on?"":"none"; };
+  show("fldMessageId", mode==="message");
+  show("fldStartId", mode==="range");
+  show("fldEndId", mode==="range");
+  show("fldLimit", mode==="latest" || mode==="chat");
+}
+$("modeIn").addEventListener("change",syncModeFields);
+syncModeFields();
+
+function numOrNull(id){
+  const raw=$(id).value.trim();
+  if(!raw) return null;
+  const value=Number(raw);
+  return Number.isFinite(value) ? Math.trunc(value) : null;
+}
 $("btnAnalyze").addEventListener("click",function(){
-  bridgeAction("analyze.run",{link:$("linkIn").value.trim(),mode:$("modeIn").value,limit:1000,mediaTypes:["all"]},
-    $("analyzeMsg"),this);
+  const msg=$("analyzeMsg");
+  const mode=$("modeIn").value;
+  const payload={link:$("linkIn").value.trim(),mode:mode,mediaTypes:["all"],
+    messageId:numOrNull("messageIdIn"),startId:numOrNull("startIdIn"),
+    endId:numOrNull("endIdIn"),limit:numOrNull("limitIn")};
+  const fail=function(text){ msg.className="msg err"; msg.textContent="⚠️ "+text; };
+  if(!payload.link) return fail("الصق رابط تيليجرام أولًا.");
+  if(payload.messageId!=null && payload.messageId<=0) return fail("رقم الرسالة يجب أن يكون أكبر من صفر.");
+  if(mode==="range"){
+    if(payload.startId==null || payload.endId==null) return fail("وضع النطاق يحتاج رقمي «من رسالة» و«إلى رسالة».");
+    if(payload.startId<=0 || payload.endId<payload.startId) return fail("نطاق الرسائل غير صحيح: «إلى» يجب ألا تقل عن «من».");
+    if(payload.endId-payload.startId+1>1000) return fail("النطاق أكبر من الحد الأقصى 1000 رسالة.");
+  }
+  if(payload.limit!=null && (payload.limit<1 || payload.limit>1000))
+    return fail("حد الرسائل يجب أن يكون بين 1 و1000.");
+  bridgeAction("analyze.run",payload,msg,this);
 });
 $("btnSelectAll").addEventListener("click",function(){ bridgeAction("analyze.select_all",{},$("analyzeMsg"),this); });
+$("btnClearSel").addEventListener("click",function(){ bridgeAction("analyze.clear_selection",{},$("analyzeMsg"),this); });
 $("btnEnqueue").addEventListener("click",function(){ bridgeAction("analyze.enqueue_selected",{},$("analyzeMsg"),this); });
 $("btnStart").addEventListener("click",function(){ queueAction("start",this); });
 $("btnPause").addEventListener("click",function(){ queueAction("pause",this); });

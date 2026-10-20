@@ -83,12 +83,17 @@ def _manifest(payload: bytes = PKG_BYTES, **overrides) -> dict:
 
 
 class _FakeResponse(io.BytesIO):
+    _final_url = ""
+
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.close()
         return False
+
+    def geturl(self):  # urllib responses expose the post-redirect URL
+        return self._final_url
 
 
 def _make_fetch(routes: dict, calls: list):
@@ -97,6 +102,10 @@ def _make_fetch(routes: dict, calls: list):
         outcome = routes[url]
         if isinstance(outcome, Exception):
             raise outcome
+        if isinstance(outcome, tuple):  # (payload, final_url_after_redirect)
+            response = _FakeResponse(outcome[0])
+            response._final_url = outcome[1]
+            return response
         return _FakeResponse(outcome)
 
     return fetch
@@ -115,9 +124,10 @@ def clean_modules(monkeypatch):
 
 
 def _try(content, **kwargs):
-    # Legacy pinned-release tests opt out of the latest-release hop; the
-    # dedicated latest tests below pass latest_api_url explicitly.
+    # Legacy pinned-release tests opt out of the latest-release hops; the
+    # dedicated latest tests below pass the URLs explicitly.
     kwargs.setdefault("latest_api_url", None)
+    kwargs.setdefault("latest_page_url", None)
     lines: list[str] = []
     result = NS["pkg_try_update"](content, emit=lines.append, **kwargs)
     return result, lines
@@ -448,8 +458,15 @@ def test_latest_release_wins_over_pinned(tmp_path, clean_modules):
     )
     assert result["outcome"] == "success"
     assert LATEST_TAG in lines[0]
-    # Pinned manifest never consulted once the latest one is trusted.
-    assert calls == [LATEST_API_URL, LATEST_MANIFEST_URL, LATEST_ARCHIVE_URL]
+    # M46-T03: the pinned manifest IS consulted for build-rank comparison
+    # (both legacy manifests rank 0 -> tie -> latest wins), but only the
+    # winning (latest) archive is ever fetched.
+    assert calls == [
+        LATEST_API_URL,
+        LATEST_MANIFEST_URL,
+        MANIFEST_URL,
+        LATEST_ARCHIVE_URL,
+    ]
     state = json.loads((tmp_path / "teledrive_package_state.json").read_text())
     assert state["release"] == LATEST_TAG
 
@@ -521,3 +538,110 @@ def test_latest_manifest_from_another_tag_is_not_trusted(tmp_path, clean_modules
     assert result["outcome"] == "success"
     assert RELEASE in lines[0]
     assert LATEST_ARCHIVE_URL not in calls
+
+
+# ---- M46-T03: redirect resolution (no API quota) + build-rank choice --------
+
+LATEST_PAGE_URL = NS["PKG_LATEST_PAGE_URL"]
+LATEST_TAG_PAGE_URL = (
+    "https://github.com/body199-cmyk/drive-buddy-3579bf74"
+    "/releases/tag/" + LATEST_TAG
+)
+
+
+def test_redirect_resolves_latest_when_api_is_rate_limited(tmp_path, clean_modules):
+    """Shared Colab IPs exhaust the unauthenticated GitHub API quota; the
+    /releases/latest redirect must still resolve the newest pkg tag."""
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: urllib.error.HTTPError(
+                LATEST_API_URL, 403, "rate limited", None, None
+            ),
+            LATEST_PAGE_URL: (b"<!DOCTYPE html><title>release</title>", LATEST_TAG_PAGE_URL),
+            LATEST_MANIFEST_URL: json.dumps(_latest_manifest()).encode(),
+            LATEST_ARCHIVE_URL: PKG_BYTES,
+            MANIFEST_URL: json.dumps(_manifest()).encode(),
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+        latest_page_url=LATEST_PAGE_URL,
+    )
+    assert result["outcome"] == "success"
+    assert LATEST_TAG in lines[0]
+    assert calls[:2] == [LATEST_API_URL, LATEST_PAGE_URL]
+    assert LATEST_MANIFEST_URL in calls
+
+
+def test_pinned_with_newer_build_run_id_beats_stale_latest(tmp_path, clean_modules):
+    """A stable tag refreshed in place keeps its old creation date, so it
+    may never become "/releases/latest" again — its newer build_run_id
+    must still win over an older per-run release."""
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: _latest_api_payload(),
+            # Latest-created release: OLD build served from OTHER_BYTES.
+            LATEST_MANIFEST_URL: json.dumps(
+                _latest_manifest(
+                    payload=OTHER_BYTES,
+                    sha256=hashlib.sha256(OTHER_BYTES).hexdigest(),
+                    size_bytes=len(OTHER_BYTES),
+                    build_run_id=100,
+                )
+            ).encode(),
+            LATEST_ARCHIVE_URL: OTHER_BYTES,
+            # Pinned stable tag: NEWER build of the real package.
+            MANIFEST_URL: json.dumps(_manifest(build_run_id=200)).encode(),
+            ARCHIVE_URL: PKG_BYTES,
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert RELEASE in lines[0]
+    assert (tmp_path / "teledrive_v4.5.zip").read_bytes() == PKG_BYTES
+    assert LATEST_ARCHIVE_URL not in calls  # losing archive never fetched
+
+
+def test_latest_with_newer_build_run_id_beats_pinned(tmp_path, clean_modules):
+    calls: list[str] = []
+    fetch = _make_fetch(
+        {
+            LATEST_API_URL: _latest_api_payload(),
+            LATEST_MANIFEST_URL: json.dumps(
+                _latest_manifest(build_run_id=300)
+            ).encode(),
+            LATEST_ARCHIVE_URL: PKG_BYTES,
+            MANIFEST_URL: json.dumps(
+                _manifest(
+                    payload=OTHER_BYTES,
+                    sha256=hashlib.sha256(OTHER_BYTES).hexdigest(),
+                    size_bytes=len(OTHER_BYTES),
+                    build_run_id=200,
+                )
+            ).encode(),
+            ARCHIVE_URL: OTHER_BYTES,
+        },
+        calls,
+    )
+    result, lines = _try(
+        tmp_path,
+        fetch=fetch,
+        manifest_url=MANIFEST_URL,
+        latest_api_url=LATEST_API_URL,
+    )
+    assert result["outcome"] == "success"
+    assert LATEST_TAG in lines[0]
+    assert (tmp_path / "teledrive_v4.5.zip").read_bytes() == PKG_BYTES
+    assert ARCHIVE_URL not in calls
