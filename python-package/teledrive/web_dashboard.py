@@ -252,10 +252,43 @@ HTML_PAGE = r"""<!DOCTYPE html>
   --shadow:0 12px 30px rgba(0,0,0,.28);
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:118px}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.55;
-  background:radial-gradient(1200px 600px at 80% -10%,var(--glow),transparent),var(--bg);color:var(--text)}
-.wrap{max-width:1180px;margin:0 auto;padding:14px 14px 44px}
+  background:radial-gradient(1200px 600px at 80% -10%,var(--glow),transparent),var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body.drawer-open{overflow:hidden}
+*{scrollbar-color:var(--bar-bg) transparent}
+.app-shell{width:min(100%,1540px);min-height:100vh;margin:0 auto;display:grid;grid-template-columns:250px minmax(0,1fr);align-items:start}
+.sidebar{position:sticky;top:0;height:100vh;height:100dvh;overflow-y:auto;padding:19px 13px 16px;
+  border-inline-start:1px solid var(--border);background:var(--header-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.sidebar-brand{display:flex;align-items:center;gap:11px;padding:4px 9px 18px;border-bottom:1px solid var(--border);margin-bottom:15px}
+.brand-mark{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;border-radius:14px;
+  background:linear-gradient(135deg,var(--blue),var(--primary-2));color:#fff;font-size:21px;box-shadow:0 8px 18px var(--glow)}
+.sidebar-brand strong{display:block;font-size:16px;line-height:1.3}
+.sidebar-brand small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.sidebar-caption{padding:0 10px;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;margin:14px 0 7px}
+.side-nav,.drawer-nav{display:grid;gap:5px}
+.nav-item{width:100%;min-height:44px;justify-content:flex-start;text-align:right;padding:8px 9px;border:1px solid transparent;
+  border-radius:12px;background:transparent;color:var(--muted);box-shadow:none;font-family:inherit;font-size:13px;font-weight:700}
+.nav-item:hover{background:var(--surface-2);color:var(--text)}
+.nav-item.is-active{background:var(--selected);border-color:var(--border);color:var(--blue)}
+.nav-icon{width:29px;height:29px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;
+  background:var(--surface-2);color:var(--muted);font-size:16px;font-weight:800;line-height:1}
+.nav-item.is-active .nav-icon{background:var(--blue);color:#fff}
+.nav-label{min-width:0}
+.nav-count{margin-inline-start:auto;min-width:22px;padding:2px 6px;border-radius:999px;background:var(--blue);color:#fff;font-size:10px;line-height:1.4;text-align:center}
+.nav-count[hidden]{display:none}
+.sidebar-footer{margin-top:20px;padding:12px 10px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.sidebar-state{display:flex;gap:9px;align-items:center}
+.sidebar-state strong{display:block;font-size:12px;line-height:1.4}
+.sidebar-state small{display:block;color:var(--muted);font-size:10px;margin-top:1px}
+.state-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 15%,transparent)}
+.state-dot.is-good{background:var(--green);box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 15%,transparent)}
+.state-dot.is-partial{background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 15%,transparent)}
+.sidebar-footer p{margin:9px 0 0;color:var(--muted);font-size:10px;line-height:1.7}
+.main-content{min-width:0}
+.wrap{width:100%;max-width:1280px;margin:0 auto;padding:14px 16px 44px}
+.tab-panel[hidden]{display:none!important}
+.mobile-tabs,.mobile-drawer{display:none}
 .app-header{position:sticky;top:10px;z-index:40;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
   margin:2px 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:18px;background:var(--header-bg);
   box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
@@ -270,9 +303,15 @@ h2{font-size:18px;line-height:1.4;margin:0}
 .theme-switch button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .theme-swatch{width:13px;height:13px;border-radius:50%;border:1px solid var(--border);display:inline-block;flex:0 0 auto}
 .sw-light{background:#f8fafc}.sw-dim{background:#15202b}.sw-dark{background:#020617}
-.workflow{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:8px;margin:10px 0}
-.workflow-step{display:flex;gap:9px;align-items:center;min-height:62px;color:var(--text);text-decoration:none;
-  border:1px solid var(--border);border-radius:14px;padding:9px 10px;background:var(--card)}
+.overview-panel{padding-top:4px}
+.overview-heading{display:flex;align-items:center;gap:12px;margin:4px 1px 11px}
+.overview-heading .step-badge{width:40px;height:40px}
+.overview-heading p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0}
+.workflow-step{display:flex;gap:9px;align-items:center;min-width:0;width:100%;min-height:62px;color:var(--text);text-align:right;
+  border:1px solid var(--border);border-radius:14px;padding:9px 10px;background:var(--card);box-shadow:none;font-family:inherit}
+.workflow-step:hover{border-color:var(--blue);background:var(--selected)}
+.workflow-step.is-active{outline:2px solid var(--blue);outline-offset:1px}
 .workflow-step strong{display:block;font-size:13px;line-height:1.35}
 .workflow-step small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45;margin-top:1px}
 .step-number{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
@@ -282,9 +321,6 @@ h2{font-size:18px;line-height:1.4;margin:0}
 .workflow-step.is-done .step-number{background:var(--green);border-color:var(--green);color:#fff}
 .next-step{border:1px solid var(--border);border-radius:14px;padding:10px 13px;background:var(--selected);font-size:13.5px;margin:8px 0 12px}
 .next-step strong{color:var(--blue)}
-.quick-links{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 2px}
-.quick-links a{color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:var(--card);font-size:12px}
-.quick-links a:hover{color:var(--text);border-color:var(--blue)}
 .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:9px;margin:10px 0 14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:10px;margin:10px 0}
@@ -367,12 +403,33 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 .settings-card label{font-weight:750}
 .secondary-section{margin-top:14px;scroll-margin-top:118px}
 @media(max-width:960px){
-  .workflow{grid-template-columns:repeat(2,minmax(150px,1fr))}
+  .app-shell{display:block;width:100%}
+  .sidebar{display:none}
+  .wrap{max-width:none;padding-bottom:100px}
+  .mobile-tabs{position:fixed;inset-inline:0;bottom:0;z-index:70;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--border);
+    background:var(--header-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 -8px 24px rgba(0,0,0,.12)}
+  .mobile-tab{min-width:0;min-height:48px;display:flex;flex-direction:column;gap:2px;padding:4px 2px;border:0;border-radius:10px;
+    background:transparent;color:var(--muted);font-size:10px;line-height:1.1;box-shadow:none}
+  .mobile-tab .nav-icon{width:22px;height:22px;border:0;background:transparent;color:currentColor;font-size:16px}
+  .mobile-tab.is-active{background:var(--selected);color:var(--blue)}
+  .mobile-tab.is-active .nav-icon{background:transparent;color:var(--blue)}
+  .mobile-tab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+  .mobile-drawer{position:fixed;inset:0;z-index:85;display:flex;align-items:flex-end;justify-content:center}
+  .mobile-drawer[hidden]{display:none!important}
+  .drawer-backdrop{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;border-radius:0;background:rgba(0,0,0,.48);box-shadow:none;backdrop-filter:blur(2px)}
+  .drawer-panel{position:relative;width:min(100%,600px);max-height:min(78vh,680px);overflow:auto;padding:17px 17px calc(18px + env(safe-area-inset-bottom));
+    border:1px solid var(--border);border-bottom:0;border-radius:24px 24px 0 0;background:var(--card);box-shadow:0 -15px 40px rgba(0,0,0,.2)}
+  .drawer-handle{width:40px;height:4px;border-radius:99px;margin:0 auto 14px;background:var(--bar-bg)}
+  .drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+  .drawer-header p{margin:2px 0 0;color:var(--muted);font-size:12px}
+  .drawer-nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workflow{grid-template-columns:repeat(2,minmax(0,1fr))}
   .stats-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
 @media(max-width:720px){
-  html{scroll-padding-top:150px}
-  .wrap{padding:10px 9px 32px}
+  html{scroll-padding-top:100px}
+  .wrap{padding:10px 9px 100px}
   .app-header{top:6px;padding:10px}
   .header-actions{justify-content:flex-start}
   h1{font-size:18px}
@@ -385,6 +442,9 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 }
 @media(max-width:480px){
   .workflow{grid-template-columns:1fr 1fr}
+  .overview-heading p{font-size:11.5px}
+  .drawer-panel{padding-inline:12px}
+  .mobile-tab{font-size:9px}
   .workflow-step{min-height:58px;padding:8px}.step-number{width:27px;height:27px}
   .theme-switch button{padding:6px 7px}.theme-switch .theme-name{display:none}
   .stats-grid{gap:7px}.big{font-size:19px}
@@ -393,7 +453,31 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 
 </head>
 <body data-gradio-available="__GRADIO_AVAILABLE__">
-<div class="wrap">
+<div class="app-shell">
+  <aside class="sidebar" aria-label="التنقل الرئيسي">
+    <div class="sidebar-brand">
+      <span class="brand-mark" aria-hidden="true">⚡</span>
+      <span><strong>TeleDrive</strong><small>لوحة التحكم الحية</small></span>
+    </div>
+    <p class="sidebar-caption">مساحة العمل</p>
+    <nav class="side-nav" aria-label="أقسام TeleDrive">
+      <button class="nav-item is-active" type="button" data-section-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">نظرة عامة</span></button>
+      <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
+      <button class="nav-item" type="button" data-section-target="destination"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">مجلد الحفظ</span></button>
+      <button class="nav-item" type="button" data-section-target="analyze"><span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-label">تحليل رابط</span></button>
+      <button class="nav-item" type="button" data-section-target="results"><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">نتائج التحليل</span><span class="nav-count" id="navCandidateCount" hidden></span></button>
+      <button class="nav-item" type="button" data-section-target="transfer"><span class="nav-icon" aria-hidden="true">⇄</span><span class="nav-label">الطابور والنقل</span><span class="nav-count" id="navQueueCount" hidden></span></button>
+      <button class="nav-item" type="button" data-section-target="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">الإعدادات</span></button>
+      <button class="nav-item" type="button" data-section-target="logs"><span class="nav-icon" aria-hidden="true">≡</span><span class="nav-label">السجلات</span></button>
+      <button class="nav-item" type="button" data-section-target="maintenance"><span class="nav-icon" aria-hidden="true">✚</span><span class="nav-label">الصيانة والتصدير</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-state"><span class="state-dot" id="sidebarStateDot" aria-hidden="true"></span><span><strong id="sidebarStateText">جارٍ التحقق…</strong><small>حالة الحسابات</small></span></div>
+      <p>تسجيل Telegram يتم عبر واجهة Gradio الآمنة فقط.</p>
+    </div>
+  </aside>
+  <main class="main-content">
+    <div class="wrap">
   <header class="app-header">
     <div class="brand-block">
       <h1>⚡ TeleDrive v5.0 Turbo — لوحة التحكم الحية</h1>
@@ -410,20 +494,41 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     </div>
   </header>
 
-  <nav class="workflow" aria-label="خطوات العمل بالترتيب">
-    <a class="workflow-step is-current" id="stepLinkConnect" href="#connections"><span class="step-number">1</span><span><strong>الاتصال بالحسابات</strong><small id="stepConnectHint">Telegram وDrive</small></span></a>
-    <a class="workflow-step" id="stepLinkDestination" href="#destination"><span class="step-number">2</span><span><strong>اختيار مجلد Drive</strong><small id="stepDestinationHint">وجهة الحفظ</small></span></a>
-    <a class="workflow-step" id="stepLinkAnalyze" href="#analyze"><span class="step-number">3</span><span><strong>تحليل الرابط</strong><small id="stepAnalyzeHint">رسالة أو قناة</small></span></a>
-    <a class="workflow-step" id="stepLinkResults" href="#results"><span class="step-number">4</span><span><strong>تحديد الملفات</strong><small id="stepResultsHint">راجع واختر المطلوب</small></span></a>
-    <a class="workflow-step" id="stepLinkTransfer" href="#transfer"><span class="step-number">5</span><span><strong>النقل والمتابعة</strong><small id="stepTransferHint">الطابور والتقدم</small></span></a>
+  <nav class="mobile-tabs" aria-label="التنقل بين الأقسام">
+    <button class="mobile-tab is-active" type="button" data-section-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span>الرئيسية</span></button>
+    <button class="mobile-tab" type="button" data-section-target="destination"><span class="nav-icon" aria-hidden="true">▣</span><span>الوجهة</span></button>
+    <button class="mobile-tab" type="button" data-section-target="analyze"><span class="nav-icon" aria-hidden="true">⌕</span><span>تحليل</span></button>
+    <button class="mobile-tab" type="button" data-section-target="results"><span class="nav-icon" aria-hidden="true">☷</span><span>النتائج</span></button>
+    <button class="mobile-tab" type="button" data-section-target="transfer"><span class="nav-icon" aria-hidden="true">⇄</span><span>الطابور</span></button>
+    <button class="mobile-tab" id="btnMobileMore" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobileMoreDrawer"><span class="nav-icon" aria-hidden="true">⋯</span><span>المزيد</span></button>
   </nav>
-  <div class="next-step" id="nextStep" role="status"><strong>الخطوة التالية:</strong> <span id="nextStepText">جارٍ قراءة الحالة الحية…</span></div>
-  <div class="quick-links" aria-label="أقسام إضافية">
-    <a href="#settings">الإعدادات</a>
-    <a href="#logs">السجلات</a>
-    <a href="#maintenance">الاستعادة والصيانة</a>
+  <div class="mobile-drawer" id="mobileMoreDrawer" hidden>
+    <button class="drawer-backdrop" id="btnCloseMoreBackdrop" type="button" aria-label="إغلاق قائمة الأقسام"></button>
+    <section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" tabindex="-1">
+      <div class="drawer-handle" aria-hidden="true"></div>
+      <div class="drawer-header"><div><h2 id="drawerTitle">أقسام إضافية</h2><p>الحسابات والإعدادات والسجلات وأدوات الصيانة.</p></div><button class="alt small" id="btnCloseMore" type="button">إغلاق</button></div>
+      <nav class="drawer-nav" aria-label="أقسام إضافية">
+        <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
+        <button class="nav-item" type="button" data-section-target="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">الإعدادات</span></button>
+        <button class="nav-item" type="button" data-section-target="logs"><span class="nav-icon" aria-hidden="true">≡</span><span class="nav-label">السجلات</span></button>
+        <button class="nav-item" type="button" data-section-target="maintenance"><span class="nav-icon" aria-hidden="true">✚</span><span class="nav-label">الصيانة والتصدير</span></button>
+      </nav>
+    </section>
   </div>
 
+  <section class="tab-panel overview-panel" id="overview" data-tab-panel="overview" aria-labelledby="overviewTitle">
+    <div class="overview-heading">
+      <span class="step-badge" aria-hidden="true">⌂</span>
+      <div><h2 id="overviewTitle" tabindex="-1">نظرة عامة</h2><p>حالة المحرك والحسابات، مع مسار سريع لأهم خطوات النقل.</p></div>
+    </div>
+    <nav class="workflow" aria-label="مسار العمل بالترتيب">
+      <button class="workflow-step is-current" type="button" id="stepLinkConnect" data-section-target="connections"><span class="step-number">1</span><span><strong>الاتصال بالحسابات</strong><small id="stepConnectHint">Telegram وDrive</small></span></button>
+      <button class="workflow-step" type="button" id="stepLinkDestination" data-section-target="destination"><span class="step-number">2</span><span><strong>اختيار مجلد Drive</strong><small id="stepDestinationHint">وجهة الحفظ</small></span></button>
+      <button class="workflow-step" type="button" id="stepLinkAnalyze" data-section-target="analyze"><span class="step-number">3</span><span><strong>تحليل الرابط</strong><small id="stepAnalyzeHint">رسالة أو قناة</small></span></button>
+      <button class="workflow-step" type="button" id="stepLinkResults" data-section-target="results"><span class="step-number">4</span><span><strong>تحديد الملفات</strong><small id="stepResultsHint">راجع واختر المطلوب</small></span></button>
+      <button class="workflow-step" type="button" id="stepLinkTransfer" data-section-target="transfer"><span class="step-number">5</span><span><strong>النقل والمتابعة</strong><small id="stepTransferHint">الطابور والتقدم</small></span></button>
+    </nav>
+    <div class="next-step" id="nextStep" role="status"><strong>الخطوة التالية:</strong> <span id="nextStepText">جارٍ قراءة الحالة الحية…</span></div>
   <div class="stats-grid" aria-label="نظرة سريعة على الحالة">
     <div class="card stat-card"><h3>حالة المحرك</h3><div class="big" id="mState">—</div></div>
     <div class="card stat-card"><h3>السرعة اللحظية</h3><div class="big"><span id="mSpeed">0</span> <small>MB/s</small></div></div>
@@ -434,9 +539,10 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div class="card stat-card"><h3>Telegram</h3><div class="big" id="mTg" style="font-size:16px">—</div></div>
     <div class="card stat-card"><h3>Google Drive</h3><div class="big" id="mDrive" style="font-size:16px">—</div></div>
   </div>
+  </section>
 
-  <section class="card step-card" id="connections" aria-labelledby="connectionsTitle">
-    <div class="section-head"><span class="step-badge">1</span><div><h2 id="connectionsTitle">الاتصال بالحسابات</h2><p>تأكد أن Telegram وGoogle Drive متصلان قبل التحليل والنقل.</p></div><span class="section-status" id="connectionsStatus">جارٍ التحقق…</span></div>
+  <section class="card step-card tab-panel" id="connections" data-tab-panel="connections" hidden aria-labelledby="connectionsTitle">
+    <div class="section-head"><span class="step-badge">1</span><div><h2 id="connectionsTitle" tabindex="-1">الاتصال بالحسابات</h2><p>تأكد أن Telegram وGoogle Drive متصلان قبل التحليل والنقل.</p></div><span class="section-status" id="connectionsStatus">جارٍ التحقق…</span></div>
     <div class="feature-grid">
     <section class="card" aria-labelledby="telegramTitle">
       <h3 id="telegramTitle">🔐 حساب Telegram</h3>
@@ -467,8 +573,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     </div>
   </section>
 
-  <section class="card step-card" id="destination" aria-labelledby="destinationTitle">
-    <div class="section-head"><span class="step-badge">2</span><div><h2 id="destinationTitle">اختيار مجلد الحفظ في Google Drive</h2><p>حدّد المكان الذي ستصل إليه الملفات بعد اكتمال النقل.</p></div><span class="section-status" id="destinationStatus">لم يتم الاختيار</span></div>
+  <section class="card step-card tab-panel" id="destination" data-tab-panel="destination" hidden aria-labelledby="destinationTitle">
+    <div class="section-head"><span class="step-badge">2</span><div><h2 id="destinationTitle" tabindex="-1">اختيار مجلد الحفظ في Google Drive</h2><p>حدّد المكان الذي ستصل إليه الملفات بعد اكتمال النقل.</p></div><span class="section-status" id="destinationStatus">لم يتم الاختيار</span></div>
     <div class="destination-summary">
       <span>المجلد المحدد للنقل:</span>
       <strong id="selectedFolderName" class="err">لم يتم اختيار مجلد</strong>
@@ -487,8 +593,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div class="msg" id="folderMsg"></div>
   </section>
 
-  <section class="card step-card" id="analyze" aria-labelledby="analyzeTitle">
-    <div class="section-head"><span class="step-badge">3</span><div><h2 id="analyzeTitle">تحليل رابط تيليجرام</h2><p>الصق رابط قناة أو مجموعة أو رسالة. الوضع التلقائي يتعرف على نوع الرابط ويختار طريقة الفحص المناسبة.</p></div><span class="section-status" id="analyzeStatus">بانتظار رابط</span></div>
+  <section class="card step-card tab-panel" id="analyze" data-tab-panel="analyze" hidden aria-labelledby="analyzeTitle">
+    <div class="section-head"><span class="step-badge">3</span><div><h2 id="analyzeTitle" tabindex="-1">تحليل رابط تيليجرام</h2><p>الصق رابط قناة أو مجموعة أو رسالة. الوضع التلقائي يتعرف على نوع الرابط ويختار طريقة الفحص المناسبة.</p></div><span class="section-status" id="analyzeStatus">بانتظار رابط</span></div>
     <div class="analyze-main">
       <input class="ltr-input" type="text" id="linkIn" dir="ltr" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://t.me/channel أو https://t.me/channel/123 أو @channel" aria-label="رابط تيليجرام">
       <select id="modeIn" aria-label="وضع التحليل">
@@ -529,8 +635,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div class="msg" id="analyzeMsg" role="status"></div>
   </section>
 
-  <section class="card step-card" id="results" aria-labelledby="resultsTitle">
-    <div class="section-head"><span class="step-badge">4</span><div><h2 id="resultsTitle">نتائج التحليل وتحديد الملفات</h2><p>النتيجة <strong id="cCount">0</strong> ملف · المحدد <strong id="cSel">0</strong> · حجم المحدد <strong id="cSelectedSize">—</strong></p></div><span class="section-status" id="resultsStatus">لا توجد نتائج</span></div>
+  <section class="card step-card tab-panel" id="results" data-tab-panel="results" hidden aria-labelledby="resultsTitle">
+    <div class="section-head"><span class="step-badge">4</span><div><h2 id="resultsTitle" tabindex="-1">نتائج التحليل وتحديد الملفات</h2><p>النتيجة <strong id="cCount">0</strong> ملف · المحدد <strong id="cSel">0</strong> · حجم المحدد <strong id="cSelectedSize">—</strong></p></div><span class="section-status" id="resultsStatus">لا توجد نتائج</span></div>
     <div class="results-toolbar">
       <input type="search" id="candidateSearchIn" placeholder="ابحث داخل النتائج بالاسم أو النوع أو رقم الرسالة…" aria-label="بحث داخل نتائج التحليل">
       <button class="alt" id="btnSelectAll" type="button">تحديد الكل</button>
@@ -572,8 +678,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     </details>
   </section>
 
-  <section class="card step-card" id="transfer" aria-labelledby="transferTitle">
-    <div class="section-head"><span class="step-badge">5</span><div><h2 id="transferTitle">التحكم في النقل ومتابعة الطابور</h2><p>بعد إضافة الملفات للطابور ابدأ النقل وتابِع التقدم والحالة من هنا.</p></div><span class="section-status" id="transferStatus">الطابور فارغ</span></div>
+  <section class="card step-card tab-panel" id="transfer" data-tab-panel="transfer" hidden aria-labelledby="transferTitle">
+    <div class="section-head"><span class="step-badge">5</span><div><h2 id="transferTitle" tabindex="-1">التحكم في النقل ومتابعة الطابور</h2><p>بعد إضافة الملفات للطابور ابدأ النقل وتابِع التقدم والحالة من هنا.</p></div><span class="section-status" id="transferStatus">الطابور فارغ</span></div>
     <div class="row">
       <button id="btnStart" type="button">▶️ بدء النقل</button>
       <button class="warn" id="btnPause" type="button">⏸️ إيقاف مؤقت</button>
@@ -599,8 +705,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <p class="note">بيانات الدخول السرية لا تمر عبر هذه الواجهة. يجب اختيار مجلد Drive قبل إضافة العناصر إلى الطابور.</p>
   </section>
 
-  <section class="card secondary-section" id="settings" aria-labelledby="settingsTitle">
-    <div class="section-head"><span class="step-badge">⚙</span><div><h2 id="settingsTitle">الإعدادات</h2><p>المظهر وسرعة التحديث وعدد عمليات النقل المتوازية.</p></div></div>
+  <section class="card secondary-section tab-panel" id="settings" data-tab-panel="settings" hidden aria-labelledby="settingsTitle">
+    <div class="section-head"><span class="step-badge">⚙</span><div><h2 id="settingsTitle" tabindex="-1">الإعدادات</h2><p>المظهر وسرعة التحديث وعدد عمليات النقل المتوازية.</p></div></div>
     <div class="feature-grid">
       <div class="card settings-card">
         <label for="themeIn">لون الواجهة</label>
@@ -639,8 +745,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     </div>
   </section>
 
-  <section class="card secondary-section" id="logs" aria-labelledby="logsTitle">
-    <div class="section-head"><span class="step-badge">☰</span><div><h2 id="logsTitle">السجلات الحية (منقّحة)</h2><p>ابحث وصفِّ وصدّر السجل عند الحاجة للتشخيص.</p></div></div>
+  <section class="card secondary-section tab-panel" id="logs" data-tab-panel="logs" hidden aria-labelledby="logsTitle">
+    <div class="section-head"><span class="step-badge">☰</span><div><h2 id="logsTitle" tabindex="-1">السجلات الحية (منقّحة)</h2><p>ابحث وصفِّ وصدّر السجل عند الحاجة للتشخيص.</p></div></div>
     <div class="row" style="margin-bottom:8px">
       <select id="logsLevel" aria-label="مستوى السجل">
         <option value="ALL">كل المستويات</option>
@@ -658,8 +764,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div id="logsBox">…</div>
   </section>
 
-  <section class="card secondary-section" id="maintenance" aria-labelledby="maintenanceTitle">
-    <div class="section-head"><span class="step-badge">✚</span><div><h2 id="maintenanceTitle">الاستعادة والصيانة والتصدير</h2><p>أدوات إضافية منفصلة عن خطوات النقل اليومية حتى لا تزحم سير العمل.</p></div></div>
+  <section class="card secondary-section tab-panel" id="maintenance" data-tab-panel="maintenance" hidden aria-labelledby="maintenanceTitle">
+    <div class="section-head"><span class="step-badge">✚</span><div><h2 id="maintenanceTitle" tabindex="-1">الاستعادة والصيانة والتصدير</h2><p>أدوات إضافية منفصلة عن خطوات النقل اليومية حتى لا تزحم سير العمل.</p></div></div>
     <div class="row">
       <button class="alt" id="btnRecovery" type="button">استعادة نقطة الحفظ</button>
       <button class="alt" id="btnCheckpoint" type="button">إنشاء نقطة حفظ</button>
@@ -671,11 +777,93 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <pre class="output-box" id="packagePath" hidden></pre>
     <pre class="output-box" id="colabCellsBox" hidden></pre>
   </section>
+    </div>
+  </main>
 </div>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+const DASHBOARD_SECTIONS=["overview","connections","destination","analyze","results","transfer","settings","logs","maintenance"];
+const MOBILE_PRIMARY_SECTIONS=["overview","destination","analyze","results","transfer"];
+let activeDashboardSection="overview";
+function closeMoreDrawer(restoreFocus){
+  const drawer=$("mobileMoreDrawer");
+  if(!drawer || drawer.hidden) return;
+  drawer.hidden=true;
+  document.body.classList.remove("drawer-open");
+  const trigger=$("btnMobileMore");
+  if(trigger){
+    trigger.setAttribute("aria-expanded","false");
+    trigger.classList.toggle("is-active",!MOBILE_PRIMARY_SECTIONS.includes(activeDashboardSection));
+  }
+  if(restoreFocus && trigger) trigger.focus();
+}
+function openMoreDrawer(){
+  const drawer=$("mobileMoreDrawer");
+  if(!drawer) return;
+  drawer.hidden=false;
+  document.body.classList.add("drawer-open");
+  const trigger=$("btnMobileMore");
+  if(trigger){trigger.setAttribute("aria-expanded","true");trigger.classList.add("is-active");}
+  const panel=drawer.querySelector(".drawer-panel");
+  if(panel) panel.focus();
+}
+function activateSection(section,options){
+  const opts=options||{};
+  const name=DASHBOARD_SECTIONS.includes(section)?section:"overview";
+  activeDashboardSection=name;
+  document.querySelectorAll("[data-tab-panel]").forEach(function(panel){
+    panel.hidden=panel.dataset.tabPanel!==name;
+  });
+  document.querySelectorAll("[data-section-target]").forEach(function(button){
+    const active=button.dataset.sectionTarget===name;
+    button.classList.toggle("is-active",active);
+    if(active) button.setAttribute("aria-current","page");
+    else button.removeAttribute("aria-current");
+  });
+  closeMoreDrawer(false);
+  const moreButton=$("btnMobileMore");
+  if(moreButton) moreButton.classList.toggle("is-active",!MOBILE_PRIMARY_SECTIONS.includes(name));
+  if(opts.pushHistory!==false && window.history && typeof window.history.pushState==="function" && window.location.hash!=="#"+name){
+    window.history.pushState({teledriveSection:name},"","#"+name);
+  }
+  if(opts.focusHeading){
+    const panel=document.querySelector('[data-tab-panel="'+name+'"]');
+    const heading=panel&&panel.querySelector("h2");
+    if(heading) heading.focus({preventScroll:true});
+  }
+  if(opts.scroll!==false && typeof window.scrollTo==="function") window.scrollTo({top:0,behavior:"smooth"});
+  return name;
+}
+document.querySelectorAll("[data-section-target]").forEach(function(button){
+  button.addEventListener("click",function(){
+    activateSection(this.dataset.sectionTarget,{focusHeading:!!this.closest(".drawer-nav")});
+  });
+});
+$("btnMobileMore").addEventListener("click",openMoreDrawer);
+$("btnCloseMore").addEventListener("click",function(){closeMoreDrawer(true);});
+$("btnCloseMoreBackdrop").addEventListener("click",function(){closeMoreDrawer(true);});
+document.addEventListener("keydown",function(event){
+  const drawer=$("mobileMoreDrawer");
+  if(!drawer || drawer.hidden) return;
+  if(event.key==="Escape"){
+    event.preventDefault();
+    closeMoreDrawer(true);
+    return;
+  }
+  if(event.key!=="Tab") return;
+  const focusable=Array.from(drawer.querySelectorAll('button:not(.drawer-backdrop):not([disabled]),a[href],input:not([disabled]),select:not([disabled])'));
+  if(!focusable.length) return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  const dialog=drawer.querySelector(".drawer-panel");
+  if(event.shiftKey && (document.activeElement===first || document.activeElement===dialog)){event.preventDefault();last.focus();}
+  else if(!event.shiftKey && (document.activeElement===last || document.activeElement===dialog)){event.preventDefault();first.focus();}
+});
+window.addEventListener("popstate",function(){
+  activateSection(window.location.hash.slice(1),{pushHistory:false});
+});
+activateSection(window.location.hash.slice(1),{pushHistory:false,scroll:false});
 function humanBytes(n){
   if(n==null) return "—";
   const u=["B","KB","MB","GB","TB"]; let i=0; let v=Number(n)||0;
@@ -940,7 +1128,18 @@ function updateWorkflow(state,data){
   const selected=candidates.filter(function(item){return item.selected;});
   const queue=state.queue||[];
   const running=!!data.is_running;
-  setText("connectionsStatus",telegramOk&&driveOk?"متصل بالحسابين":(telegramOk||driveOk?"متبقٍّ حساب واحد":"غير متصل"));
+  const allAccountsReady=telegramOk&&driveOk;
+  setText("connectionsStatus",allAccountsReady?"متصل بالحسابين":(telegramOk||driveOk?"متبقٍّ حساب واحد":"غير متصل"));
+  setText("sidebarStateText",allAccountsReady?"الحسابان متصلان":(telegramOk||driveOk?"حساب واحد يحتاج ربطًا":"الحسابات غير متصلة"));
+  const sidebarDot=$("sidebarStateDot");
+  if(sidebarDot){
+    sidebarDot.classList.toggle("is-good",allAccountsReady);
+    sidebarDot.classList.toggle("is-partial",!allAccountsReady&&(telegramOk||driveOk));
+  }
+  const resultsBadge=$("navCandidateCount");
+  if(resultsBadge){resultsBadge.textContent=String(candidates.length);resultsBadge.hidden=candidates.length===0;}
+  const queueBadge=$("navQueueCount");
+  if(queueBadge){queueBadge.textContent=String(queue.length);queueBadge.hidden=queue.length===0;}
   setText("destinationStatus",folderOk?("المجلد: "+(folder.name||"محدد")):"لم يتم الاختيار");
   setText("analyzeStatus",candidates.length?("تم العثور على "+candidates.length+" ملف"):"بانتظار تحليل");
   setText("transferStatus",running?"النقل جارٍ الآن":(queue.length?queue.length+" عنصر في الطابور":"الطابور فارغ"));
@@ -1377,8 +1576,10 @@ $("btnAnalyze").addEventListener("click",async function(){
   if(rows.length){
     const bytes=rows.reduce(function(sum,item){return sum+(Number(item.sizeBytes)||0);},0);
     const modeText=selectedMode==="auto" ? (mode==="message"?"رسالة مباشرة":"قناة/محادثة") : mode;
-    setMessage(msg,"اكتمل تحليل "+modeText+": وجدنا "+rows.length+" ملف قابل للتنزيل"+(bytes?" بحجم تقريبي "+humanBytes(bytes):"")+". حدّد المطلوب من صندوق النتائج في الخطوة 4.",true);
-    $("results").scrollIntoView({behavior:"smooth",block:"start"});
+    const summary="اكتمل تحليل "+modeText+": وجدنا "+rows.length+" ملف قابل للتنزيل"+(bytes?" بحجم تقريبي "+humanBytes(bytes):"")+". حدّد المطلوب من النتائج.";
+    setMessage(msg,summary,true);
+    setMessage($("selectionMsg"),summary,true);
+    activateSection("results");
   }else{
     setMessage(msg,"اكتمل التحليل لكن لم نجد ملفات قابلة للتنزيل في النطاق المفحوص. جرّب زيادة حد الرسائل، أو تغيير الوضع/أنواع الملفات، وتأكد أن حسابك يستطيع فتح القناة.",false);
   }
@@ -1394,8 +1595,10 @@ $("btnClearSel").addEventListener("click",function(){ bridgeAction("analyze.clea
 $("btnEnqueue").addEventListener("click",async function(){
   const result=await bridgeAction("analyze.enqueue_selected",{},$("selectionMsg"),this);
   if(result && result.status==="ok"){
-    setMessage($("selectionMsg"),"تمت إضافة الملفات المحددة إلى الطابور. ابدأ النقل من الخطوة 5.",true);
-    $("transfer").scrollIntoView({behavior:"smooth",block:"start"});
+    const queuedMessage="تمت إضافة الملفات المحددة إلى الطابور.";
+    setMessage($("selectionMsg"),queuedMessage,true);
+    setMessage($("actionMsg"),queuedMessage,true);
+    activateSection("transfer");
   }
 });
 function currentFilterPayload(){

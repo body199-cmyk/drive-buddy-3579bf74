@@ -230,6 +230,39 @@ def test_page_has_three_themes_clear_workflow_and_independent_panes():
     assert "queue.pause_item" in HTML_PAGE and "queue.retry_item" in HTML_PAGE
 
 
+def test_dashboard_uses_separate_navigable_sections_on_desktop_and_mobile():
+    import re
+
+    sections = (
+        "overview", "connections", "destination", "analyze", "results",
+        "transfer", "settings", "logs", "maintenance",
+    )
+    panels = re.findall(r'<section\b[^>]*data-tab-panel="([a-z]+)"[^>]*>', HTML_PAGE)
+    assert panels == list(sections)
+    for section in sections:
+        assert f'data-section-target="{section}"' in HTML_PAGE
+        assert f'data-tab-panel="{section}"' in HTML_PAGE
+    targets = set(re.findall(r'data-section-target="([a-z]+)"', HTML_PAGE))
+    assert targets == set(sections)
+    # The overview is the only server-rendered visible panel; navigation
+    # switches the hidden property rather than scrolling through a long page.
+    overview = re.search(r'<section\b[^>]*data-tab-panel="overview"[^>]*>', HTML_PAGE)
+    assert overview and " hidden " not in overview.group(0)
+    for section in sections[1:]:
+        panel = re.search(r'<section\b[^>]*data-tab-panel="' + section + r'"[^>]*>', HTML_PAGE)
+        assert panel and " hidden " in panel.group(0)
+    assert 'class="sidebar"' in HTML_PAGE
+    assert 'class="mobile-tabs"' in HTML_PAGE
+    assert 'id="mobileMoreDrawer" hidden' in HTML_PAGE
+    assert 'aria-modal="true"' in HTML_PAGE
+    assert "function activateSection" in HTML_PAGE
+    assert "panel.hidden=panel.dataset.tabPanel!==name" in HTML_PAGE
+    assert "window.history.pushState" in HTML_PAGE
+    assert 'window.addEventListener("popstate"' in HTML_PAGE
+    assert "document.activeElement===dialog" in HTML_PAGE
+    assert "scrollIntoView" not in HTML_PAGE
+
+
 def test_metrics_reflect_the_real_empty_runtime(ctx):
     metrics = TeleDriveWebBridge(ctx).get_system_metrics()
     assert metrics["ok"] is True
