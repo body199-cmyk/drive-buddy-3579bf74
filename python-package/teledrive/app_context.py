@@ -105,6 +105,9 @@ class ApplicationContext:
         self.queue_manager.bind_context(self)
         self.progress.reset()
         self.ui: Any = None          # Gradio launch handle (set by app.launch)
+        # Browser-safe link to the secure Gradio controls. The modern dashboard
+        # uses it for Telegram login; credentials/OTP/2FA remain Gradio-only.
+        self.gradio_proxy_url: Optional[str] = None
         self.web_dashboard: Any = None  # uvicorn handle (web_dashboard.launch)
         self.transfer_manager: Any = None
         self.drive_client: Any = None
@@ -165,6 +168,7 @@ class ApplicationContext:
             except Exception:  # pragma: no cover - defensive
                 _log.warning("ui close failed during shutdown")
             self.ui = None
+        self.gradio_proxy_url = None
         self.aio.stop()
         try:
             self.db.close()

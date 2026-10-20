@@ -65,13 +65,35 @@ def test_no_ad_hoc_application_loop_or_wildcard_cors_or_fake_engine():
 
 def test_page_is_self_contained_and_polls_relative_metrics():
     assert "api/metrics" in HTML_PAGE
-    assert "setInterval(pollMetrics,1000)" in HTML_PAGE
+    assert "configurePolling(1000)" in HTML_PAGE
+    assert "setInterval(pollMetrics,interval)" in HTML_PAGE
     # Zero external CDN: no script/link is fetched from the network.
     assert 'src="http' not in HTML_PAGE
     assert 'href="http' not in HTML_PAGE
     # Server strings are rendered safely, never through innerHTML.
     assert "textContent" in HTML_PAGE
     assert "innerHTML" not in HTML_PAGE
+
+
+def test_page_exposes_the_missing_controls_without_moving_telegram_secrets():
+    for element_id in (
+        "telegramLoginLink", "btnTelegramLogout", "selectedFolderName",
+        "folderList", "newFolderName", "themeIn", "concurrencyIn",
+        "autoRefreshIn", "btnRecovery", "btnCheckpoint", "btnBuildZip",
+    ):
+        assert f'id="{element_id}"' in HTML_PAGE
+    for action_id in (
+        "drive.list_folders", "drive.create_folder", "drive.select_folder",
+        "settings.set_theme", "settings.set_concurrency",
+        "settings.set_auto_refresh", "telegram.logout",
+    ):
+        assert f'"{action_id}"' in HTML_PAGE
+    # Secret-bearing Telegram login actions must stay outside the HTTP page.
+    for action_id in (
+        "telegram.set_credentials", "telegram.send_code",
+        "telegram.verify_code", "telegram.verify_password",
+    ):
+        assert action_id not in HTML_PAGE
 
 
 def test_page_analyze_modes_are_the_canonical_scanner_modes():
@@ -84,7 +106,9 @@ def test_page_analyze_modes_are_the_canonical_scanner_modes():
 
     from teledrive.media_scanner import SCAN_MODES
 
-    offered = re.findall(r'<option value="([a-z_]+)"', HTML_PAGE)
+    mode_select = re.search(r'<select id="modeIn">(.*?)</select>', HTML_PAGE, re.S)
+    assert mode_select, "mode dropdown missing"
+    offered = re.findall(r'<option value="([a-z_]+)"', mode_select.group(1))
     assert offered, "mode dropdown missing"
     assert set(offered) <= set(SCAN_MODES), f"non-canonical modes: {offered}"
     assert set(offered) == set(SCAN_MODES), "every scanner mode must be offered"
@@ -143,6 +167,98 @@ def test_http_endpoints(ctx):
     state = client.get("/api/state")
     assert state.status_code == 200
     assert state.json()["actionId"] == "bridge.snapshot"
+
+
+def test_index_renders_saved_theme_and_escaped_secure_gradio_handoff(ctx):
+    ctx.handlers.h_settings_set_theme("dark")
+    ctx.gradio_proxy_url = "https://colab.example/gradio?cell=4&view=secure"
+    page = _client(ctx).get("/").text
+    assert 'data-theme="dark"' in page
+    assert 'data-gradio-available="true"' in page
+    assert 'href="https://colab.example/gradio?cell=4&amp;view=secure"' in page
+    assert "__INITIAL_THEME__" not in page
+    assert "__GRADIO_URL__" not in page
+
+
+def test_index_refuses_non_http_gradio_login_link(ctx):
+    ctx.gradio_proxy_url = "javascript:alert(1)"
+    page = _client(ctx).get("/").text
+    assert 'data-gradio-available="false"' in page
+    assert 'href="#"' in page
+    assert "javascript:" not in page
+
+
+def test_web_folder_actions_browse_create_and_select_through_live_drive(ctx):
+    folder_mime = "application/vnd.google-apps.folder"
+
+    class Execute:
+        def __init__(self, callback):
+            self.callback = callback
+
+        def execute(self):
+            return self.callback()
+
+    class FakeDrive:
+        def __init__(self):
+            self.folders = [{"id": "folder-a", "name": "Alpha", "mimeType": folder_mime}]
+
+        def about(self):
+            class About:
+                def get(self, **_kwargs):
+                    return Execute(lambda: {
+                        "user": {"emailAddress": "drive@example.test"},
+                        "storageQuota": {"limit": "1000", "usage": "250"},
+                    })
+            return About()
+
+        def files(self):
+            drive = self
+
+            class Files:
+                def list(self, **_kwargs):
+                    return Execute(lambda: {"files": [
+                        {"id": item["id"], "name": item["name"]}
+                        for item in drive.folders
+                    ]})
+
+                def create(self, body=None, **_kwargs):
+                    item = {
+                        "id": "folder-new",
+                        "name": body["name"],
+                        "mimeType": folder_mime,
+                    }
+                    drive.folders.append(item)
+                    return Execute(lambda: {"id": item["id"], "name": item["name"]})
+
+                def get(self, fileId=None, **_kwargs):
+                    item = next(folder for folder in drive.folders if folder["id"] == fileId)
+                    return Execute(lambda: item)
+
+            return Files()
+
+    drive = FakeDrive()
+    ctx.drive_auth._factory = lambda: drive
+    ctx.handlers.h_drive_connect()
+    client = _client(ctx)
+
+    listed = client.post(
+        "/api/action", json={"actionId": "drive.list_folders", "payload": {"parentId": "root"}}
+    ).json()
+    assert listed["status"] == "ok"
+    assert listed["data"]["folders"] == [{"id": "folder-a", "name": "Alpha"}]
+
+    created = client.post(
+        "/api/action",
+        json={"actionId": "drive.create_folder", "payload": {"name": "Archive", "parentId": "root"}},
+    ).json()
+    assert created["status"] == "ok"
+    assert created["state"]["folder"] == {"id": "folder-new", "name": "Archive"}
+
+    selected = client.post(
+        "/api/action", json={"actionId": "drive.select_folder", "payload": {"folderId": "folder-a"}}
+    ).json()
+    assert selected["status"] == "ok"
+    assert selected["state"]["folder"] == {"id": "folder-a", "name": "Alpha"}
 
 
 def test_action_endpoint_uses_the_validated_bridge(ctx):

@@ -34,11 +34,11 @@ Constitution instead of being copied verbatim:
   ``ctx.progress.snapshot()``, ``ctx.queue_manager.snapshot()`` and the
   browser-safe ``LiveUiStateService`` snapshot. Nothing is synthesized:
   an idle runtime reports an empty queue and zero speed.
-* **AJAX polling first.** The page polls ``api/metrics`` about once a
-  second with plain ``fetch`` (relative URL, ``cache: no-store``), which
-  survives the Colab ``proxyPort`` proxy where long-lived sockets can
-  be dropped. The ``/ws`` WebSocket endpoint stays as an optional
-  enhancement and serves the exact same payload.
+* **AJAX polling first.** The browser obeys the persisted refresh setting
+  (off, 1s, 2s or 5s; one second by default) and fetches ``api/metrics``
+  relative to this page with ``cache: no-store``. This survives the Colab
+  ``proxyPort`` proxy where long-lived sockets can be dropped. The ``/ws``
+  endpoint stays as an optional enhancement and serves the same payload.
 * **No secrets over HTTP.** Authentication actions keep the React
   bridge's secure-Gradio-only refusal, there is no CORS wildcard, log
   lines come from the redacted ``LogService``, and the page renders
@@ -57,6 +57,7 @@ import socket
 import threading
 import time
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from . import __version__
@@ -119,7 +120,7 @@ class TeleDriveWebBridge:
             return {}
 
     def get_system_metrics(self) -> dict[str, Any]:
-        """The ``/api/metrics`` payload the page polls about once a second."""
+        """The live ``/api/metrics`` payload used by the configurable browser poll."""
         from .config import TEMP_DIR
         from .utils import safe_disk_free
 
@@ -149,6 +150,10 @@ class TeleDriveWebBridge:
             logs = []
 
         instant = float(progress.get("instant_speed") or 0.0)
+        state = self._live_state()
+        preferences = getattr(self.ctx, "preferences", None)
+        web_theme = preferences.current_theme() if preferences is not None else "light"
+        state["webTheme"] = web_theme if web_theme in {"light", "dark"} else "light"
         return {
             "ok": True,
             "version": __version__,
@@ -160,7 +165,7 @@ class TeleDriveWebBridge:
             "progress": progress,
             "total_speed_mbps": round(instant / (1024 * 1024), 2),
             "free_disk_bytes": int(safe_disk_free(disk_path)),
-            "state": self._live_state(),
+            "state": state,
             "logs": [redact(line) for line in logs],
         }
 
@@ -208,60 +213,101 @@ class TeleDriveWebBridge:
 
 
 HTML_PAGE = r"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-theme="__INITIAL_THEME__">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TeleDrive v5.0 Turbo | لوحة التحكم الحية</title>
 <style>
 :root{
-  --bg:#070b14; --card:rgba(15,23,42,.92); --border:rgba(255,255,255,.09);
+  color-scheme:light;
+  --bg:#f3f6fb; --card:rgba(255,255,255,.96); --border:rgba(15,23,42,.12);
+  --text:#172033; --muted:#64748b; --blue:#2563eb; --green:#15803d;
+  --red:#b91c1c; --amber:#b45309; --input:#fff; --surface-2:#e9eef6;
+  --log-bg:#f8fafc; --bar-bg:#dbe3ee; --glow:rgba(59,130,246,.12);
+  --radius:14px;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#070b14; --card:rgba(15,23,42,.94); --border:rgba(255,255,255,.10);
   --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --green:#22c55e;
-  --red:#ef4444; --amber:#f59e0b; --radius:14px;
+  --red:#ef4444; --amber:#f59e0b; --input:#0b1222; --surface-2:#1e293b;
+  --log-bg:#020617; --bar-bg:#1e293b; --glow:rgba(30,58,138,.34);
 }
 *{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
-  background:radial-gradient(1200px 600px at 80% -10%,#1e3a8a55,transparent),var(--bg);color:var(--text)}
-.wrap{max-width:1060px;margin:0 auto;padding:18px 14px 40px}
-header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:8px 0 16px}
+  background:radial-gradient(1200px 600px at 80% -10%,var(--glow),transparent),var(--bg);color:var(--text)}
+.wrap{max-width:1120px;margin:0 auto;padding:18px 14px 40px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:8px 0 12px}
 h1{font-size:22px;margin:0}
 .sub{color:var(--muted);font-size:12.5px}
 .pill{border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12.5px;background:var(--card)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:10px;margin:10px 0}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
 .card h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600}
 .big{font-size:24px;font-weight:800}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-input,select{background:#0b1222;color:var(--text);border:1px solid var(--border);
+input,select{background:var(--input);color:var(--text);border:1px solid var(--border);
   border-radius:10px;padding:10px 12px;font-size:14px;min-width:0}
 input[type=text]{flex:1 1 280px}
-button{cursor:pointer;border:0;border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:700;
-  background:linear-gradient(90deg,#2563eb,#4f46e5);color:#fff}
-button.alt{background:#1e293b;border:1px solid var(--border)}
+input[type=range]{accent-color:var(--blue);padding:0;min-width:180px;flex:1 1 220px}
+button,.link-btn{cursor:pointer;border:0;border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:700;
+  background:linear-gradient(90deg,#2563eb,#4f46e5);color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button.alt,.link-btn.alt{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
 button.warn{background:linear-gradient(90deg,#b45309,#d97706)}
 button.danger{background:linear-gradient(90deg,#b91c1c,#dc2626)}
-button:disabled{opacity:.55;cursor:wait}
+button:disabled,.link-btn.disabled{opacity:.55;cursor:not-allowed;pointer-events:none}
+button:focus-visible,.link-btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.section-nav{display:flex;gap:7px;overflow:auto;padding:4px 0 10px;margin-bottom:4px;scrollbar-width:thin}
+.section-nav a{white-space:nowrap;color:var(--text);text-decoration:none;border:1px solid var(--border);border-radius:999px;padding:7px 11px;background:var(--card);font-size:12.5px}
+.section-nav a:hover{border-color:var(--blue)}
+.detail-line{margin:5px 0;overflow-wrap:anywhere}
+.feature-actions{margin-top:10px}
+.destination-summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--surface-2)}
+.destination-summary strong{overflow-wrap:anywhere}
+.folder-list{display:grid;gap:8px;margin:10px 0;max-height:340px;overflow:auto}
+.folder-row{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--surface-2)}
+.folder-name{min-width:0;flex:1;overflow-wrap:anywhere;font-weight:600}
+.folder-actions{display:flex;flex-wrap:wrap;gap:6px}
+.folder-actions button{padding:7px 10px;font-size:12px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
-.bar{height:7px;border-radius:99px;background:#1e293b;overflow:hidden;min-width:110px}
+.bar{height:7px;border-radius:99px;background:var(--bar-bg);overflow:hidden;min-width:110px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#3b82f6)}
-#logsBox{background:#020617;border:1px solid var(--border);border-radius:10px;padding:10px;
+#logsBox,.output-box{background:var(--log-bg);border:1px solid var(--border);border-radius:10px;padding:10px;
   font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.7;
   max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;direction:ltr;text-align:left}
+.output-box{max-height:300px}
 .note{color:var(--muted);font-size:12px;line-height:1.8}
 .msg{min-height:20px;font-size:13px}
 .ok{color:var(--green)} .err{color:var(--red)} .warnT{color:var(--amber)}
+@media(max-width:620px){.wrap{padding:12px 9px 28px}h1{font-size:19px}.folder-row{align-items:flex-start;flex-direction:column}.folder-actions{width:100%}.feature-grid{grid-template-columns:1fr}}
 </style>
 </head>
-<body>
+<body data-gradio-available="__GRADIO_AVAILABLE__">
 <div class="wrap">
   <header>
     <div>
       <h1>⚡ TeleDrive v5.0 Turbo — لوحة التحكم الحية</h1>
-      <div class="sub">FastAPI + تحديث لحظي عبر AJAX Polling كل ثانية (بدون ريفرش) — نفس محرك النقل والطابور، بلا أي بيانات وهمية</div>
+      <div class="sub">FastAPI + تحديث مباشر بالإعدادات المحفوظة — نفس محرك النقل والطابور، بلا أي بيانات وهمية</div>
     </div>
-    <div class="pill" id="syncClock">⏳ الاتصال…</div>
+    <div class="row">
+      <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الآن</button>
+      <div class="pill" id="syncClock">⏳ الاتصال…</div>
+    </div>
   </header>
+
+  <nav class="section-nav" aria-label="أقسام لوحة التحكم">
+    <a href="#connections">الحسابات</a>
+    <a href="#destination">وجهة Drive</a>
+    <a href="#analyze">التحليل</a>
+    <a href="#queue">الطابور</a>
+    <a href="#settings">الإعدادات</a>
+    <a href="#logs">السجلات</a>
+    <a href="#maintenance">أدوات إضافية</a>
+  </nav>
 
   <div class="grid">
     <div class="card"><h3>حالة المحرك</h3><div class="big" id="mState">—</div></div>
@@ -274,7 +320,56 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
     <div class="card"><h3>Google Drive</h3><div class="big" id="mDrive" style="font-size:16px">—</div></div>
   </div>
 
-  <div class="card">
+  <div class="feature-grid" id="connections">
+    <section class="card" aria-labelledby="telegramTitle">
+      <h3 id="telegramTitle">🔐 حساب Telegram</h3>
+      <p class="detail-line">الحالة: <strong id="telegramStatus">—</strong></p>
+      <p class="detail-line">الحساب الحالي: <strong id="telegramAccount">—</strong></p>
+      <div class="row feature-actions">
+        <a class="link-btn" id="telegramLoginLink" href="__GRADIO_URL__" target="_blank" rel="noopener noreferrer">🔑 تسجيل الدخول / تبديل الحساب بأمان ↗</a>
+        <button class="alt" id="btnTelegramStatus" type="button">تحديث الحالة</button>
+        <button class="danger" id="btnTelegramLogout" type="button">تسجيل الخروج</button>
+      </div>
+      <p class="note">لأمان الحساب، إدخال API ID وAPI Hash والهاتف ورمز التحقق وكلمة مرور 2FA يتم في حقول Gradio الآمنة فقط، وليس هنا. تسجيل الخروج يمسح الجلسة المحفوظة للحساب الحالي.</p>
+      <div class="msg" id="telegramMsg"></div>
+    </section>
+
+    <section class="card" aria-labelledby="driveTitle">
+      <h3 id="driveTitle">☁️ حساب Google Drive</h3>
+      <p class="detail-line">الحالة: <strong id="driveStatus">—</strong></p>
+      <p class="detail-line">الحساب: <strong id="driveAccount">—</strong></p>
+      <p class="detail-line">المساحة: <strong id="driveQuota">—</strong></p>
+      <div class="row feature-actions">
+        <button id="btnDriveConnect" type="button">ربط Drive</button>
+        <button class="alt" id="btnDriveReconnect" type="button">إعادة الربط</button>
+        <button class="alt" id="btnDriveStatus" type="button">تحديث الحالة</button>
+        <button class="alt" id="btnDriveQuota" type="button">تحديث المساحة</button>
+      </div>
+      <div class="msg" id="driveMsg"></div>
+    </section>
+  </div>
+
+  <section class="card" id="destination" aria-labelledby="destinationTitle">
+    <h3 id="destinationTitle">📁 وجهة الحفظ في Google Drive</h3>
+    <div class="destination-summary">
+      <span>المجلد المحدد للنقل:</span>
+      <strong id="selectedFolderName" class="err">لم يتم اختيار مجلد</strong>
+    </div>
+    <p class="note">افتح المجلد للدخول إليه، أو اختره مباشرة كوجهة للحفظ. إنشاء مجلد جديد سيختاره تلقائيًا.</p>
+    <div class="row">
+      <button class="alt" id="btnFolderUp" type="button" disabled>⬆ المجلد الأعلى</button>
+      <button class="alt" id="btnFolderRefresh" type="button" disabled>🔄 تحديث المجلدات</button>
+      <span class="note" id="folderBreadcrumb">My Drive</span>
+    </div>
+    <div class="folder-list" id="folderList" aria-live="polite"><div class="note">اربط Google Drive أولًا لعرض المجلدات.</div></div>
+    <div class="row">
+      <input type="text" id="newFolderName" placeholder="اسم المجلد الجديد" aria-label="اسم المجلد الجديد" disabled>
+      <button id="btnCreateFolder" type="button" disabled>＋ إنشاء مجلد هنا</button>
+    </div>
+    <div class="msg" id="folderMsg"></div>
+  </section>
+
+  <div class="card" id="analyze">
     <h3>🔍 تحليل رابط تيليجرام (نفس خدمة Scanner الرسمية)</h3>
     <div class="row">
       <input type="text" id="linkIn" placeholder="الصق رابط رسالة/قناة تيليجرام… مثال: https://t.me/channel/123">
@@ -312,11 +407,10 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
       <button class="alt" id="btnRetry">🔁 إعادة الفاشل</button>
     </div>
     <div class="msg" id="actionMsg"></div>
-    <p class="note">تسجيل دخول Telegram (الهاتف/الكود/كلمة السر) يبقى دائمًا داخل حقول Gradio الآمنة ولا يسافر عبر هذه الواجهة.
-    إذا استُعيدت جلستك من Drive في الخلية 4 فستظهر الحالة «متصل» هنا مباشرة. اختر مجلد Drive الهدف من واجهة Gradio أو شغّل الوضعين معًا <b>Run_Both_Together</b>.</p>
+    <p class="note">بيانات الدخول السرية لا تمر عبر هذه الواجهة. حالة Telegram وإدارة مجلد وجهة Drive متاحتان أعلاه؛ يجب اختيار مجلد قبل إضافة العناصر إلى الطابور.</p>
   </div>
 
-  <div class="card" style="margin-top:12px">
+  <div class="card" id="queue" style="margin-top:12px">
     <h3>📦 طابور النقل الحي (<span id="qCount">0</span>)</h3>
     <div style="overflow:auto">
       <table><thead><tr><th>الملف</th><th>الحالة</th><th>التقدم</th><th>الحجم</th></tr></thead>
@@ -324,10 +418,77 @@ th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);ver
     </div>
   </div>
 
-  <div class="card" style="margin-top:12px">
-    <h3>🧾 السجلات الحية (منقّحة)</h3>
+  <section class="card" id="settings" style="margin-top:12px" aria-labelledby="settingsTitle">
+    <h3 id="settingsTitle">⚙️ الإعدادات</h3>
+    <div class="feature-grid">
+      <div class="card">
+        <label for="themeIn">المظهر</label>
+        <div class="row" style="margin-top:8px">
+          <select id="themeIn" aria-label="المظهر">
+            <option value="light">فاتح</option>
+            <option value="dark">داكن</option>
+          </select>
+        </div>
+        <p class="note">يُحفظ الاختيار ويُطبّق على لوحة الويب الحديثة.</p>
+        <div class="msg" id="themeMsg"></div>
+      </div>
+      <div class="card">
+        <label for="concurrencyIn">عدد عمليات النقل المتوازية (1–100): <strong id="concurrencyValue">2</strong></label>
+        <div class="row" style="margin-top:8px">
+          <input type="range" id="concurrencyIn" min="1" max="100" step="1" value="2">
+          <button id="btnConcurrency" type="button">حفظ التوازي</button>
+        </div>
+        <p class="note" id="concurrencyRisk">القيم الأعلى من 8 قد تزيد استهلاك الذاكرة واحتمال FloodWait.</p>
+        <div class="msg" id="concurrencyMsg"></div>
+      </div>
+      <div class="card">
+        <label for="autoRefreshIn">تحديث الحالة تلقائيًا</label>
+        <div class="row" style="margin-top:8px">
+          <select id="autoRefreshIn">
+            <option value="0">إيقاف (التحديث اليدوي متاح)</option>
+            <option value="1000">كل ثانية</option>
+            <option value="2000">كل ثانيتين</option>
+            <option value="5000">كل 5 ثوانٍ</option>
+          </select>
+        </div>
+        <p class="note">يُحفظ الفاصل على الخادم؛ زر «تحديث الآن» يبقى متاحًا عند الإيقاف.</p>
+        <div class="msg" id="refreshMsg"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="logs" style="margin-top:12px" aria-labelledby="logsTitle">
+    <h3 id="logsTitle">🧾 السجلات الحية (منقّحة)</h3>
+    <div class="row" style="margin-bottom:8px">
+      <select id="logsLevel" aria-label="مستوى السجل">
+        <option value="ALL">كل المستويات</option>
+        <option value="INFO">معلومات</option>
+        <option value="WARNING">تحذيرات</option>
+        <option value="ERROR">أخطاء</option>
+        <option value="RECOVERY">استعادة</option>
+      </select>
+      <input type="text" id="logsQuery" placeholder="ابحث في السجلات…" aria-label="بحث في السجلات">
+      <button class="alt" id="btnLogsRefresh" type="button">تحديث</button>
+      <button class="alt" id="btnLogsSearch" type="button">بحث</button>
+      <button class="alt" id="btnLogsDownload" type="button">تصدير ملف السجل</button>
+    </div>
+    <div class="msg" id="logsMsg"></div>
     <div id="logsBox">…</div>
-  </div>
+  </section>
+
+  <section class="card" id="maintenance" style="margin-top:12px" aria-labelledby="maintenanceTitle">
+    <h3 id="maintenanceTitle">🧰 الاستعادة والصيانة والتصدير</h3>
+    <div class="row">
+      <button class="alt" id="btnRecovery" type="button">استعادة نقطة الحفظ</button>
+      <button class="alt" id="btnCheckpoint" type="button">إنشاء نقطة حفظ</button>
+      <button class="alt" id="btnBuildZip" type="button">بناء حزمة ZIP مختبرة</button>
+      <button class="alt" id="btnColabCells" type="button">عرض خلايا Colab</button>
+    </div>
+    <p class="note">بناء ZIP يشغّل مجموعة الاختبارات كاملة قبل إنشاء الحزمة وقد يستغرق وقتًا.</p>
+    <div class="msg" id="maintenanceMsg"></div>
+    <pre class="output-box" id="packagePath" hidden></pre>
+    <pre class="output-box" id="colabCellsBox" hidden></pre>
+  </section>
 </div>
 
 <script>
@@ -340,6 +501,18 @@ function humanBytes(n){
   return v.toFixed(v>=100?0:1)+" "+u[i];
 }
 function setText(id, value){ const el=$(id); if(el) el.textContent = (value==null ? "—" : String(value)); }
+function applyTheme(theme){
+  const chosen=theme==="dark"?"dark":"light";
+  document.documentElement.dataset.theme=chosen;
+  const control=$("themeIn");
+  if(control && document.activeElement!==control) control.value=chosen;
+}
+applyTheme(document.documentElement.dataset.theme);
+function setMessage(el, text, ok){
+  if(!el) return;
+  el.className="msg "+(ok?"ok":"err");
+  el.textContent=(ok?"✅ ":"⚠️ ")+String(text||"");
+}
 
 function renderQueue(state){
   const body=$("qBody"); body.textContent="";
@@ -372,6 +545,58 @@ const TG_LABELS={AUTHORIZED:"✅ متصل",CONNECTED:"✅ متصل",DISCONNECTED
   PASSWORD_REQUIRED:"بانتظار كلمة سر 2FA (من Gradio)",VERIFYING_PASSWORD:"جارٍ التحقق…",
   REAUTH_REQUIRED:"يلزم إعادة تسجيل الدخول",ERROR:"خطأ — راجع Gradio"};
 function friendlyStatus(raw){ return TG_LABELS[raw] || raw || "—"; }
+
+let folderStack=[{id:"root",name:"My Drive"}];
+let lastDriveConnected=false;
+let driveAvailable=false;
+let folderRequestSequence=0;
+function renderFolderBreadcrumb(){
+  setText("folderBreadcrumb",folderStack.map(function(item){return item.name;}).join(" / "));
+  const up=$("btnFolderUp");
+  if(up) up.disabled=!driveAvailable||folderStack.length<=1;
+}
+function renderFolders(folders){
+  const list=$("folderList");
+  list.replaceChildren();
+  if(!folders.length){
+    const empty=document.createElement("div");
+    empty.className="note";
+    empty.textContent="لا توجد مجلدات في هذا المستوى.";
+    list.appendChild(empty);
+    return;
+  }
+  for(const folder of folders){
+    const row=document.createElement("div"); row.className="folder-row";
+    const name=document.createElement("div"); name.className="folder-name";
+    name.textContent="📁 "+(folder.name||"مجلد بدون اسم");
+    const actions=document.createElement("div"); actions.className="folder-actions";
+    const open=document.createElement("button"); open.type="button"; open.className="alt"; open.textContent="فتح";
+    open.addEventListener("click",function(){
+      folderStack.push({id:String(folder.id||""),name:String(folder.name||"مجلد")});
+      void refreshDriveFolders();
+    });
+    const choose=document.createElement("button"); choose.type="button"; choose.textContent="اختيار وجهة";
+    choose.addEventListener("click",async function(){
+      const result=await bridgeAction("drive.select_folder",{folderId:folder.id},$("folderMsg"),this);
+      if(result && result.status==="ok") setMessage($("folderMsg"),"تم اختيار «"+(folder.name||"المجلد")+"» وجهةً للحفظ.",true);
+    });
+    actions.append(open,choose); row.append(name,actions); list.appendChild(row);
+  }
+}
+async function refreshDriveFolders(btn){
+  const current=folderStack[folderStack.length-1]||{id:"root",name:"My Drive"};
+  renderFolderBreadcrumb();
+  const request=++folderRequestSequence;
+  const result=await bridgeAction("drive.list_folders",{parentId:current.id||"root"},$("folderMsg"),btn);
+  if(request!==folderRequestSequence) return;
+  if(result && result.status==="ok"){
+    const folders=(result.data && Array.isArray(result.data.folders))?result.data.folders:[];
+    renderFolders(folders);
+    setMessage($("folderMsg"),"تم تحميل "+folders.length+" مجلدًا.",true);
+  }else{
+    renderFolders([]);
+  }
+}
 
 // Analyze candidates: re-render ONLY when the visible signature changes,
 // so the 1s polling never clobbers a checkbox mid-click.
@@ -408,6 +633,7 @@ function renderCandidates(state){
   }
 }
 
+let showFilteredLogs=false;
 function applyData(data){
   if(!data) return;
   setText("syncClock","🟢 متصل لحظياً • "+(data.server_time||""));
@@ -420,17 +646,69 @@ function applyData(data){
   setText("mPending", data.pending || 0);
   setText("mDisk", humanBytes(data.free_disk_bytes));
   const st=data.state||{};
-  setText("mTg", friendlyStatus(st.telegram && st.telegram.status));
-  setText("mDrive", friendlyStatus(st.drive && st.drive.status));
+  const telegram=st.telegram||{};
+  const drive=st.drive||{};
+  setText("mTg", friendlyStatus(telegram.status));
+  setText("mDrive", friendlyStatus(drive.status));
+  setText("telegramStatus", friendlyStatus(telegram.status));
+  setText("telegramAccount", telegram.accountLabel||"—");
+  setText("driveStatus", friendlyStatus(drive.status));
+  setText("driveAccount", drive.accountLabel||"—");
+  const used=drive.quotaUsed, limit=drive.quotaLimit;
+  setText("driveQuota", used!=null&&limit!=null ? humanBytes(used)+" / "+humanBytes(limit) : "غير متاح");
+  const folderName=st.folder && st.folder.name;
+  const folderLabel=$("selectedFolderName");
+  if(folderLabel){
+    folderLabel.textContent=folderName||"لم يتم اختيار مجلد";
+    folderLabel.classList.toggle("ok",!!folderName);
+    folderLabel.classList.toggle("err",!folderName);
+  }
+  if(st.webTheme==="light"||st.webTheme==="dark") applyTheme(st.webTheme);
+  if(Number.isFinite(Number(st.concurrency))){
+    if(document.activeElement!==$("concurrencyIn")) $("concurrencyIn").value=String(st.concurrency);
+    setText("concurrencyValue",st.concurrency);
+    setText("concurrencyRisk",Number(st.concurrency)>8 ? "⚠️ التوازي أعلى من 8: قد يزيد استهلاك الذاكرة واحتمال FloodWait." : "القيم الأعلى من 8 قد تزيد استهلاك الذاكرة واحتمال FloodWait.");
+  }
+  if(Number.isFinite(Number(st.autoRefreshMs))){
+    if(document.activeElement!==$("autoRefreshIn")) $("autoRefreshIn").value=String(st.autoRefreshMs);
+    configurePolling(Number(st.autoRefreshMs));
+  }
+  const driveConnected=drive.status==="CONNECTED";
+  driveAvailable=driveConnected;
+  $("btnFolderRefresh").disabled=!driveConnected;
+  $("btnCreateFolder").disabled=!driveConnected;
+  $("newFolderName").disabled=!driveConnected;
+  $("btnDriveQuota").disabled=!driveConnected;
+  if(driveConnected&&!lastDriveConnected){
+    folderStack=[{id:"root",name:"My Drive"}];
+    void refreshDriveFolders();
+  }else if(!driveConnected&&lastDriveConnected){
+    folderRequestSequence++;
+    renderFolders([]);
+    setMessage($("folderMsg"),"اربط Google Drive لعرض المجلدات.",false);
+  }
+  lastDriveConnected=driveConnected;
+  renderFolderBreadcrumb();
   renderCandidates(st);
   renderQueue(st);
-  const lb=$("logsBox");
-  lb.textContent=(data.logs||[]).join("\n");
-  lb.scrollTop=lb.scrollHeight;
+  if(!showFilteredLogs){
+    const lb=$("logsBox");
+    lb.textContent=(data.logs||[]).join("\n")||"لا توجد سجلات بعد.";
+    lb.scrollTop=lb.scrollHeight;
+  }
 }
 
-// ---- AJAX Polling: short JSON requests the Colab proxy never blocks ----
+// ---- AJAX Polling: the saved setting controls the browser heartbeat ----
 let busyPoll=false;
+let pollTimer=null;
+let configuredPollMs=null;
+function configurePolling(ms){
+  const interval=[0,1000,2000,5000].includes(Number(ms))?Number(ms):1000;
+  if(configuredPollMs===interval) return;
+  configuredPollMs=interval;
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  if(interval>0) pollTimer=setInterval(pollMetrics,interval);
+}
 async function pollMetrics(){
   if(busyPoll) return;
   busyPoll=true;
@@ -439,9 +717,9 @@ async function pollMetrics(){
     if(res.ok){ applyData(await res.json()); }
     else { setText("syncClock","🟡 إعادة محاولة…"); }
   }catch(e){ setText("syncClock","🔴 انقطع الاتصال — إعادة محاولة…"); }
-  busyPoll=false;
+  finally{ busyPoll=false; }
 }
-setInterval(pollMetrics,1000);
+configurePolling(1000);
 pollMetrics();
 
 // ---- actions (same validated bridge actions as the Gradio/React UI) ----
@@ -462,6 +740,7 @@ async function bridgeAction(actionId, payload, el, btn){
   try{
     const data=await postJson("api/action",{actionId:actionId,payload:payload||{},language:"ar"});
     showAction(el,data);
+    return data;
   }finally{ if(btn) btn.disabled=false; }
 }
 async function queueAction(name, btn){
@@ -472,6 +751,120 @@ async function queueAction(name, btn){
     showAction($("actionMsg"),data);
   }finally{ if(btn) btn.disabled=false; }
 }
+
+// Telegram authentication remains in the secure Gradio controls. The modern
+// page can safely inspect status or sign out before switching accounts.
+const telegramLoginLink=$("telegramLoginLink");
+if(document.body.dataset.gradioAvailable!=="true"){
+  telegramLoginLink.classList.add("disabled");
+  telegramLoginLink.href="#";
+  telegramLoginLink.setAttribute("aria-disabled","true");
+  telegramLoginLink.title="شغّل الواجهة الكلاسيكية للحصول على تسجيل الدخول الآمن.";
+  telegramLoginLink.addEventListener("click",function(event){
+    event.preventDefault();
+    setMessage($("telegramMsg"),"واجهة Gradio الآمنة غير متاحة الآن. شغّل الواجهتين معًا أو الواجهة الكلاسيكية.",false);
+  });
+}
+$("btnTelegramStatus").addEventListener("click",function(){
+  bridgeAction("telegram.status",{},$("telegramMsg"),this);
+});
+$("btnTelegramLogout").addEventListener("click",function(){
+  if(!window.confirm("سيتم تسجيل الخروج ومسح نسخة الجلسة المحفوظة لهذا الحساب. هل تريد المتابعة لتبديله؟")) return;
+  const button=this;
+  bridgeAction("telegram.logout",{},$("telegramMsg"),button).then(function(result){
+    if(result && result.status==="ok"){
+      const detail=result.data&&result.data.detail;
+      setMessage($("telegramMsg"),detail||"تم تسجيل الخروج. افتح تسجيل الدخول الآمن لإضافة الحساب الجديد.",true);
+    }
+  });
+});
+
+$("btnDriveConnect").addEventListener("click",function(){ bridgeAction("drive.connect",{},$("driveMsg"),this); });
+$("btnDriveReconnect").addEventListener("click",function(){ bridgeAction("drive.reconnect",{},$("driveMsg"),this); });
+$("btnDriveStatus").addEventListener("click",function(){ bridgeAction("drive.status",{},$("driveMsg"),this); });
+$("btnDriveQuota").addEventListener("click",function(){ bridgeAction("drive.refresh_quota",{},$("driveMsg"),this); });
+$("btnFolderRefresh").addEventListener("click",function(){ refreshDriveFolders(this); });
+$("btnFolderUp").addEventListener("click",function(){
+  if(folderStack.length>1){ folderStack.pop(); refreshDriveFolders(this); }
+});
+$("btnCreateFolder").addEventListener("click",async function(){
+  const name=$("newFolderName").value.trim();
+  if(!name){ setMessage($("folderMsg"),"اكتب اسم المجلد أولًا.",false); return; }
+  const current=folderStack[folderStack.length-1]||{id:"root",name:"My Drive"};
+  const result=await bridgeAction("drive.create_folder",{name:name,parentId:current.id||"root"},$("folderMsg"),this);
+  if(result && result.status==="ok"){
+    $("newFolderName").value="";
+    setMessage($("folderMsg"),"تم إنشاء المجلد واختياره وجهةً للحفظ.",true);
+    await refreshDriveFolders();
+  }
+});
+
+$("themeIn").addEventListener("change",async function(){
+  const previous=document.documentElement.dataset.theme||"light";
+  const chosen=this.value==="dark"?"dark":"light";
+  applyTheme(chosen);
+  const result=await bridgeAction("settings.set_theme",{theme:chosen},$("themeMsg"),this);
+  if(result && result.status==="ok") setMessage($("themeMsg"),"تم حفظ المظهر "+(chosen==="dark"?"الداكن":"الفاتح")+".",true);
+  else applyTheme(previous);
+});
+$("concurrencyIn").addEventListener("input",function(){ setText("concurrencyValue",this.value); });
+$("btnConcurrency").addEventListener("click",async function(){
+  const value=Number($("concurrencyIn").value);
+  if(!Number.isInteger(value)||value<1||value>100){ setMessage($("concurrencyMsg"),"أدخل عددًا صحيحًا من 1 إلى 100.",false); return; }
+  const result=await bridgeAction("settings.set_concurrency",{value:value},$("concurrencyMsg"),this);
+  if(result && result.status==="ok"){
+    setText("concurrencyValue",value);
+    setText("concurrencyRisk",value>8 ? "⚠️ التوازي أعلى من 8: قد يزيد استهلاك الذاكرة واحتمال FloodWait." : "القيم الأعلى من 8 قد تزيد استهلاك الذاكرة واحتمال FloodWait.");
+    setMessage($("concurrencyMsg"),"تم حفظ عدد العمليات المتوازية: "+value+".",true);
+  }
+});
+$("autoRefreshIn").addEventListener("change",async function(){
+  const value=Number(this.value);
+  const result=await bridgeAction("settings.set_auto_refresh",{value:value},$("refreshMsg"),this);
+  if(result && result.status==="ok"){
+    configurePolling(value);
+    setMessage($("refreshMsg"),value===0?"تم إيقاف التحديث التلقائي؛ استخدم زر «تحديث الآن» عند الحاجة.":"تم ضبط التحديث كل "+(value/1000)+" ثانية.",true);
+  }
+});
+$("btnRefreshMetrics").addEventListener("click",function(){ pollMetrics(); });
+
+async function runLogAction(actionId, payload, button){
+  const result=await bridgeAction(actionId,payload,$("logsMsg"),button);
+  if(!result||result.status!=="ok") return;
+  if(result.data && typeof result.data.logs==="string"){
+    const box=$("logsBox"); box.textContent=result.data.logs||"لا توجد سجلات مطابقة."; box.scrollTop=box.scrollHeight;
+    showFilteredLogs=true;
+    setMessage($("logsMsg"),"تم تحميل السجلات المنقّحة.",true);
+  }else if(result.data && result.data.path){
+    setMessage($("logsMsg"),"تم إنشاء ملف السجل: "+result.data.path,true);
+  }
+}
+$("btnLogsRefresh").addEventListener("click",function(){
+  runLogAction("logs.refresh",{level:$("logsLevel").value},this);
+});
+$("btnLogsSearch").addEventListener("click",function(){
+  runLogAction("logs.search",{query:$("logsQuery").value.trim(),level:$("logsLevel").value},this);
+});
+$("btnLogsDownload").addEventListener("click",function(){
+  runLogAction("logs.download",{level:$("logsLevel").value},this);
+});
+
+$("btnRecovery").addEventListener("click",function(){ bridgeAction("recovery.restore",{},$("maintenanceMsg"),this); });
+$("btnCheckpoint").addEventListener("click",function(){ bridgeAction("maintenance.checkpoint",{},$("maintenanceMsg"),this); });
+$("btnBuildZip").addEventListener("click",async function(){
+  if(!window.confirm("سيتم تشغيل مجموعة الاختبارات كاملة قبل إنشاء الحزمة وقد يستغرق ذلك وقتًا. متابعة؟")) return;
+  const result=await bridgeAction("export.build_zip",{},$("maintenanceMsg"),this);
+  if(result && result.status==="ok" && result.data && result.data.zipPath){
+    const output=$("packagePath"); output.hidden=false; output.textContent="تم إنشاء الحزمة المختبرة: "+result.data.zipPath;
+  }
+});
+$("btnColabCells").addEventListener("click",async function(){
+  const result=await bridgeAction("export.colab_cells",{},$("maintenanceMsg"),this);
+  if(result && result.status==="ok" && result.data && result.data.cells){
+    const output=$("colabCellsBox"); output.hidden=false; output.textContent=result.data.cells;
+  }
+});
+
 // Mirror of the scanner's MODE_FIELDS: show only the inputs the chosen
 // canonical mode consumes (message / range / latest / chat).
 function syncModeFields(){
@@ -544,7 +937,21 @@ def create_web_app(ctx: Any):
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return HTMLResponse(HTML_PAGE)
+        preferences = getattr(ctx, "preferences", None)
+        theme = preferences.current_theme() if preferences is not None else "light"
+        if theme not in {"light", "dark"}:
+            theme = "light"
+        raw_gradio_url = str(getattr(ctx, "gradio_proxy_url", "") or "").strip()
+        parsed_gradio_url = urlsplit(raw_gradio_url)
+        gradio_available = (
+            parsed_gradio_url.scheme in {"http", "https"}
+            and bool(parsed_gradio_url.netloc)
+        )
+        gradio_url = html.escape(raw_gradio_url, quote=True) if gradio_available else "#"
+        page = HTML_PAGE.replace("__INITIAL_THEME__", theme)
+        page = page.replace("__GRADIO_URL__", gradio_url)
+        page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
+        return HTMLResponse(page)
 
     @app.get("/api/health")
     def api_health():

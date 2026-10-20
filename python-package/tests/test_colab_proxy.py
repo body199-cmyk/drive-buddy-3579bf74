@@ -170,11 +170,13 @@ def test_launch_passes_proxy_url_as_root_path(ctx, fake_demo, fake_colab):
     # root_path is keyword-only in Gradio 6.20.0; it must be the proxy origin so
     # /config, events, assets and queue resolve through the Colab proxy.
     assert fake_demo.kwargs["root_path"] == fake_colab.proxy
+    assert ctx.gradio_proxy_url == fake_colab.proxy
 
 
 def test_launch_off_colab_passes_none_root_path(ctx, fake_demo):
     app.launch(ctx)
     assert fake_demo.kwargs["root_path"] is None
+    assert ctx.gradio_proxy_url is None
 
 
 def test_launch_share_true_skips_proxy_and_root_path(ctx, fake_demo, fake_colab):
@@ -184,6 +186,7 @@ def test_launch_share_true_skips_proxy_and_root_path(ctx, fake_demo, fake_colab)
     assert fake_colab.eval_js_calls == []
     assert fake_demo.kwargs["root_path"] is None
     assert fake_demo.kwargs["share"] is True
+    assert ctx.gradio_proxy_url is None
 
 
 # --------------------------------------------------------------------------

@@ -26,6 +26,26 @@ def _bridge(ctx):
     return ctx.handlers.react_bridge
 
 
+def test_bridge_response_data_exposes_safe_export_and_log_outputs(ctx):
+    bridge = _bridge(ctx)
+    assert bridge._response_data(
+        "export.build_zip", ("✅ archive ready", {"value": "/tmp/teledrive.zip"})
+    ) == {"zipPath": "/tmp/teledrive.zip"}
+    assert bridge._response_data(
+        "export.colab_cells", ({"value": "cell source"}, "✅ ready")
+    ) == {"cells": "cell source"}
+    assert bridge._response_data(
+        "logs.download", ({"value": "/tmp/logs.txt", "visible": True}, "✅ ready")
+    ) == {"path": "/tmp/logs.txt"}
+    assert bridge._response_data(
+        "telegram.logout", ("Disconnected · saved-session deletion failed",)
+    ) == {"detail": "Disconnected · saved-session deletion failed"}
+    redacted = bridge._response_data(
+        "telegram.logout", ("api_hash=0123456789abcdef0123456789abcdef",)
+    )
+    assert "0123456789abcdef" not in str(redacted)
+
+
 def test_react_bridge_rejects_unknown_action(ctx):
     response = _bridge(ctx).handle(_request("missing.action"))
     assert response["status"] == "error"
@@ -36,6 +56,19 @@ def test_react_bridge_rejects_blocked_action(ctx):
     response = _bridge(ctx).handle(_request("telegram.verify_code"))
     assert response["status"] == "blocked"
     assert response["errorKey"] == "bridge.secure_gradio_only"
+
+
+def test_web_theme_preference_roundtrips_without_changing_the_light_only_react_shell(ctx):
+    from teledrive.web_dashboard import TeleDriveWebBridge
+
+    response = _bridge(ctx).handle(
+        _request("settings.set_theme", {"theme": "dark"}, "theme-dark")
+    )
+    assert response["status"] == "ok"
+    assert response["state"]["theme"] == "light"
+    assert ctx.preferences.current_theme() == "dark"
+    assert db.get_setting("theme") == "dark"
+    assert TeleDriveWebBridge(ctx).get_system_metrics()["state"]["webTheme"] == "dark"
 
 
 def test_react_bridge_persists_auto_refresh_and_returns_the_new_snapshot(ctx):

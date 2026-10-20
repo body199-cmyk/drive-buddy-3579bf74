@@ -205,6 +205,9 @@ def launch(
     # Obtain the official proxy URL (None off Colab / on failure). It seeds
     # Gradio's root_path BEFORE launch; it is printed AFTER the server listens.
     proxy_url = colab_proxy_url(port) if (on_colab and not share) else None
+    # The modern dashboard can hand users off to the exact same Gradio login
+    # controls without ever carrying Telegram secrets over its HTTP bridge.
+    ctx.gradio_proxy_url = proxy_url
 
     # Loopback must bypass any VPN/HTTP proxy so Gradio's localhost probes pass.
     _ensure_localhost_bypasses_proxy()
