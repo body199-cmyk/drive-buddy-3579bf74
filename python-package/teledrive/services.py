@@ -838,11 +838,9 @@ class SettingsService:
 class PreferencesService:
     def __init__(self, ctx) -> None:
         self.ctx = ctx
-        # Restore persisted theme/language on boot (best-effort).
-        # M20-T02: the default is LIGHT. The shell is light-only (theme.py
-        # neutralises Gradio's dark palette at the CSS-variable level), so a
-        # persisted "dark" default would make this preference claim a state the
-        # UI can never actually paint.
+        # Restore persisted theme/language on boot (best-effort). The first-run
+        # default remains LIGHT. Gradio intentionally stays light-only; the
+        # modern web dashboard paints both persisted light and dark preferences.
         saved_theme = db.get_setting("theme") or DEFAULT_THEME
         self.ctx.ui_state.extra["theme"] = (
             saved_theme if saved_theme in ("dark", "light") else DEFAULT_THEME

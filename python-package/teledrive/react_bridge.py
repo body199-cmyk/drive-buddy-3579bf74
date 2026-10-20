@@ -310,6 +310,22 @@ class ReactBridge:
         if action_id in {"logs.refresh", "logs.search"}:
             first = result[0] if isinstance(result, (list, tuple)) and result else result
             return {"logs": _safe_text(_update_value(first) or "")}
+        if action_id == "telegram.logout":
+            first = result[0] if isinstance(result, (list, tuple)) and result else result
+            detail = _safe_text(first or "")
+            return {"detail": detail} if detail else None
+        if action_id == "logs.download":
+            first = result[0] if isinstance(result, (list, tuple)) and result else result
+            path = _safe_text(_update_value(first) or "")
+            return {"path": path} if path else None
+        if action_id == "export.build_zip":
+            last = result[-1] if isinstance(result, (list, tuple)) and result else result
+            path = _safe_text(_update_value(last) or "")
+            return {"zipPath": path} if path else None
+        if action_id == "export.colab_cells":
+            first = result[0] if isinstance(result, (list, tuple)) and result else result
+            text = _safe_text(_update_value(first) or "")
+            return {"cells": text} if text else None
         return None
 
     @staticmethod

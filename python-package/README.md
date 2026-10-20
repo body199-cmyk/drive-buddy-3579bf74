@@ -14,14 +14,12 @@ Transfer media from Telegram to Google Drive using only Google Colab. No servers
 
 1. **افتح** `notebook/TeleDrive.ipynb` داخل Colab (File → Upload notebook).
 2. **ارفع** الحزمة كـ ZIP في الخلية الأولى.
-3. **شغّل** الخلايا بالترتيب: تثبيت → bootstrap → إدخال api_id/hash → إطلاق الواجهة.
-   في الخلية 4 اختر `UI_MODE`: `Modern_Web_Dashboard` (واجهة FastAPI حية
-   بـ AJAX Polling على المنفذ 8765)، أو `Classic_Gradio_Backup` (7860)،
-   أو `Run_Both_Together`. بيانات دخول Telegram تُكتب فقط في حقول Gradio.
-   In cell 4 pick `UI_MODE`: the live FastAPI dashboard (8765), the classic
-   Gradio UI (7860), or both — Telegram secrets stay in Gradio's secure fields.
-4. **افتح** تبويب Google Drive في الواجهة وارفع ملف OAuth Desktop JSON من Google Cloud Console.
-5. **الصق** رابط تيليجرام في تبويب "Link & Analyze"، اضغط Analyze، ثم Start.
+3. **شغّل** الخلايا بالترتيب. في الخلية 4 اختر `UI_MODE`: `Modern_Web_Dashboard` (FastAPI على 8765)، أو `Classic_Gradio_Backup` (7860)، أو `Run_Both_Together`.
+   لوحة الويب الحديثة تتضمن الثيم الفاتح/الداكن، إعدادات التوازي والتحديث، واستعراض/إنشاء/اختيار مجلد Drive. تسجيل Telegram يفتح حقول Gradio الآمنة؛ لا تُرسل مفاتيح API أو الهاتف أو OTP أو 2FA عبر الويب.
+   In cell 4 choose the modern FastAPI dashboard (8765), classic Gradio (7860), or both. The modern dashboard includes light/dark mode, concurrency/refresh settings, and Drive folder browsing/creation/selection. Telegram credentials and codes remain in secure Gradio fields.
+4. **فوّض Google Drive** من مطالبة Colab الأصلية في الخلية 3. لا ترفع ملف OAuth Desktop JSON. بعد الاتصال اختر مجلد الوجهة من بطاقة «وجهة الحفظ في Google Drive» في لوحة الويب.
+   Authorize Drive through Colab's native prompt in cell 3 (no OAuth Desktop JSON upload), then choose the save destination from the modern dashboard's Drive folder card.
+5. **الصق** رابط تيليجرام في لوحة التحليل، اضغط Analyze، حدّد الملفات، ثم أضفها للطابور وابدأ النقل.
 
 ## القيود الصادقة — Honest limitations
 
