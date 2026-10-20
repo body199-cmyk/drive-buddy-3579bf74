@@ -12,7 +12,8 @@
 - `835 passed` · compileall PASS · launcher `54/54` · notebooks check + cmp PASS · React contracts `34/34` · سكربت Web اجتاز `node --check`.
 - تشغيل HTTP مزدوج حي (Gradio + Web) مع نفس Context: الصفحتان `/` = 200، `/config`، health/metrics/state، analyze candidates toggle/select-all/clear، إعادة الإطلاق idempotent، وحلقة التطبيق `pong`؛ `FAILURES: 0`.
 - archive: `628920` bytes، SHA-256 `89de5831be2350d564d8196c4780173a7b5b5693d7b544106fa7702327a4e736`.
-- **لم يُثبت Colab حيًا ولم يُنشر الإصدار بعد:** `gh workflow run` عاد 403 من صلاحية الوكيل. يلزم نشر GitHub Actions يدوي بعد الدمج أو تبنّي الـworkflow الجاهز؛ التقرير `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md`.
+- دُمجت التغييرات عبر PR [#108](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/108) عند `d8c22df`; PR CI [#39452872933](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39452872933) وmain CI [#39453144455](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39453144455) نجحا (Python + Frontend).
+- **لم يُثبت Colab حيًا ولم يُنشر الإصدار بعد:** `gh workflow run` عاد 403 من صلاحية الوكيل. يلزم نشر GitHub Actions يدوي أو تبنّي الـworkflow الجاهز؛ التقرير `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md`.
 
 ## [M46-T02] — 2026-10-19 — إصلاح عاجل: الواجهة الحديثة غائبة وGradio متجمدة على Colab
 

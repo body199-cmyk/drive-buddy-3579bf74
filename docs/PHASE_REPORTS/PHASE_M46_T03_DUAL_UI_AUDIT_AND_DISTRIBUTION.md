@@ -71,10 +71,20 @@
   وفيها `web_dashboard.py` بلا علة `channel` ومع جدول المرشحين،
   وبوابة إعادة التوجيه/الترتيب، وافتراضي الواجهتين.
 
+## حالة الدمج وCI
+
+* PR [#108](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/108)
+  merged عند `d8c22df07b4a672ff00389cb880c847534d15db7` في
+  `2026-10-20T15:57:26Z`.
+* PR CI [#39452872933](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39452872933)
+  وmain push CI [#39453144455](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39453144455)
+  SUCCESS في Python + Frontend. التنبيهات الوحيدة من GitHub تخص انتقال Node 20
+  إلى 24 وubuntu-latest، وليست فشلات.
+
 ## الحدود الصادقة / ما يتبقى بيد المالك
 
 1. **نشر الحزمة**: الوكيل لا يستطيع `workflow_dispatch` ‏(403 مثبت أعلاه).
-   بعد دمج هذا الـPR يكفي واحد من: (أ) تشغيل
+   بعد دمج PR #108 يكفي واحد من: (أ) تشغيل
    `Publish current TeleDrive package` يدويًا من تبويب Actions على
    `main` — تنشر تاجًا جديدًا تلتقطه الخلية 1 عبر API أو إعادة التوجيه؛
    أو (ب) تبنّي `docs/M46_T02_release_current_workflow.yml` مكان
