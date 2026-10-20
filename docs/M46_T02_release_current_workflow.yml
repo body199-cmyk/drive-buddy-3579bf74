@@ -129,6 +129,12 @@ jobs:
               "schema": 1,
               "release": os.environ["RELEASE_TAG"],
               "commit": os.environ["CURRENT_SHA"],
+              # M46-T03: monotonically increasing build order. Notebook
+              # Cell 1 compares this across the latest-resolved and
+              # pinned manifests and installs the newer build, so a
+              # stable tag refreshed in place (old creation date) is
+              # never shadowed by an older per-run "latest" release.
+              "build_run_id": int(os.environ.get("GITHUB_RUN_ID") or 0),
               "product_version": os.environ["PRODUCT_VERSION"],
               "sha256": os.environ["ARCHIVE_SHA256"],
               "size_bytes": int(os.environ["ARCHIVE_SIZE"]),

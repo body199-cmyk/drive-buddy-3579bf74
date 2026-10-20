@@ -1,5 +1,19 @@
 # CHANGELOG — آخر 20-30 تغيير (TeleDrive v5.0)
 
+## [M46-T03] — 2026-10-20 — تدقيق الواجهتين: إظهار الويب وإصلاح التحليل والتوزيع
+
+### Fixed
+- **توزيع Colab:** آخر release بعد دمج M46-T02 ظل مبنيًا من SHA أقدم، والتاج المثبت يحمل حزمة بلا الواجهة الحديثة. أضيف resolve لـ`/releases/latest` عبر redirect عند نفاد حد GitHub API، ومقارنة `build_run_id` بين latest والتاج المثبت حتى لا يُظلَّل الإصدار الأحدث بناءً بسبب تاريخ إنشاء التاج الثابت.
+- **صفحة Web الحديثة:** `channel` كان اسم وضع غير موجود في المحرك، و`range` يرسل بلا start/end، كما لم تعرض الصفحة أي نتيجة تحليل. صارت الأوضاع `message/range/latest/chat` مطابقة لـ`SCAN_MODES`، لكل وضع حقوله والتحقق العربي، وتظهر قائمة المرشحين مع التحديد/مسح التحديد عبر نفس الـbridge المعتمد.
+- **استمرار الواجهتين:** الافتراضي في Cell 4 هو `Run_Both_Together`؛ تطلق Gradio أولًا وتبقى حقول Telegram الآمنة متاحة، ثم لوحة الويب الحديثة. فشل تشغيل Gradio لا يمنع محاولة الويب، وفشل الويب يطلق Gradio احتياطيًا، وإذا فشلا يظهر تنبيه واضح بدل ادعاء تشغيلهما. أُعيد توليد النوت‌بوكين و`colab_cells.json` من المصدر.
+- نسخة `docs/M46_T02_release_current_workflow.yml` الجاهزة للتبنّي تضيف `build_run_id` إلى الـmanifest.
+
+### Gates and local verification
+- `835 passed` · compileall PASS · launcher `54/54` · notebooks check + cmp PASS · React contracts `34/34` · سكربت Web اجتاز `node --check`.
+- تشغيل HTTP مزدوج حي (Gradio + Web) مع نفس Context: الصفحتان `/` = 200، `/config`، health/metrics/state، analyze candidates toggle/select-all/clear، إعادة الإطلاق idempotent، وحلقة التطبيق `pong`؛ `FAILURES: 0`.
+- archive: `628920` bytes، SHA-256 `89de5831be2350d564d8196c4780173a7b5b5693d7b544106fa7702327a4e736`.
+- **لم يُثبت Colab حيًا ولم يُنشر الإصدار بعد:** `gh workflow run` عاد 403 من صلاحية الوكيل. يلزم نشر GitHub Actions يدوي بعد الدمج أو تبنّي الـworkflow الجاهز؛ التقرير `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md`.
+
 ## [M46-T02] — 2026-10-19 — إصلاح عاجل: الواجهة الحديثة غائبة وGradio متجمدة على Colab
 
 ### Fixed

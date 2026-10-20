@@ -74,6 +74,46 @@ def test_page_is_self_contained_and_polls_relative_metrics():
     assert "innerHTML" not in HTML_PAGE
 
 
+def test_page_analyze_modes_are_the_canonical_scanner_modes():
+    """M46-T03 regression: the page offered mode ``channel``, which the
+    scanner has never accepted (``SCAN_MODES`` = message/range/latest/
+    chat), so "whole channel" analyze always failed after login; the
+    range option also shipped without any start/end inputs, so it could
+    only ever fail validation too."""
+    import re
+
+    from teledrive.media_scanner import SCAN_MODES
+
+    offered = re.findall(r'<option value="([a-z_]+)"', HTML_PAGE)
+    assert offered, "mode dropdown missing"
+    assert set(offered) <= set(SCAN_MODES), f"non-canonical modes: {offered}"
+    assert set(offered) == set(SCAN_MODES), "every scanner mode must be offered"
+    # The inputs each mode consumes exist and are actually sent.
+    for element_id in ("messageIdIn", "startIdIn", "endIdIn", "limitIn"):
+        assert f'id="{element_id}"' in HTML_PAGE
+    for payload_key in ("messageId", "startId", "endId", "limit"):
+        assert f"{payload_key}:" in HTML_PAGE or f"{payload_key}=" in HTML_PAGE
+    assert "syncModeFields" in HTML_PAGE
+
+
+def test_page_renders_analyze_candidates_with_selection():
+    """M46-T03: analyze results were invisible in the Web UI (candidates
+    existed in the snapshot but the page never rendered them), so
+    select/enqueue from the modern UI was blind."""
+    assert 'id="cBody"' in HTML_PAGE
+    assert "state.candidates" in HTML_PAGE
+    assert '"analyze.toggle_row"' in HTML_PAGE
+    assert "sourceId:item.sourceId" in HTML_PAGE
+    assert '"analyze.clear_selection"' in HTML_PAGE
+
+
+def test_page_script_has_no_escaped_quote_artifacts():
+    """The page is a Python raw string: a stray backslash before a quote
+    in the embedded JS is a browser SyntaxError that kills the whole
+    script (caught by `node --check` during M46-T03)."""
+    assert '\\"' not in HTML_PAGE
+
+
 def test_metrics_reflect_the_real_empty_runtime(ctx):
     metrics = TeleDriveWebBridge(ctx).get_system_metrics()
     assert metrics["ok"] is True

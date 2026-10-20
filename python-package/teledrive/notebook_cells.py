@@ -68,8 +68,9 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   No desktop OAuth JSON and no pasted authorization code.
 * Cell 4 has a **UI_MODE** dropdown: `Modern_Web_Dashboard` (FastAPI +
   AJAX Polling, port 8765), `Classic_Gradio_Backup` (port 7860), or
-  `Run_Both_Together`. Telegram login secrets are only ever typed into
-  the Gradio fields, never into the Web Dashboard.
+  `Run_Both_Together` — the default, so both interfaces (and their two
+  printed URLs) come up together. Telegram login secrets are only ever
+  typed into the Gradio fields, never into the Web Dashboard.
 * Cell 4 starts the UI only. Run optional Cell 8 afterward if you want the
   best-effort heartbeat and silent browser audio; run Cell 9 to stop both, then
   Cell 7 for cleanup/shutdown. Autoplay may be blocked, and this cannot override
@@ -113,6 +114,10 @@ PKG_RELEASE_BASE = (
 PKG_MANIFEST_URL = PKG_RELEASE_BASE + "teledrive_manifest.json"
 PKG_LATEST_API_URL = (
     "https://api.github.com/repos/body199-cmyk/drive-buddy-3579bf74"
+    "/releases/latest"
+)
+PKG_LATEST_PAGE_URL = (
+    "https://github.com/body199-cmyk/drive-buddy-3579bf74"
     "/releases/latest"
 )
 _PKG_TAG_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
@@ -185,6 +190,41 @@ def _pkg_latest_manifest_url(fetch, api_url):
     if not _pkg_tag_is_valid(tag):
         raise ValueError("latest release is not a pkg-* release")
     return _pkg_release_base(tag) + "teledrive_manifest.json", tag
+
+
+def _pkg_latest_tag_via_redirect(fetch, page_url):
+    """Resolve the newest release tag WITHOUT the GitHub API.
+
+    ``github.com/<repo>/releases/latest`` redirects to
+    ``.../releases/tag/<tag>``; urllib follows the redirect and exposes
+    the final URL. This path has no API rate limit — shared Colab NAT
+    IPs routinely exhaust the unauthenticated 60/hour API quota, which
+    used to drop this gate silently onto the ancient pinned package
+    (M46-T03). Returns the validated tag; raises on anything else."""
+    with fetch(page_url) as response:
+        final_url = response.geturl() if hasattr(response, "geturl") else ""
+    marker = "/releases/tag/"
+    if marker not in str(final_url):
+        raise ValueError("latest-release page did not redirect to a tag")
+    tag = str(final_url).split(marker, 1)[1].split("/")[0].split("?")[0]
+    if not _pkg_tag_is_valid(tag):
+        raise ValueError("latest release is not a pkg-* release")
+    return tag
+
+
+def _pkg_manifest_rank(manifest):
+    """Comparable build order between two trusted manifests.
+
+    Publishing workflows stamp each manifest with ``build_run_id`` (the
+    GitHub Actions run id — monotonically increasing); legacy manifests
+    without the field rank 0. A stable tag refreshed in place keeps its
+    old creation date, so "/releases/latest" (newest by creation) can
+    point at an OLDER build than the pinned tag. Ranking lets the gate
+    install whichever trusted manifest was actually built later."""
+    try:
+        return int(manifest.get("build_run_id") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _pkg_manifest_is_trusted(manifest, expected_tag=None):
@@ -345,14 +385,17 @@ def _pkg_refused(reason, emit):
 
 
 def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None,
-                   emit=print, latest_api_url=PKG_LATEST_API_URL):
+                   emit=print, latest_api_url=PKG_LATEST_API_URL,
+                   latest_page_url=PKG_LATEST_PAGE_URL):
     """One fail-closed update check; always prints exactly ONE redacted line.
 
-    Manifest resolution order: the newest pkg-* GitHub release first (so a
-    freshly published package reaches Colab without editing this notebook),
-    then the pinned release as fallback. Outcomes: 'already-current' |
-    'success' | 'refused'. Nothing mutates the installed package unless the
-    bytes matched the chosen manifest's digest.
+    Manifest resolution: the newest pkg-* GitHub release (public API
+    first, then the rate-limit-free /releases/latest redirect) AND the
+    pinned release are both consulted; when both are trusted, the one
+    built later (``build_run_id``) wins — a tie keeps the
+    latest-resolved one. Outcomes: 'already-current' | 'success' |
+    'refused'. Nothing mutates the installed package unless the bytes
+    matched the chosen manifest's digest.
     """
     local_root = pathlib.Path(local_root)
     fetch = fetch or _pkg_fetch
@@ -362,21 +405,52 @@ def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None,
     if reason is not None:
         return _pkg_refused(reason + "; restart the runtime, then re-run Cell 1", emit)
     manifest = None
-    if latest_api_url:
-        try:
-            latest_url, latest_tag = _pkg_latest_manifest_url(fetch, latest_api_url)
-            candidate = _pkg_load_manifest(fetch, latest_url)
-            if _pkg_manifest_is_trusted(candidate, latest_tag):
-                manifest = candidate
-        except Exception:
-            manifest = None  # API down / rate-limited: pinned fallback below
-    if manifest is None:
-        try:
-            manifest = _pkg_load_manifest(fetch, manifest_url)
-        except Exception:
+    if latest_api_url or latest_page_url:
+        latest_tag = None
+        if latest_api_url:
+            try:
+                _latest_url, latest_tag = _pkg_latest_manifest_url(
+                    fetch, latest_api_url)
+            except Exception:
+                latest_tag = None  # API down / rate-limited: redirect next
+        if latest_tag is None and latest_page_url:
+            try:
+                latest_tag = _pkg_latest_tag_via_redirect(fetch, latest_page_url)
+            except Exception:
+                latest_tag = None
+        if latest_tag is not None:
+            try:
+                candidate = _pkg_load_manifest(
+                    fetch,
+                    _pkg_release_base(latest_tag) + "teledrive_manifest.json")
+                if _pkg_manifest_is_trusted(candidate, latest_tag):
+                    manifest = candidate
+            except Exception:
+                manifest = None
+    # The pinned manifest is consulted even when a latest candidate is
+    # already trusted: "latest" is newest by CREATION date, so a pinned
+    # stable tag refreshed in place can carry a newer build than the
+    # latest-created release. _pkg_manifest_rank decides; a pinned
+    # fetch failure never discards a trusted latest candidate.
+    pinned = None
+    pinned_untrusted = False
+    try:
+        pinned_candidate = _pkg_load_manifest(fetch, manifest_url)
+        if _pkg_manifest_is_trusted(pinned_candidate, PKG_RELEASE_TAG):
+            pinned = pinned_candidate
+        else:
+            pinned_untrusted = True
+    except Exception:
+        pinned = None
+    if manifest is not None and pinned is not None:
+        if _pkg_manifest_rank(pinned) > _pkg_manifest_rank(manifest):
+            manifest = pinned
+    elif manifest is None:
+        if pinned is None:
+            if pinned_untrusted:
+                return _pkg_refused("untrusted or incomplete manifest", emit)
             return _pkg_refused("update endpoint unreachable", emit)
-        if not _pkg_manifest_is_trusted(manifest, PKG_RELEASE_TAG):
-            return _pkg_refused("untrusted or incomplete manifest", emit)
+        manifest = pinned
 
     release = manifest["release"]
     digest = manifest["sha256"]
@@ -737,10 +811,11 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 #   Modern_Web_Dashboard  : FastAPI + AJAX Polling page (port 8765),
 #                           live metrics about once a second, no refresh.
 #   Classic_Gradio_Backup : the original Gradio UI (port 7860).
-#   Run_Both_Together     : both; secure Telegram login fields live in
-#                           Gradio, so prefer this until your session
-#                           vault restore shows "connected" automatically.
-UI_MODE = "Modern_Web_Dashboard"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "Run_Both_Together"]
+#   Run_Both_Together     : both (DEFAULT since M46-T03); secure
+#                           Telegram login fields live in Gradio, so
+#                           the modern-only mode is a dead end until a
+#                           saved session restores as "connected".
+UI_MODE = "Run_Both_Together"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "Run_Both_Together"]
 WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 
 # share=False: the UI is reachable inside this runtime only. A public link is an
@@ -762,8 +837,13 @@ WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 print("selected UI_MODE:", UI_MODE)
 _classic_launched = False
 if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
-    launch(ctx, share=False, inline=False, blocking=False)
-    _classic_launched = True
+    try:
+        launch(ctx, share=False, inline=False, blocking=False)
+        _classic_launched = True
+    except Exception as _classic_exc:
+        # A stale/busy Gradio port must not prevent Modern Web from coming
+        # up in Run_Both_Together; report the exact cause and keep going.
+        print("⚠️ Classic Gradio unavailable:", type(_classic_exc).__name__, _classic_exc)
 
 web_server = None
 if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
@@ -786,10 +866,19 @@ if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
             )
         if not _classic_launched:
             print("falling back to Classic_Gradio_Backup")
-            launch(ctx, share=False, inline=False, blocking=False)
-            _classic_launched = True
+            try:
+                launch(ctx, share=False, inline=False, blocking=False)
+                _classic_launched = True
+            except Exception as _classic_fallback_exc:
+                print(
+                    "⚠️ Classic Gradio fallback unavailable:",
+                    type(_classic_fallback_exc).__name__, _classic_fallback_exc,
+                )
 
-print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
+if _classic_launched or web_server is not None:
+    print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
+else:
+    print("⚠️ no UI is serving; check the startup errors above, free ports 7860/8765, and re-run Cell 4")
 '''
 
 CELL_5 = '''# ==== Cell 5: redacted handoff snapshot ====

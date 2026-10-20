@@ -1,3 +1,31 @@
+# بطاقة التسليم — M46-T03: إصلاح الواجهتين الحديثة والكلاسيكية + استمرار توزيع Colab
+
+| الحقل | القيمة |
+|---|---|
+| Updated (UTC) | `2026-10-20` |
+| Base SHA | `1f337c47a3f14dc4bd9d0468b80b6bdddbcebb77` (`main` بعد PR #107) |
+| الفرع | `arena/955ee77e-drive-buddy-3579bf74` |
+| الحالة | **CODE-COMPLETE + LOCAL-GATES-PASS; merge and package publish pending; Colab live proof pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md` |
+
+## النتيجة
+
+- تأكد أن آخر Release وقت بدء الجلسة كان `pkg-39320945506` مبنيًا من `106d8f8`، قبل دمج إصلاح M46-T02 #107؛ والتاج الثابت `pkg-2026.08.09-m15t07` كان أقدم بلا `web_dashboard.py`. إذن إصلاح T02 لم يصل Colab قط. `gh workflow run release-current.yml` من الوكيل عاد 403؛ مسار النشر يحتاج تدخل المالك.
+- صُححت صفحة Web: أوضاع Scanner القانونية الأربعة وحقول الرسالة/النطاق/الحد، جدول نتائج المرشحين وتحديد/مسح، وتسميات حالة Telegram/Drive عربية.
+- بوابة الخلية 1 تدعم latest-release redirect بلا API quota وتختار الأحدث فعليًا بمقارنة `build_run_id` بين أحدث إصدار والتاج المثبت. نسخة الـWorkflow الجاهزة في `docs/M46_T02_release_current_workflow.yml` تضيف هذا الحقل إلى الـManifest.
+- جعل Cell 4 افتراضيًا `Run_Both_Together` (Gradio أولًا) حتى يظل مسار تسجيل الدخول الآمن متاحًا مع الحديثة.
+
+## الأدلة المحلية
+
+`835 passed` · compileall PASS · launcher `54/54` · notebook check + cmp PASS · React contracts `34/34` · `node --check` لسكربت Web PASS. تشغيل HTTP حي مزدوج: Gradio `/` و`/config`، Web `/` و`/api/health` و`/api/metrics` و`/api/state`، تحديد المرشحين عبر bridge، Idempotent re-launch، وحلقة `ctx.aio`=`pong`؛ **FAILURES: 0**. حزمة build مختبرة `628920` bytes، SHA-256 `89de5831be2350d564d8196c4780173a7b5b5693d7b544106fa7702327a4e736`.
+
+## ما تبقى
+
+- بعد الدمج: انشر الحزمة مرة واحدة من GitHub Actions → `Publish current TeleDrive package` (الـworkflow الحي القديم يدوي وبلا `build_run_id`، لكن أحدث `pkg-*` يُلتقط عبر API أو redirect؛ الأفضل تبنّي نسخة `docs/M46_T02_release_current_workflow.yml` لتفعيل التوزيع الآلي/التاج الثابت).
+- لا يُدّعى Colab-ready قبل فتح Notebook `main` بعد النشر وتشغيل Runtime > Restart and run all والخلايا 1–4؛ يجب ظهور URL Gradio وURL/زر Web.
+
+---
+
 # بطاقة التسليم — M45-T01 (استئناف Arena): تحقق وإغلاق الفجوة الحرفية الوحيدة
 
 | الحقل | القيمة |
