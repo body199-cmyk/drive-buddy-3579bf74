@@ -235,6 +235,7 @@
   "settings.auto_refresh.2s": "Every 2 seconds",
   "settings.auto_refresh.5s": "Every 5 seconds",
   "settings.theme.dark": "Dark",
+  "settings.theme.dim": "Dim (X)",
   "settings.theme.light": "Light",
   "settings.theme.applied": "Theme applied",
   "msg.logs_refreshed": "Logs refreshed",

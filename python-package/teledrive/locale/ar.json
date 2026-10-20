@@ -235,6 +235,7 @@
   "settings.auto_refresh.2s": "كل ثانيتين",
   "settings.auto_refresh.5s": "كل 5 ثوانٍ",
   "settings.theme.dark": "ليلي",
+  "settings.theme.dim": "خافت (X)",
   "settings.theme.light": "نهاري",
   "settings.theme.applied": "تم تطبيق المظهر",
   "msg.logs_refreshed": "تم تحديث السجلات",
