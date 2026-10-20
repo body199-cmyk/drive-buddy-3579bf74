@@ -462,7 +462,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <p class="sidebar-caption">مساحة العمل</p>
     <nav class="side-nav" aria-label="أقسام TeleDrive">
       <button class="nav-item is-active" type="button" data-section-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label">نظرة عامة</span></button>
-      <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
+      <button class="nav-item" type="button" data-section-target="universal"><span class="nav-icon" aria-hidden="true">🌐</span><span class="nav-label">التحميل الشامل (أي رابط)</span></button>
+        <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
       <button class="nav-item" type="button" data-section-target="destination"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">مجلد الحفظ</span></button>
       <button class="nav-item" type="button" data-section-target="analyze"><span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-label">تحليل رابط</span></button>
       <button class="nav-item" type="button" data-section-target="results"><span class="nav-icon" aria-hidden="true">☷</span><span class="nav-label">نتائج التحليل</span><span class="nav-count" id="navCandidateCount" hidden></span></button>
@@ -508,6 +509,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="drawer-handle" aria-hidden="true"></div>
       <div class="drawer-header"><div><h2 id="drawerTitle">أقسام إضافية</h2><p>الحسابات والإعدادات والسجلات وأدوات الصيانة.</p></div><button class="alt small" id="btnCloseMore" type="button">إغلاق</button></div>
       <nav class="drawer-nav" aria-label="أقسام إضافية">
+        <button class="nav-item" type="button" data-section-target="universal"><span class="nav-icon" aria-hidden="true">🌐</span><span class="nav-label">التحميل الشامل (أي رابط)</span></button>
         <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
         <button class="nav-item" type="button" data-section-target="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">الإعدادات</span></button>
         <button class="nav-item" type="button" data-section-target="logs"><span class="nav-icon" aria-hidden="true">≡</span><span class="nav-label">السجلات</span></button>
@@ -703,6 +705,60 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="pane-footer"><span>قائمة الطابور تمرّر داخل صندوقها مستقلًا عن الصفحة.</span><span>أزرار كل صف تتحكم في ذلك العنصر وحده.</span></div>
     </div>
     <p class="note">بيانات الدخول السرية لا تمر عبر هذه الواجهة. يجب اختيار مجلد Drive قبل إضافة العناصر إلى الطابور.</p>
+  </section>
+
+
+  <section class="card step-card tab-panel" id="universal" data-tab-panel="universal" hidden aria-labelledby="universalTitle">
+    <div class="section-head">
+      <span class="step-badge">🌐</span>
+      <div>
+        <h2 id="universalTitle" tabindex="-1">التحميل الشامل من أي رابط إلى Google Drive</h2>
+        <p>حمّل الفيديوهات أو الصوتيات (MP3) أو الملفات المباشرة من يوتيوب، فيسبوك، منصات الكورسات، أو Google Drive مباشرة إلى مجلدك.</p>
+      </div>
+      <span class="section-status" id="universalStatus">جاهز للتحميل</span>
+    </div>
+
+    <div class="destination-summary" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+      <div>
+        <span>📁 مجلد الحفظ الحالي في Google Drive: </span>
+        <strong id="udlSelectedFolderName">نفس المجلد المحدد في قسم «الوجهة»</strong>
+      </div>
+      <button class="alt small" type="button" data-section-target="destination" onclick="document.querySelector('[data-section-target=destination]').click()">تغيير مجلد الحفظ ↗</button>
+    </div>
+
+    <div class="analyze-main" style="grid-template-columns:1fr auto auto">
+      <input class="ltr-input" type="url" id="udlUrlIn" dir="ltr" placeholder="https://www.youtube.com/watch?v=... أو رابط فيسبوك / منصة / ملف مباشر / Drive" aria-label="الرابط الخارجي">
+      <select id="udlQualityIn" aria-label="اختيار الجودة أو الصوت">
+        <option value="best" selected>🎬 أعلى جودة فيديو متاحة (Best MP4)</option>
+        <option value="1080p">🎬 فيديو جودة عالية (1080p Full HD)</option>
+        <option value="720p">🎬 فيديو جودة متوسطة (720p للمحاضرات)</option>
+        <option value="480p">🎬 فيديو جودة اقتصادية (480p لتوفير المساحة)</option>
+        <option value="audio_mp3">🎵 صوت فقط — تحويل إلى MP3</option>
+        <option value="audio_m4a">🎵 صوت فقط — جودة أصلية سريعة (M4A)</option>
+      </select>
+      <button id="btnUdlStart" type="button">🚀 بدء التحميل والرفع</button>
+    </div>
+
+    <div class="msg" id="udlMsg" role="status" style="margin-top:10px"></div>
+
+    <div style="margin-top:16px">
+      <div class="queue-toolbar">
+        <h3 style="margin:0">⚡ مهام التحميل الخارجي (<span id="udlCount">0</span>)</h3>
+        <span style="flex:1"></span>
+        <button class="alt small" id="btnUdlRefresh" type="button">🔄 تحديث</button>
+        <button class="alt small" id="btnUdlClear" type="button">🧹 مسح المكتمل</button>
+      </div>
+      <div class="scroll-pane queue-pane" style="max-height:320px">
+        <table>
+          <thead>
+            <tr><th>العنوان / الرابط</th><th>الجودة</th><th>الحالة</th><th>التقدم</th><th>المجلد</th></tr>
+          </thead>
+          <tbody id="udlBody">
+            <tr><td colspan="5" class="note">لا توجد مهام تحميل خارجية حالياً — الصق أي رابط بالأعلى واضغط «بدء التحميل والرفع».</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section class="card secondary-section tab-panel" id="settings" data-tab-panel="settings" hidden aria-labelledby="settingsTitle">
@@ -1663,6 +1719,112 @@ $("qBody").addEventListener("click",function(event){
   const actionId=actions[button.dataset.queueAction];
   if(actionId) bridgeAction(actionId,{itemId:button.dataset.itemId},$("actionMsg"),button);
 });
+
+// --- Universal URL Downloader UI Logic ---
+(function(){
+  const btnStart = $("btnUdlStart");
+  const btnRefresh = $("btnUdlRefresh");
+  const btnClear = $("btnUdlClear");
+  const urlIn = $("udlUrlIn");
+  const qualIn = $("udlQualityIn");
+  const msgEl = $("udlMsg");
+  const bodyEl = $("udlBody");
+  const countEl = $("udlCount");
+  const folderLabel = $("udlSelectedFolderName");
+
+  function syncFolderLabel(){
+    const mainFolder = $("selectedFolderName");
+    if(mainFolder && folderLabel){
+      folderLabel.textContent = mainFolder.textContent || "نفس المجلد المحدد في قسم الوجهة";
+      folderLabel.className = mainFolder.className;
+    }
+  }
+
+  function renderUdlTasks(tasks){
+    syncFolderLabel();
+    if(!bodyEl) return;
+    if(!Array.isArray(tasks) || tasks.length === 0){
+      if(countEl) countEl.textContent = "0";
+      bodyEl.replaceChildren();
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 5;
+      td.className = "note";
+      td.textContent = "لا توجد مهام تحميل خارجية حالياً — الصق أي رابط بالأعلى واضغط «بدء التحميل والرفع».";
+      tr.appendChild(td);
+      bodyEl.appendChild(tr);
+      return;
+    }
+    if(countEl) countEl.textContent = String(tasks.length);
+    bodyEl.replaceChildren();
+    tasks.forEach(function(t){
+      const tr = document.createElement("tr");
+      const tdTitle = document.createElement("td");
+      tdTitle.textContent = t.title || t.url || "—";
+      const tdQual = document.createElement("td");
+      tdQual.textContent = t.quality || "best";
+      const tdStatus = document.createElement("td");
+      tdStatus.textContent = t.status_ar || t.status || "—";
+      const tdProg = document.createElement("td");
+      tdProg.textContent = (typeof t.progress === "number" ? t.progress.toFixed(1) : "0") + "%";
+      const tdFolder = document.createElement("td");
+      tdFolder.textContent = t.folder_name || "Drive";
+      tr.append(tdTitle, tdQual, tdStatus, tdProg, tdFolder);
+      bodyEl.appendChild(tr);
+    });
+  }
+
+  async function fetchUdlTasks(){
+    try{
+      const r = await fetch("api/universal/tasks", {cache:"no-store"});
+      const d = await r.json();
+      if(d && Array.isArray(d.tasks)) renderUdlTasks(d.tasks);
+    }catch(_e){}
+  }
+
+  if(btnStart){
+    btnStart.addEventListener("click", async function(){
+      const url = (urlIn ? urlIn.value : "").trim();
+      const quality = qualIn ? qualIn.value : "best";
+      if(!url){
+        if(msgEl){ msgEl.textContent = "⚠️ يرجى لصق الرابط أولاً."; msgEl.className = "msg err"; }
+        return;
+      }
+      btnStart.disabled = true;
+      if(msgEl){ msgEl.textContent = "⏳ جاري إرسال الرابط لمحرك التحميل..."; msgEl.className = "msg"; }
+      try{
+        const r = await fetch("api/universal/start", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({url: url, quality: quality})
+        });
+        const d = await r.json();
+        if(d && d.ok){
+          if(msgEl){ msgEl.textContent = "✅ " + (d.message || "بدأ التحميل!"); msgEl.className = "msg ok"; }
+          if(urlIn) urlIn.value = "";
+          fetchUdlTasks();
+        } else {
+          if(msgEl){ msgEl.textContent = "⚠️ " + ((d && d.message) || "تعذر بدء التحميل"); msgEl.className = "msg err"; }
+        }
+      }catch(e){
+        if(msgEl){ msgEl.textContent = "⚠️ خطأ في الاتصال بالخادم."; msgEl.className = "msg err"; }
+      }finally{
+        btnStart.disabled = false;
+      }
+    });
+  }
+
+  if(btnRefresh) btnRefresh.addEventListener("click", fetchUdlTasks);
+  if(btnClear){
+    btnClear.addEventListener("click", async function(){
+      await fetch("api/universal/clear", {method:"POST"});
+      fetchUdlTasks();
+    });
+  }
+
+  setInterval(fetchUdlTasks, 2500);
+  setTimeout(fetchUdlTasks, 800);
+})();
 </script>
 </body>
 </html>
@@ -1742,6 +1904,29 @@ def create_web_app(ctx: Any):
     @app.post("/api/stop")
     def api_stop():
         return JSONResponse(bridge.queue_action("stop"), headers=_NO_STORE)
+
+
+    @app.get("/api/universal/tasks")
+    def api_universal_tasks():
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        return JSONResponse({"ok": True, "tasks": mgr.list_tasks()}, headers=_NO_STORE)
+
+    @app.post("/api/universal/start")
+    def api_universal_start(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        url = str((payload or {}).get("url") or "")
+        quality = str((payload or {}).get("quality") or "best")
+        folder_id = (payload or {}).get("folder_id")
+        return JSONResponse(mgr.start_download(url=url, quality=quality, folder_id=folder_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/clear")
+    def api_universal_clear():
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        cleared = mgr.clear_finished()
+        return JSONResponse({"ok": True, "cleared": cleared, "tasks": mgr.list_tasks()}, headers=_NO_STORE)
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
