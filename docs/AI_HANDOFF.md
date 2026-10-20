@@ -5,7 +5,9 @@
 | Updated (UTC) | `2026-10-20` |
 | Base SHA | `1f337c47a3f14dc4bd9d0468b80b6bdddbcebb77` (`main` بعد PR #107) |
 | الفرع | `arena/955ee77e-drive-buddy-3579bf74` |
-| الحالة | **CODE-COMPLETE + LOCAL-GATES-PASS; merge and package publish pending; Colab live proof pending** |
+| merge | **PR [#108](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/108) MERGED** at `d8c22df07b4a672ff00389cb880c847534d15db7` |
+| CI | PR run [#39452872933](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39452872933) and main push run [#39453144455](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39453144455): Python + Frontend SUCCESS |
+| الحالة | **MERGED + CI-PASSED; package publish and Colab live proof pending** |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md` |
 
 ## النتيجة
@@ -21,7 +23,7 @@
 
 ## ما تبقى
 
-- بعد الدمج: انشر الحزمة مرة واحدة من GitHub Actions → `Publish current TeleDrive package` (الـworkflow الحي القديم يدوي وبلا `build_run_id`، لكن أحدث `pkg-*` يُلتقط عبر API أو redirect؛ الأفضل تبنّي نسخة `docs/M46_T02_release_current_workflow.yml` لتفعيل التوزيع الآلي/التاج الثابت).
+- **بعد الدمج الحالي:** انشر الحزمة مرة واحدة من GitHub Actions → `Publish current TeleDrive package` (الـworkflow الحي القديم يدوي وبلا `build_run_id`، لكن أحدث `pkg-*` يُلتقط عبر API أو redirect؛ الأفضل تبنّي نسخة `docs/M46_T02_release_current_workflow.yml` لتفعيل التوزيع الآلي/التاج الثابت).
 - لا يُدّعى Colab-ready قبل فتح Notebook `main` بعد النشر وتشغيل Runtime > Restart and run all والخلايا 1–4؛ يجب ظهور URL Gradio وURL/زر Web.
 
 ---

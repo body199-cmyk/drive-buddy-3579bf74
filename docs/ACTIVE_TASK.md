@@ -9,7 +9,7 @@
 | الأساس | `1f337c4` — main بعد PR #107 |
 | الفرع | `arena/955ee77e-drive-buddy-3579bf74` |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M46_T03_DUAL_UI_AUDIT_AND_DISTRIBUTION.md` |
-| الحالة | **FIXED + GATES GREEN محليًا** — ‏835 passed وتشغيل مزدوج حي ‏FAILURES: 0؛ يبقى نشر الحزمة (dispatch من الوكيل 403) وإثبات Colab الحي بيد المالك |
+| الحالة | **MERGED + CI-PASSED** — PR [#108](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/108) → `d8c22df`; PR CI `39452872933` وmain CI `39453144455` نجاح؛ يبقى نشر الحزمة (dispatch من الوكيل 403) وإثبات Colab الحي بيد المالك |
 
 ---
 
