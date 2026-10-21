@@ -33,6 +33,7 @@ class UniversalDownloadManager:
         self._lock = threading.Lock()
         self._tasks: list[dict[str, Any]] = []
         self._cancel_events: dict[str, threading.Event] = {}
+        self._yt_dlp_update_checked = False
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -153,20 +154,26 @@ class UniversalDownloadManager:
             except ImportError:
                 missing.append(packages[module_name])
 
-        if missing:
+        install_args = list(missing)
+        if not self._yt_dlp_update_checked:
+            install_args = ["--upgrade", "yt-dlp", *install_args]
+
+        if install_args:
             proc = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q", *missing],
+                [sys.executable, "-m", "pip", "install", "-q", *install_args],
                 check=False,
                 capture_output=True,
                 text=True,
             )
             if proc.returncode != 0:
                 detail = (proc.stderr or proc.stdout or "").strip()[-500:]
+                label = ", ".join(missing) if missing else "yt-dlp update"
                 raise RuntimeError(
-                    "تعذر تثبيت مكونات التحميل المطلوبة "
-                    f"({', '.join(missing) or 'yt-dlp update'}). "
+                    "تعذر تثبيت/تحديث مكونات التحميل المطلوبة "
+                    f"({label}). "
                     f"{detail or 'تحقق من اتصال الإنترنت ثم أعد المحاولة.'}"
                 )
+            self._yt_dlp_update_checked = True
 
         importlib.invalidate_caches()
         still_missing = []
@@ -380,6 +387,12 @@ class UniversalDownloadManager:
             "no_warnings": True,
             "merge_output_format": "mp4" if not quality.startswith("audio") else None,
         }
+
+        if "youtube.com" in lower_url or "youtu.be" in lower_url:
+            ydl_opts["extractor_args"] = {
+                "youtube": {"player_client": ["tv", "web_safari"]}
+            }
+            ydl_opts["sleep_requests"] = 1
 
         if quality == "audio_mp3":
             ydl_opts["postprocessors"] = [
