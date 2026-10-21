@@ -24,6 +24,7 @@ function ConnectPage() {
   const [bridge, setBridge] = useState<RemoteColabBridge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function connect() {
     setError("");
@@ -41,10 +42,19 @@ function ConnectPage() {
     }
   }
 
-  function disconnect() {
-    bridge?.disconnect();
-    setBridge(null);
-    setToken("");
+  async function disconnect() {
+    setError("");
+    setNotice("");
+    try {
+      await bridge?.revokePairing();
+      setNotice("تم إلغاء رمز الربط فورًا. لو حبيت تربط تاني، انسخ الرمز البديل من مخرجات Colab.");
+    } catch {
+      setError("فصلنا هذا المتصفح، لكن تعذر إلغاء الرمز من Colab. أوقف الجلسة أو أعد تشغيلها لإبطال الرمز.");
+    } finally {
+      bridge?.disconnect();
+      setBridge(null);
+      setToken("");
+    }
   }
 
   if (bridge) {
@@ -52,15 +62,15 @@ function ConnectPage() {
       <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            Connected directly to your Colab runtime. Your pairing token is held in this tab's
-            memory only.
+            Connected directly to your Colab runtime. The pairing token stays in this tab's
+            memory and is revoked when you disconnect.
           </p>
           <button
             type="button"
             onClick={disconnect}
             className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            Disconnect
+            Disconnect and revoke pairing
           </button>
         </div>
         <TeleDriveSandbox bridge={bridge} />
@@ -112,6 +122,11 @@ function ConnectPage() {
             </li>
           </ol>
 
+          {notice ? (
+            <p role="status" className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+              {notice}
+            </p>
+          ) : null}
           <div className="mt-6 grid gap-4">
             <label className="grid gap-2 text-sm font-medium">
               رابط Colab الخاص بك
