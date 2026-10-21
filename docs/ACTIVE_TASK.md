@@ -1,3 +1,16 @@
+# Active Task Update — YouTube downloader bot-challenge fallback (2026-10-21)
+
+## Current change
+
+- Updated `python-package/teledrive/universal_downloader.py` to use yt-dlp's documented `sleep_interval_requests` option and retry a YouTube bot/login challenge once with the alternate `tv,web_safari` player profile after the default profile fails.
+- Added a regression test in `python-package/tests/test_universal_downloader.py` that simulates a bot challenge on the first attempt and a successful second attempt.
+- Rationale: previous changes updated the package but still failed immediately on the first bot challenge. A fallback profile is now attempted automatically without forcing that profile on every YouTube video.
+- Safety: user cookies are not collected, logged, or stored in GitHub. If YouTube rejects both attempts due to Colab IP reputation/session checks, software changes alone cannot guarantee access.
+- Commits: implementation `48c8eb9962e28d18c7a2f3a7d4b0f3a5f57eed3b`; tests `41eb47c7eee5ac9a3c0db84cefb1c0ca416fe7e5`; test assertion correction `86c5ba58eaf538f416efb57225c1487f1502fef6`.
+- Status at writing: CI and release workflow results still pending. Do not mark the issue resolved until the workflow is green and an owner-run Colab test confirms the specific public video downloads successfully.
+
+---
+
 # المهمة النشطة
 
 ## بطاقة M48-T01 — أقسام تنقّل مستقلة للوحة الويب الحديثة (جلسة Arena 2026-10-21)
