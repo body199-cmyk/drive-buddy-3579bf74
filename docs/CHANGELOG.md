@@ -1,3 +1,13 @@
+## 2026-10-21 — YouTube downloader retry after bot challenge
+
+- Corrected yt-dlp's request pacing option to the documented Python API key, `sleep_interval_requests` (the old `sleep_requests` name could be silently ignored).
+- YouTube downloads now try the normal current yt-dlp player first, then retry once with the alternate `tv,web_safari` player profile only when the first attempt returns the specific bot/login challenge. Other download errors still fail immediately.
+- If both profiles are refused, the error now states clearly that Colab IP restrictions or YouTube session requirements may remain; optional cookies stay user-managed and must never be committed or shared.
+- Added a regression test for retry order, option spelling, and successful completion after a simulated first-attempt challenge.
+- Verification status: awaiting GitHub Actions CI and release publication. This code fallback is not a guarantee against YouTube/Colab IP blocking; no live Colab download has yet been proven.
+
+---
+
 ## [M49-T01] — 2026-10-21 — منع الرجوع الصامت إلى ZIP قديم في Colab
 
 ### Fixed / changed
