@@ -2084,14 +2084,19 @@ def create_web_app(ctx: Any):
     async def require_runtime_capability(request: Request, call_next):
         path = request.url.path
         if path.startswith("/api/") and request.method != "OPTIONS":
-            authorization = request.headers.get("authorization", "")
-            supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
-            if not supplied or not hmac.compare_digest(supplied, runtime_token):
-                return JSONResponse(
-                    {"ok": False, "status": "unauthorized", "message": "Invalid or missing runtime pairing token"},
-                    status_code=401,
-                    headers=_NO_STORE,
-                )
+            # Same-origin browser requests are protected by the user's Colab
+            # session/proxy. Cross-origin portal calls and non-browser clients
+            # must prove possession of the per-runtime pairing capability.
+            same_origin_browser = request.headers.get("sec-fetch-site") == "same-origin"
+            if not same_origin_browser:
+                authorization = request.headers.get("authorization", "")
+                supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+                if not supplied or not hmac.compare_digest(supplied, runtime_token):
+                    return JSONResponse(
+                        {"ok": False, "status": "unauthorized", "message": "Invalid or missing runtime pairing token"},
+                        status_code=401,
+                        headers=_NO_STORE,
+                    )
         return await call_next(request)
 
     @app.get("/", response_class=HTMLResponse)
@@ -2109,21 +2114,6 @@ def create_web_app(ctx: Any):
         gradio_url = html.escape(raw_gradio_url, quote=True) if gradio_available else "#"
         page = HTML_PAGE.replace("__INITIAL_THEME__", theme)
         page = page.replace("__GRADIO_URL__", gradio_url)
-        # Keep the token in this runtime page's memory only. The public portal
-        # requires the user to paste it manually; it is never put in a URL.
-        token_bootstrap = (
-            '<script>window.__TD_RUNTIME_TOKEN__="' + runtime_token + '";'
-            '(function(){const nativeFetch=window.fetch.bind(window);'
-            'window.fetch=function(input,init){init=init||{};'
-            'const raw=typeof input==="string"?input:(input&&input.url)||"";'
-            'const url=new URL(raw,window.location.href);'
-            'if(url.origin===window.location.origin&&url.pathname.startsWith("/api/")){'
-            'const headers=new Headers(init.headers||(input instanceof Request?input.headers:undefined));'
-            'headers.set("Authorization","Bearer "+window.__TD_RUNTIME_TOKEN__);'
-            'init=Object.assign({},init,{headers:headers});}'
-            'return nativeFetch(input,init);};})();</script>'
-        )
-        page = page.replace("</head>", token_bootstrap + "</head>")
         page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
         return HTMLResponse(page)
 
@@ -2226,6 +2216,11 @@ def create_web_app(ctx: Any):
     async def ws_endpoint(ws: WebSocket):
         import asyncio
 
+        authorization = ws.headers.get("authorization", "")
+        supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        if not supplied or not hmac.compare_digest(supplied, runtime_token):
+            await ws.close(code=4401, reason="Runtime pairing token required")
+            return
         await ws.accept()
         try:
             while True:
