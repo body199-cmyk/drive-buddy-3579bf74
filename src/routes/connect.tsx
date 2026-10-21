@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import TeleDriveSandbox from "../components/teleDrive/TeleDriveSandbox";
 import sandboxCss from "../components/teleDrive/teleDrive.css?url";
@@ -24,7 +24,46 @@ function ConnectPage() {
   const [bridge, setBridge] = useState<RemoteColabBridge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
   const [notice, setNotice] = useState("");
+  const handoffHandled = useRef(false);
+
+  useEffect(() => {
+    if (handoffHandled.current) return;
+    const fragment = window.location.hash;
+    if (!fragment) return;
+    const params = new URLSearchParams(fragment.slice(1));
+    const handoffUrl = params.get("url");
+    const handoffToken = params.get("token");
+    if (!handoffUrl || !handoffToken) return;
+    handoffHandled.current = true;
+
+    // Remove the one-time capability from the address bar before any network request.
+    window.history.replaceState(
+      window.history.state,
+      "",
+      window.location.pathname + window.location.search,
+    );
+    setRuntimeUrl(handoffUrl);
+    setToken(handoffToken);
+    setNotice("وصلت بيانات الربط من Colab. جاري اختبار الاتصال...");
+    setBusy(true);
+    let candidate: RemoteColabBridge | null = null;
+    try {
+      candidate = new RemoteColabBridge(handoffUrl, handoffToken);
+      void candidate.connect().then(() => {
+        setBridge(candidate);
+      }).catch((reason) => {
+        candidate?.disconnect();
+        setError(reason instanceof Error ? reason.message : "Could not connect to Colab.");
+      }).finally(() => setBusy(false));
+    } catch (reason) {
+      candidate?.disconnect();
+      setError(reason instanceof Error ? reason.message : "Could not connect to Colab.");
+      setBusy(false);
+    }
+  }, []);
+
 
   async function connect() {
     setError("");
