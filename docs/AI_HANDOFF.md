@@ -2,14 +2,14 @@
 
 | الحقل | القيمة |
 |---|---|
-| الحالة | **Implemented on branch; PR/CI pending; live YouTube/Colab test not performed** |
-| الفرع | `feature/youtube-ar-en-audio-tracks` |
+| الحالة | **Merged to main; CI passed; live YouTube/Colab test and package release pending** |
+| PR / merge | [PR #123](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/123), merged as `325848978f1f4def008df8210bc6ca15284626ca` |
 | الملفات | `python-package/teledrive/universal_downloader.py`; `python-package/tests/test_universal_downloader.py`; `docs/TODO.md`; `docs/PHASE_REPORTS/PHASE_M51_T01_YOUTUBE_AR_EN_AUDIO_TRACKS.md` |
 | المتطلب | تنزيل المسارين العربي والإنجليزي فقط عندما يتوفران، داخل ملف واحد متعدد المسارات؛ إذا توفر واحد فقط نحتفظ به، وإذا لم يتوفر أي منهما نرجع لأفضل مسار صوت متاح. |
 | التنفيذ | `_youtube_multiaudio_format()` يرتب محاولات التنسيق: عربي+إنجليزي، عربي وحده، إنجليزي وحده، ثم أفضل صوت متاح. تفعيل `audio_multistreams` وMKV محصوران في تنزيل فيديو يوتيوب؛ مسارات الصوت فقط والمنصات الأخرى تبقى كما كانت. بادئات اللغة تشمل صيغًا مثل `en-US`. |
-| الاختبارات | أُضيفت اختبارات انحدار، لكن لم تُشغّل بعد ضمن هذه المهمة. افحص PR ونتائج CI قبل وصفها بأنها ناجحة. |
+| الاختبارات | CI run [#39624150025](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39624150025) passed Python tests/package checks, Colab contract checks, archive build, and frontend lint/build. |
 | ما لم يُثبت | لم يُختبر تنزيل حقيقي من يوتيوب أو Colab/Drive، ولم يُتحقق من ظهور المسارين في مشغل فعلي. بعض الفيديوهات قد لا تعرض metadata للغة بشكل متوقع أو لا توفر اللغتين. |
-| الخطوة التالية | راجع diff وصحة صيغة yt-dlp، شغّل CI والاختبارات، ثم بعد الدمج والنشر اختبر فيديو عامًا معروفًا بتوفر اللغتين وتحقق من مسارات MKV والتبديل في مشغل يدعمها. لا تدّعِ نجاحًا حيًا اعتمادًا على اختبارات الوحدة. |
+| الخطوة التالية | انشر حزمة جديدة تحتوي merge commit المذكور وتحقق من ZIP/manifest/hash/commit، ثم اختبر فيديو يوتيوب حقيقيًا في Colab وتحقق من مساري MKV والتبديل في مشغل يدعمها. لا تدّعِ نجاحًا حيًا اعتمادًا على CI وحده. |
 | التراجع | Revert لميزة PR؛ التغيير معزول ولا يعدل Telegram أو Vault أو مخطط قاعدة البيانات. |
 
 ---
