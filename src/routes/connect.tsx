@@ -52,7 +52,8 @@ function ConnectPage() {
       <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            Connected directly to your Colab runtime. Your pairing token is held in this tab's memory only.
+            Connected directly to your Colab runtime. Your pairing token is held in this tab's memory
+            only.
           </p>
           <button
             type="button"
