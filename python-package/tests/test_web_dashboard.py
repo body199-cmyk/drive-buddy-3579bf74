@@ -14,6 +14,7 @@ leave ``ctx.web_dashboard`` empty, and leave ``ctx.aio`` fully alive.
 from __future__ import annotations
 
 import json
+import secrets
 import socket
 import time
 import urllib.request
@@ -108,6 +109,38 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
         assert rejected_after_revoke.status_code == 401
     finally:
         client.close()
+
+
+def test_public_tunnel_requires_bearer_and_handoff_exchange_is_single_use(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app = create_web_app(ctx)
+    handoff = secrets.token_urlsafe(32)
+    ctx.remote_handoff_tokens = {handoff: time.time() + 60}
+
+    with TestClient(app, base_url="https://test-tunnel.trycloudflare.com") as client:
+        # Opening the tunnel's own HTML page must not grant API access.
+        same_origin_without_token = client.get(
+            "/api/health",
+            headers={"Sec-Fetch-Site": "same-origin"},
+        )
+        assert same_origin_without_token.status_code == 401
+
+        exchanged = client.post(
+            "/api/pairing/exchange",
+            json={"handoff_token": handoff},
+        )
+        assert exchanged.status_code == 200
+        assert exchanged.json()["ok"] is True
+        assert exchanged.json()["token"] == ctx.remote_control_token
+
+        replay = client.post(
+            "/api/pairing/exchange",
+            json={"handoff_token": handoff},
+        )
+        assert replay.status_code == 401
 
 
 def test_pairing_token_from_runtime_a_cannot_authorize_runtime_b():
