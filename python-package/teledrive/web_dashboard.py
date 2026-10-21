@@ -2031,22 +2031,31 @@ def _wait_until_started(server: Any, thread: threading.Thread, timeout: float = 
 
 
 def _ensure_port_free(port: int) -> None:
-    """Fail fast with a clear message when the dashboard port is taken.
-
-    A stale server from an earlier Cell-4 run in the same Colab VM is
-    the classic trigger; the remedy is a runtime restart or a
-    different ``WEB_DASHBOARD_PORT`` — not a silent dead link.
-    """
+    """Raise a clear error if a requested dashboard port is occupied."""
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         probe.bind((BIND_ADDRESS, int(port)))
     except OSError as exc:
         raise RuntimeError(
-            f"port {int(port)} is already in use ({exc.strerror or exc}); "
-            "restart the Colab runtime or change WEB_DASHBOARD_PORT in Cell 4"
+            f"port {int(port)} is already in use ({exc.strerror or exc})"
         ) from exc
     finally:
         probe.close()
+
+
+def _select_dashboard_port(preferred: int) -> int:
+    """Try preferred port, a deterministic fallback range, then an OS port."""
+    preferred = int(preferred)
+    candidates = [preferred] + [p for p in range(8766, 8801) if p != preferred]
+    for candidate in candidates:
+        try:
+            _ensure_port_free(candidate)
+            return candidate
+        except RuntimeError:
+            continue
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((BIND_ADDRESS, 0))
+        return int(probe.getsockname()[1])
 
 
 def stop_web_dashboard(ctx: Any) -> bool:
@@ -2100,10 +2109,14 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
 
     from .app import _ensure_localhost_bypasses_proxy, colab_proxy_url, is_colab
 
-    _ensure_port_free(int(port))
+    requested_port = int(port)
+    actual_port = _select_dashboard_port(requested_port)
+    if actual_port != requested_port:
+        _log.warning("requested dashboard port %s is occupied; using fallback port %s", requested_port, actual_port)
+        print(f"⚠️ المنفذ {requested_port} مشغول؛ تم اختيار منفذ بديل تلقائيًا: {actual_port}")
     app = create_web_app(ctx)
     config = uvicorn.Config(
-        app, host=BIND_ADDRESS, port=int(port), log_level="warning", access_log=False
+        app, host=BIND_ADDRESS, port=actual_port, log_level="warning", access_log=False
     )
     server = uvicorn.Server(config)
     server._td_error = None
@@ -2127,10 +2140,10 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
         finally:
             ctx.web_dashboard = None
         raise
-    _log.info("web dashboard listening port=%s thread=%s", int(port), thread.name)
+    _log.info("web dashboard listening port=%s thread=%s", actual_port, thread.name)
 
     if is_colab():
-        proxy_url = colab_proxy_url(int(port))
+        proxy_url = colab_proxy_url(actual_port)
         if proxy_url:
             # Keep notebook output plain-text only. Rendering an IPython HTML
             # card here relies on Colab's JavaScript output renderer and can
@@ -2140,16 +2153,16 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
         else:  # pragma: no cover - Colab-only branch
             print(
                 f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
-                f"{int(port)} could not be obtained; server listens on "
-                f"{BIND_ADDRESS}:{int(port)}."
+                f"{actual_port} could not be obtained; server listens on "
+                f"{BIND_ADDRESS}:{actual_port}."
             )
         if open_iframe:  # pragma: no cover - Colab-only branch
             try:
                 from google.colab import output  # type: ignore[import-not-found]
 
-                output.serve_kernel_port_as_iframe(int(port), height="760")
+                output.serve_kernel_port_as_iframe(actual_port, height="760")
             except Exception:
                 pass
     else:
-        print(f"TeleDrive Web Dashboard URL: http://localhost:{int(port)}/")
+        print(f"TeleDrive Web Dashboard URL: http://localhost:{actual_port}/")
     return server
