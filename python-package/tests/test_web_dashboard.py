@@ -72,6 +72,14 @@ def test_no_ad_hoc_application_loop_or_wildcard_cors_or_fake_engine():
     assert "fast_telethon" not in SOURCE
 
 
+def test_dashboard_header_scrolls_away_and_mobile_navigation_remains_fixed():
+    """The branding/actions header must scroll with the page, not occupy the
+    viewport on every section; the mobile navigation remains thumb-accessible."""
+    assert ".app-header{position:static;" in HTML_PAGE
+    assert ".app-header{position:sticky;" not in HTML_PAGE
+    assert ".mobile-tabs{position:fixed;inset-inline:0;bottom:0;" in HTML_PAGE
+
+
 def test_page_is_self_contained_and_polls_relative_metrics():
     assert "api/metrics" in HTML_PAGE
     assert "configurePolling(1000)" in HTML_PAGE
