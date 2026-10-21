@@ -2077,7 +2077,7 @@ def create_web_app(ctx: Any):
     # actual authorization. Never use wildcard origins or allow credentials.
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"https://(teledrive\.vercel\.app|teledrive-[a-z0-9-]+-abdullah-74f3\.vercel\.app)",
+        allow_origin_regex=r"https://(teledrive\.vercel\.app|teledrive-abdullah-74f3\.vercel\.app|teledrive-git-main-abdullah-74f3\.vercel\.app|teledrive-gamma\.vercel\.app|teledrive-[a-z0-9-]+-abdullah-74f3\.vercel\.app)",
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
         allow_credentials=True,
