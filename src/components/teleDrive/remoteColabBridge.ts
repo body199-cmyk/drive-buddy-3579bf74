@@ -66,7 +66,7 @@ export class RemoteColabBridge implements TeleDriveBridge {
       ...init,
       cache: "no-store",
       mode: "cors",
-      credentials: "include",
+      credentials: this.baseUrl.toLowerCase().endsWith(".trycloudflare.com") ? "omit" : "include",
       headers,
     });
     if (response.status === 401 || response.status === 403) {
