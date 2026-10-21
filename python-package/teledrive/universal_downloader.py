@@ -393,7 +393,7 @@ class UniversalDownloadManager:
             # client LOGIN_REQUIRED while another works. Let current yt-dlp
             # choose its supported defaults and install recommended EJS
             # dependencies through yt-dlp[default].
-            ydl_opts["sleep_requests"] = 1
+            ydl_opts["sleep_interval_requests"] = 1
             ydl_opts["extractor_retries"] = 3
             ydl_opts["retries"] = 3
             ydl_opts["socket_timeout"] = 30
@@ -423,30 +423,54 @@ class UniversalDownloadManager:
                 }
             ]
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-        except yt_dlp.utils.DownloadError as exc:
-            message = str(exc)
-            if (
-                ("Sign in to confirm you're not a bot" in message)
-                or ("LOGIN_REQUIRED" in message)
-            ) and ("youtube.com" in lower_url or "youtu.be" in lower_url):
+        is_youtube = "youtube.com" in lower_url or "youtu.be" in lower_url
+        attempts = [ydl_opts]
+        if is_youtube:
+            # Try the normal current yt-dlp defaults first. Only after YouTube
+            # rejects that attempt as a bot, retry a second supported client
+            # profile; forcing this profile for every video can break videos
+            # that work with the default player.
+            fallback_opts = dict(ydl_opts)
+            fallback_opts["extractor_args"] = {
+                "youtube": {"player_client": ["tv", "web_safari"]}
+            }
+            attempts.append(fallback_opts)
+
+        last_bot_error = None
+        for attempt_index, attempt_opts in enumerate(attempts):
+            try:
+                with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                    ydl.download([url])
+                break
+            except yt_dlp.utils.DownloadError as exc:
+                message = str(exc)
+                is_bot_challenge = (
+                    ("Sign in to confirm you're not a bot" in message)
+                    or ("LOGIN_REQUIRED" in message)
+                ) and is_youtube
+                if not is_bot_challenge:
+                    raise
+                last_bot_error = exc
+                if attempt_index < len(attempts) - 1:
+                    _log.warning(
+                        "YouTube default player was challenged; retrying with fallback player profile"
+                    )
+                    continue
+
                 cookie_hint = (
-                    " تم العثور على ملف cookies محليًا واستخدامه؛ "
+                    " تم العثور على ملف cookies محليًا واستخدامه في المحاولتين؛ "
                     "إذا استمر الخطأ فصدّر Cookies حديثة من المتصفح."
                     if ydl_opts.get("cookiefile")
                     else
-                    " للحل العملي: صدّر Cookies يوتيوب بصيغة Netscape من متصفحك "
-                    "وارفع الملف إلى Colab باسم /content/youtube_cookies.txt ثم أعد المحاولة. "
+                    " لم يتم العثور على Cookies صالحة. إذا استمر الرفض، صدّر Cookies يوتيوب بصيغة Netscape "
+                    "وارفعها بنفسك إلى جلسة Colab باسم /content/youtube_cookies.txt. "
                     "لا ترسل الملف لأي شخص ولا ترفعه إلى GitHub لأنه يحتوي بيانات جلسة حسابك."
                 )
                 raise RuntimeError(
-                    "يوتيوب رفض طلب التحميل برسالة التحقق من الروبوت. "
-                    "تم تحديث yt-dlp وتجربة إعدادات العميل الافتراضية، لكن قد تكون قيود IP في Colab هي السبب."
+                    "يوتيوب رفض طلب التحميل حتى بعد تجربة إعدادات yt-dlp الافتراضية وملف تعريف بديل. "
+                    "قد يكون السبب حظر عنوان IP الخاص بـ Colab أو اشتراط جلسة موثّقة."
                     + cookie_hint
                 ) from exc
-            raise
         if self._is_cancelled(task_id):
             raise RuntimeError("cancelled")
 
