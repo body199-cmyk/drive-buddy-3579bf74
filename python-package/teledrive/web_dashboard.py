@@ -2095,13 +2095,15 @@ def create_web_app(ctx: Any):
             if not same_origin_browser:
                 authorization = request.headers.get("authorization", "")
                 supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
-                if time.time() >= token_expires_at:
+                active_token = str(getattr(ctx, "remote_control_token", "") or "")
+                active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+                if time.time() >= active_expiry:
                     return JSONResponse(
                         {"ok": False, "status": "unauthorized", "message": "Runtime pairing token expired; restart the Colab runtime to pair again"},
                         status_code=401,
                         headers=_NO_STORE,
                     )
-                if not supplied or not hmac.compare_digest(supplied, runtime_token):
+                if not supplied or not hmac.compare_digest(supplied, active_token):
                     return JSONResponse(
                         {"ok": False, "status": "unauthorized", "message": "Invalid or missing runtime pairing token"},
                         status_code=401,
@@ -2126,6 +2128,27 @@ def create_web_app(ctx: Any):
         page = page.replace("__GRADIO_URL__", gradio_url)
         page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
         return HTMLResponse(page)
+
+    @app.post("/api/pairing/revoke")
+    def api_revoke_pairing():
+        # The current bearer token authenticates this request in middleware.
+        # Rotate the runtime capability immediately; all other paired tabs
+        # using the old token will fail their next request.
+        replacement = secrets.token_urlsafe(32)
+        replacement_expiry = time.time() + (8 * 60 * 60)
+        setattr(ctx, "remote_control_token", replacement)
+        setattr(ctx, "remote_control_token_expires_at", replacement_expiry)
+        app.state.remote_control_token = replacement
+        app.state.remote_control_token_expires_at = replacement_expiry
+        print(
+            "TeleDrive pairing token rotated (private; expires in 8 hours; "
+            "copy from this Colab output only if you want to pair again):",
+            replacement,
+        )
+        return JSONResponse(
+            {"ok": True, "message": "Pairing revoked. A replacement token was printed in Colab output."},
+            headers=_NO_STORE,
+        )
 
     @app.get("/api/health")
     def api_health():
@@ -2228,10 +2251,12 @@ def create_web_app(ctx: Any):
 
         authorization = ws.headers.get("authorization", "")
         supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
-        if time.time() >= token_expires_at:
+        active_token = str(getattr(ctx, "remote_control_token", "") or "")
+        active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+        if time.time() >= active_expiry:
             await ws.close(code=4401, reason="Runtime pairing token expired")
             return
-        if not supplied or not hmac.compare_digest(supplied, runtime_token):
+        if not supplied or not hmac.compare_digest(supplied, active_token):
             await ws.close(code=4401, reason="Runtime pairing token required")
             return
         await ws.accept()
