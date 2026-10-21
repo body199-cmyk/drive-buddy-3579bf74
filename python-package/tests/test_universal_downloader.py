@@ -5,7 +5,10 @@ import subprocess
 
 import pytest
 
-from teledrive.universal_downloader import UniversalDownloadManager
+from teledrive.universal_downloader import (
+    UniversalDownloadManager,
+    _youtube_multiaudio_format,
+)
 
 
 def test_ensure_packages_installs_gdown_when_yt_dlp_already_exists(monkeypatch):
@@ -73,7 +76,7 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
                 raise yt_dlp.utils.DownloadError(
                     "Sign in to confirm you're not a bot"
                 )
-            (download_dir / "sample.mp4").write_bytes(b"video")
+            (download_dir / "sample.mkv").write_bytes(b"video")
 
     download_dir = tmp_path / "download"
     download_dir.mkdir()
@@ -91,6 +94,9 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
 
     assert len(attempts) == 2
     assert "extractor_args" not in attempts[0]
+    assert attempts[0]["audio_multistreams"] is True
+    assert attempts[0]["merge_output_format"] == "mkv"
+    assert "ba[language^=ar]+ba[language^=en]" in attempts[0]["format"]
     assert attempts[0]["sleep_interval_requests"] == 1
     assert attempts[0]["concurrent_fragment_downloads"] == 4
     assert attempts[1]["concurrent_fragment_downloads"] == 4
@@ -98,4 +104,21 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
         "tv",
         "web_safari",
     ]
-    assert [path.name for path in files] == ["sample.mp4"]
+    assert [path.name for path in files] == ["sample.mkv"]
+
+
+def test_youtube_multiaudio_selector_prefers_both_languages_and_falls_back():
+    selector = _youtube_multiaudio_format("720p")
+
+    assert "bestvideo[height<=720][ext=mp4]+ba[language^=ar]+ba[language^=en]" in selector
+    assert "bestvideo[height<=720][ext=mp4]+ba[language^=ar]/" in selector
+    assert "bestvideo[height<=720][ext=mp4]+ba[language^=en]/" in selector
+    assert selector.endswith("best[height<=720]")
+
+
+def test_youtube_multiaudio_selector_uses_original_audio_fallback():
+    selector = _youtube_multiaudio_format("best")
+
+    assert "bestvideo+ba[language^=ar]+ba[language^=en]" in selector
+    assert "bestvideo+bestaudio" in selector
+    assert selector.endswith("best")
