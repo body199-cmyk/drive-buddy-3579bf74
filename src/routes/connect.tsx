@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import TeleDriveSandbox from "../components/teleDrive/TeleDriveSandbox";
 import sandboxCss from "../components/teleDrive/teleDrive.css?url";
@@ -26,12 +26,12 @@ function ConnectPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  async function connect() {
+  const connectToRuntime = useCallback(async (url: string, pairingToken: string) => {
     setError("");
     setBusy(true);
     let candidate: RemoteColabBridge | null = null;
     try {
-      candidate = new RemoteColabBridge(runtimeUrl, token);
+      candidate = new RemoteColabBridge(url, pairingToken);
       await candidate.connect();
       setBridge(candidate);
     } catch (reason) {
@@ -40,6 +40,31 @@ function ConnectPage() {
     } finally {
       setBusy(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const receiveHandoff = (event: MessageEvent) => {
+      if (event.source !== window.opener) return;
+      if (
+        event.origin !== "https://colab.research.google.com" &&
+        !event.origin.endsWith(".googleusercontent.com")
+      ) return;
+      if (event.data?.type !== "teledrive-colab-handoff") return;
+      const handoffUrl = event.data.url;
+      const handoffToken = event.data.token;
+      if (typeof handoffUrl !== "string" || typeof handoffToken !== "string") return;
+      setRuntimeUrl(handoffUrl);
+      setToken(handoffToken);
+      setNotice("وصلت بيانات الربط من Colab. جاري اختبار الاتصال...");
+      void connectToRuntime(handoffUrl, handoffToken);
+    };
+    window.addEventListener("message", receiveHandoff);
+    window.opener?.postMessage({ type: "teledrive-portal-ready" }, "*");
+    return () => window.removeEventListener("message", receiveHandoff);
+  }, [connectToRuntime]);
+
+  async function connect() {
+    await connectToRuntime(runtimeUrl, token);
   }
 
   async function disconnect() {
@@ -96,7 +121,7 @@ function ConnectPage() {
         </header>
 
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">قبل الربط</h2>
+          <h2 className="text-lg font-semibold">الربط التلقائي أو اليدوي</h2>
           <ol className="mt-3 list-decimal space-y-2 pr-6 text-sm leading-6">
             <li>
               افتح{" "}
