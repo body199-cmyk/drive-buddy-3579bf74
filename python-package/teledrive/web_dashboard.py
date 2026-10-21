@@ -841,7 +841,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const DASHBOARD_SECTIONS=["overview","connections","destination","analyze","results","transfer","settings","logs","maintenance"];
+const DASHBOARD_SECTIONS=["overview","universal","connections","destination","analyze","results","transfer","settings","logs","maintenance"];
 const MOBILE_PRIMARY_SECTIONS=["overview","destination","analyze","results","transfer"];
 let activeDashboardSection="overview";
 function closeMoreDrawer(restoreFocus){
