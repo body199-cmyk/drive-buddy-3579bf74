@@ -1,3 +1,14 @@
+## 2026-10-21 — Universal web-download controls parity (M52-T02)
+
+- Merged [PR #124](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124) as `08363cdffa4653f95db39e88e0e124022dc86afe`: per-task and bulk pause/resume/stop/cancel/retry-failed controls for the Universal URL Downloader, wired to real `UniversalDownloadManager` methods and FastAPI endpoints rather than UI-only state.
+- Pause/resume use cooperative gates for yt-dlp and direct HTTP downloads; cancel wakes paused workers. Bulk actions report succeeded/failed counts.
+- `gdown` pause is intentionally not offered because its blocking download call has no safe pause callback. Drive upload is not forcibly interrupted. Retry creates a new task using the saved URL, quality, and folder; it is not byte-level resume.
+- Main CI [run #39627612669](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612669) passed: `876 passed, 1 warning`; frontend lint/build, notebook checks, byte-compile, and archive build passed.
+- Published package [pkg-2026.08.09-m15t07](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) from [run #39627612843](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612843); archive size `674316` bytes, SHA-256 `6b0ede407ea2e68af03f93c88041824c9328140bef5bc35e6b45bb069f9a9be6`, manifest verified against exact archive bytes.
+- **Still pending:** owner-run live Colab/Drive verification. CI and release publication do not prove runtime behavior in the owner's active Colab session.
+
+---
+
 ## 2026-10-21 — YouTube downloader retry after bot challenge
 
 - Corrected yt-dlp's request pacing option to the documented Python API key, `sleep_interval_requests` (the old `sleep_requests` name could be silently ignored).

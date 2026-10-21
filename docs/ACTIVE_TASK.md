@@ -1,10 +1,12 @@
 # Active Task Update — M52-T02 universal downloader controls (2026-10-21)
 
-## Current branch change
-- Branch: `fix/universal-downloader-controls`
+## Current status — merged and published
+
+Next action: owner-run live Colab test after runtime restart and normal package update/bootstrap; do not claim live behavior until download controls and Drive upload are observed.
+- PR [#124](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124) merged as `08363cdffa4653f95db39e88e0e124022dc86afe`.
 - Compare Telegram's per-item pause/resume/stop/retry with the Universal URL Downloader. Added real per-task and bulk manager actions, cooperative pause gates for yt-dlp/direct HTTP, resume, cancel that wakes paused tasks, retry from stored URL/quality/folder, and UI/API wiring.
 - gdown pause is deliberately unavailable because the blocking backend has no safe pause callback. Drive upload is not force-cancelled. Retry is a new download, not byte-level resume.
-- Added control tests. CI, merge, package publication and live Colab test remain pending until evidence is checked.
+- CI [run #39627612669](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612669) passed (`876 passed, 1 warning`); package publication [run #39627612843](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612843) passed; release [pkg-2026.08.09-m15t07](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) verified, 674316 bytes, SHA-256 `6b0ede407ea2e68af03f93c88041824c9328140bef5bc35e6b45bb069f9a9be6`. Live Colab/Drive test remains pending.
 - Detailed report: `docs/PHASE_REPORTS/PHASE_M52_T02_UNIVERSAL_DOWNLOAD_CONTROLS.md`.
 
 ---

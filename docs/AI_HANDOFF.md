@@ -2,15 +2,15 @@
 
 | الحقل | القيمة |
 |---|---|
-| الحالة | **Implemented on branch; CI / PR / merge / release / live Colab test pending** |
-| الفرع | `fix/universal-downloader-controls` |
+| الحالة | **MERGED TO MAIN; CI and package publication passed; live Colab/Drive verification pending** |
+| الدمج | [PR #124]( https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124 ), merge commit `08363cdffa4653f95db39e88e0e124022dc86afe` |
 | الملفات الأساسية | `python-package/teledrive/universal_downloader.py`, `python-package/teledrive/web_dashboard.py`, `python-package/tests/test_universal_downloader_controls.py` |
 | التقرير | `docs/PHASE_REPORTS/PHASE_M52_T02_UNIVERSAL_DOWNLOAD_CONTROLS.md` |
 | المقارنة | Telegram queue had per-item pause/resume/stop/retry actions; Universal URL Downloader only had start/cancel. These are separate engines, so web URL controls now call UniversalDownloadManager, not Telegram QueueManager. |
-| التنفيذ | Added cooperative pause/resume gates for yt-dlp and direct HTTP, real cancel that wakes paused tasks, and retry creating a new task from saved URL/quality/Drive folder. New API routes: `/api/universal/pause`, `resume`, `retry`; existing cancel retained. |
+| التنفيذ | Added cooperative pause/resume gates for yt-dlp and direct HTTP, real cancel that wakes paused tasks, retry creating a new task from saved URL/quality/Drive folder, and bulk pause/resume/cancel/retry-failed. API routes: `/api/universal/pause`, `resume`, `retry`, `bulk`; existing cancel retained. |
 | حدود مهمة | `gdown` blocking calls do not safely support pause; `pause_supported=false` prevents a fake pause button. Drive upload is not forcibly interrupted. Retry is a fresh task, not byte-level resume. |
-| التحقق | Tests added on branch; no CI result claimed until Actions completes. No live Colab/Drive transfer test yet. |
-| التالي | Run CI; fix failures; merge only after gates pass; regenerate Colab notebooks via `notebook_cells.py`; publish package; perform live Colab test before declaring fully complete. |
+| التحقق | Validation: main CI [run #39627612669](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612669) passed; `876 passed, 1 warning`; frontend lint/build, notebook generator checks, byte-compile, and archive build passed. Package publication [run #39627612843](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612843) passed; release [pkg-2026.08.09-m15t07](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) targets `08363cdffa4653f95db39e88e0e124022dc86afe`, ZIP 674316 bytes, SHA-256 `6b0ede407ea2e68af03f93c88041824c9328140bef5bc35e6b45bb069f9a9be6`, and the published manifest was verified against the archive. No live Colab/Drive transfer test yet. |
+| التالي | Owner-run live Colab verification remains: restart the runtime, run the normal package update/bootstrap flow, test direct HTTP and yt-dlp pause/resume/cancel/retry, then verify the Drive upload. Do not claim live success until observed. |
 
 ---
 

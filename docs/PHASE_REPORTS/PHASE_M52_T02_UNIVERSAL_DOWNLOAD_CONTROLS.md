@@ -1,8 +1,8 @@
 # M52-T02 — استكمال أدوات التحكم في التنزيل الخارجي (Universal URL Downloader)
 
 **التاريخ:** 2026-10-21  
-**الحالة:** IMPLEMENTED ON BRANCH; CI / merge / live Colab verification pending  
-**Branch:** `fix/universal-downloader-controls`
+**الحالة:** MERGED TO MAIN; CI and package publication passed; live Colab/Drive verification pending  
+**PR / merge:** [PR #124](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124), commit `08363cdffa4653f95db39e88e0e124022dc86afe`
 
 ## الطلب
 
@@ -69,3 +69,11 @@ Revert للـPR الخاص بـ M52-T02. لا تغيّر قاعدة البيان
 4. نشر حزمة جديدة من المصدر المدمج.
 5. اختبار حي: direct HTTP (pause/resume/cancel/retry)، رابط فيديو yt-dlp (pause/resume/retry)، ثم Drive upload. تحقق منفصل من أن gdown لا يعرض pause غير مدعوم.
 6. لا تعلن «مكتمل بالكامل» حتى الاختبار الحي في Colab؛ CI وحده لا يثبت التشغيل الفعلي.
+
+
+## حالة ما بعد الدمج والنشر — 2026-10-21
+
+- Main CI: [run #39627612669](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612669) — **success**. Test suite: `876 passed, 1 warning`; frontend lint/build, notebook generation checks, byte compilation, and archive build passed.
+- Package release: [run #39627612843](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39627612843) — **success**. Release [pkg-2026.08.09-m15t07](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) targets `08363cdffa4653f95db39e88e0e124022dc86afe`.
+- Exact published ZIP: `674316` bytes; SHA-256 `6b0ede407ea2e68af03f93c88041824c9328140bef5bc35e6b45bb069f9a9be6`. Workflow validated the public manifest against the exact archive bytes.
+- The branch code includes both per-task and bulk actions. No live Colab download/Drive upload was performed by CI. Owner-run live verification remains mandatory before describing the controls as runtime-verified.
