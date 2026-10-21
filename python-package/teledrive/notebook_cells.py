@@ -663,9 +663,21 @@ try:
 except Exception as exc:  # not on Colab, or the user declined the mount
     print(\"drive mount skipped:\", type(exc).__name__)
 
-# Pre-bootstrap update check. Prints ONE line (SUCCESS / ALREADY CURRENT /
-# REFUSED); REFUSED never aborts the cell — the fallback below still restores.
-pkg_try_update(LOCAL_ROOT)
+# Pre-bootstrap update check. A refusal caused by an already-imported runtime
+# MUST stop here: continuing would silently restore /content's stale ZIP and
+# make a rerun look like the latest release was installed. Restart the runtime,
+# then run Cell 1 again. Network/manifest failures may still use the documented
+# archive fallback, but the runtime-loaded case is never allowed to downgrade.
+PACKAGE_UPDATE_RESULT = pkg_try_update(LOCAL_ROOT)
+if (
+    PACKAGE_UPDATE_RESULT.get("outcome") == "refused"
+    and "runtime already loaded" in PACKAGE_UPDATE_RESULT.get("reason", "")
+):
+    raise RuntimeError(
+        "TeleDrive package update stopped because this runtime already imported "
+        "TeleDrive modules. Use Runtime > Restart session, then run Cells 1–4 "
+        "again; continuing here could silently load an older cached package."
+    )
 
 PACKAGE_ZIP = resolve_package_zip(LOCAL_ROOT)
 
