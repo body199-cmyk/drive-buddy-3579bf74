@@ -35,6 +35,13 @@ from teledrive.web_dashboard import (
 SOURCE = Path(web_dashboard.__file__).read_text(encoding="utf-8")
 
 
+def test_colab_launch_output_does_not_depend_on_ipython_html_renderer():
+    """Mobile Colab output can disappear when its HTML/JS renderer fails.
+    Keep the dashboard launch result as a plain, auto-linkable URL."""
+    assert "from IPython.display import HTML, display" not in SOURCE
+    assert 'print(f"TeleDrive Web Dashboard URL: {proxy_url}")' in SOURCE
+
+
 def _client(ctx):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")  # TestClient transport (via gradio deps)
