@@ -349,6 +349,8 @@ def test_http_endpoints(ctx):
     page = client.get("/")
     assert page.status_code == 200
     assert "TeleDrive v5.0 Turbo" in page.text
+    # The remote pairing capability must never be embedded in served HTML.
+    assert ctx.remote_control_token not in page.text
 
     health = client.get("/api/health")
     assert health.status_code == 200 and health.json()["ok"] is True
