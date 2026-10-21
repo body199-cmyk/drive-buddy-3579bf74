@@ -1,3 +1,15 @@
+## 🚀 فتح النوت‌بوك مباشرة في Google Colab
+
+**اضغط هنا لفتح أحدث نسخة من النوت‌بوك مباشرةً داخل Colab:**
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb)
+
+الرابط المباشر: https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb
+
+> إذا لم تفتح النسخة تلقائيًا، تأكد أنك مسجّل الدخول بحساب Google ثم جرّب فتح الرابط المباشر أعلاه.
+
+---
+
 # TeleDrive v5.0 — Telegram → Google Drive Transfer Manager
 
 > **المواصفة:** v5.0.0 (AI-OS Continuity Edition — الحوكمة) · موروث المنتج v4.5.0
