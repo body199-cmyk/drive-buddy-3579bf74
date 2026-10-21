@@ -21,9 +21,7 @@ export class RemoteColabBridge implements TeleDriveBridge {
     const supportedHost =
       host.endsWith(".googleusercontent.com") ||
       host.endsWith(".prod.colab.dev") ||
-      host.endsWith(".colab.google") ||
-      host === "trycloudflare.com" ||
-      host.endsWith(".trycloudflare.com");
+      host.endsWith(".colab.google");
     if (
       parsed.protocol !== "https:" ||
       !supportedHost ||
