@@ -219,8 +219,12 @@ def test_page_has_three_themes_clear_workflow_and_independent_panes():
     ]
     for theme in ("light", "dim", "dark"):
         assert f'data-theme-choice="{theme}"' in HTML_PAGE
-    assert '--bg:#15202b' in HTML_PAGE  # X Dim background
-    assert '--blue:#1d9bf0' in HTML_PAGE  # X blue action colour
+    assert '--bg:#383b40' in HTML_PAGE  # medium neutral grey background
+    assert '--card:rgba(67,71,77,.98)' in HTML_PAGE  # lighter grey cards
+    assert '--blue:#58a6ff' in HTML_PAGE  # readable blue action colour
+    assert 'رمادي متوسط بين الأسود والأبيض' in HTML_PAGE
+    assert '#universal .analyze-main{grid-template-columns:minmax(0,1fr)!important}' in HTML_PAGE
+    assert '#universal .queue-pane table{min-width:700px;font-size:12px}' in HTML_PAGE
     assert 'const THEMES=["light","dim","dark"]' in HTML_PAGE
     assert "function saveTheme" in HTML_PAGE
     assert "if(THEMES.includes(st.webTheme)) applyTheme(st.webTheme)" in HTML_PAGE
