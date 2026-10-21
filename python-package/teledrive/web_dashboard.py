@@ -2076,7 +2076,7 @@ def create_web_app(ctx: Any):
         allow_origin_regex=r"https://(teledrive\.vercel\.app|teledrive-[a-z0-9-]+\.vercel\.app)",
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
-        allow_credentials=False,
+        allow_credentials=True,
         max_age=600,
     )
 
