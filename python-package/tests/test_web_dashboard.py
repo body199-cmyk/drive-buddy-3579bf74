@@ -47,7 +47,36 @@ def _client(ctx):
     pytest.importorskip("httpx")  # TestClient transport (via gradio deps)
     from fastapi.testclient import TestClient
 
-    return TestClient(create_web_app(ctx))
+    app = create_web_app(ctx)
+    client = TestClient(app)
+    client.headers.update({"Authorization": f"Bearer {ctx.remote_control_token}"})
+    return client
+
+
+def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflight():
+    ctx = _ctx()
+    client = _client(ctx)
+    try:
+        denied = client.get("/api/health", headers={"Authorization": "Bearer wrong-token"})
+        assert denied.status_code == 401
+        assert denied.json()["status"] == "unauthorized"
+
+        allowed = client.get("/api/health")
+        assert allowed.status_code == 200
+        assert allowed.json()["service"] == "teledrive-web-dashboard"
+
+        preflight = client.options(
+            "/api/action",
+            headers={
+                "Origin": "https://teledrive-preview-123-abdullah-74f3.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert preflight.status_code == 200
+        assert preflight.headers.get("access-control-allow-origin") == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
+    finally:
+        client.close()
 
 
 def test_module_imports_without_web_framework_at_top_level():
