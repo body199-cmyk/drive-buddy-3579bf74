@@ -1,9 +1,25 @@
+# بطاقة تسليم M52-T01 — بوابة TeleDrive العامة عبر Vercel (2026-10-21)
+
+| الحقل | القيمة |
+|---|---|
+| الحالة | **PLANNED ONLY — NOT IMPLEMENTED** بناءً على طلب المالك الصريح |
+| ملف التخطيط | `docs/PHASE_REPORTS/PHASE_M52_T01_PUBLIC_VERCEL_PORTAL_PROPOSAL.md` |
+| قائمة العمل | `docs/TODO.md` — Task `M52-T01` |
+| الهدف | رابط ويب عام واحد لتسجيل الدخول وربط Google Drive وTelegram اختياريًا، والتحكم في محرك TeleDrive الحقيقي دون مطالبة المستخدم بالتنقل يدويًا بين GitHub وColab |
+| المقترح | Vercel للواجهة وAPI قصيرة؛ Google OAuth منفصل عن صلاحيات Drive؛ backend آمن للأسرار؛ طبقة اتصال worker موثقة مع المحرك؛ حالة اتصال وطابور حقيقيان. Colab خيار انتقالي منخفض التكلفة لكنه غير مضمون التشغيل التلقائي أو الاستمرار؛ worker دائم بديل أكثر استقرارًا لكنه قد يتطلب تكلفة |
+| حدود النطاق | لا تغييرات على كود المحرك، لا إعداد Vercel، لا إنشاء OAuth credentials، لا ربط حسابات، ولا نشر عام لهذه الفكرة. المطلوب الآن هو التوثيق فقط |
+| قواعد التنفيذ لاحقًا | ابدأ بتدقيق معماري وADR وتقدير تكلفة؛ صمم عزل المستخدمين وحماية الأسرار قبل multi-user؛ لا بيانات وهمية؛ لا تعتبر CI إثباتًا حيًا؛ لا تَعِد بتشغيل Colab المجاني تلقائيًا |
+| التالي عند موافقة المالك | تدقيق معماري/إثبات مفهوم محدود فقط، بعد انتهاء أعمال الإصلاح ذات الأولوية وبموافقة صريحة على بدء التنفيذ |
+
+---
+
 # بطاقة تسليم M51-T01 — مسارات الصوت العربية والإنجليزية في يوتيوب (2026-10-21)
 
 | الحقل | القيمة |
 |---|---|
-| الحالة | **Merged to main; CI passed; live YouTube/Colab test and package release pending** |
+| الحالة | **Merged to main; CI passed; package release refreshed successfully; live YouTube/Colab test pending** |
 | PR / merge | [PR #123](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/123), merged as `325848978f1f4def008df8210bc6ca15284626ca` |
+| Publication | GitHub Actions [run #39624773056](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39624773056) completed successfully. Stable release [pkg-2026.08.09-m15t07](https://github.com/body199-cmyk/drive-buddy-3579bf74/releases/tag/pkg-2026.08.09-m15t07) now targets merge commit `325848978f1f4def008df8210bc6ca15284626ca` (release assets updated 2026-10-21 15:22 UTC). Colab live download/player verification remains pending. |
 | الملفات | `python-package/teledrive/universal_downloader.py`; `python-package/tests/test_universal_downloader.py`; `docs/TODO.md`; `docs/PHASE_REPORTS/PHASE_M51_T01_YOUTUBE_AR_EN_AUDIO_TRACKS.md` |
 | المتطلب | تنزيل المسارين العربي والإنجليزي فقط عندما يتوفران، داخل ملف واحد متعدد المسارات؛ إذا توفر واحد فقط نحتفظ به، وإذا لم يتوفر أي منهما نرجع لأفضل مسار صوت متاح. |
 | التنفيذ | `_youtube_multiaudio_format()` يرتب محاولات التنسيق: عربي+إنجليزي، عربي وحده، إنجليزي وحده، ثم أفضل صوت متاح. تفعيل `audio_multistreams` وMKV محصوران في تنزيل فيديو يوتيوب؛ مسارات الصوت فقط والمنصات الأخرى تبقى كما كانت. بادئات اللغة تشمل صيغًا مثل `en-US`. |
