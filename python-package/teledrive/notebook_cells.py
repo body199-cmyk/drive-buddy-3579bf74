@@ -22,10 +22,10 @@ Constitution rules encoded here:
   * SQLite and temp files stay on local ``/content``, never on mounted Drive;
   * no blind ``rmtree(TEMP_DIR)`` — maintenance deletes only temp files that
     belong to verified Uploaded items and quarantines everything unknown;
-  * cell 1 runs a pre-bootstrap integrity-verified update gate (pinned release
-    manifest + sha256, ``.part``-only downloads, atomic swap) that REFUSES to
-    touch a live runtime and never hot-reloads; the archived ZIP in Drive
-    stays the sanctioned fallback, and refusal is never fatal.
+  * cell 1 runs a pre-bootstrap integrity-verified update gate (latest/pinned
+    release manifest + sha256, ``.part``-only downloads, atomic swap). Any
+    REFUSED outcome stops the cell before local ZIP fallback; this is required
+    to guarantee the notebook never silently starts from an unverified stale package.
 """
 from __future__ import annotations
 
@@ -101,8 +101,9 @@ CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restor
 #     ONLY /content/teledrive_v4.5.zip and /content/teledrive-v4.5/;
 #   * /content/teledrive_runtime, SQLite, checkpoints, logs, quarantine and
 #     every Drive file are never touched;
-#   * REFUSED is never fatal: resolve_package_zip() below still restores the
-#     tested archive (Drive copy or official CI-artifact wrapper) as before.
+#   * any REFUSED result stops Cell 1 before local/Drive ZIP fallback; if the
+#     latest package cannot be verified, the notebook fails visibly instead
+#     of claiming or silently using an older cached package.
 import datetime
 import hashlib, json, os, pathlib, sys, tempfile, urllib.request, zipfile
 
@@ -663,20 +664,18 @@ try:
 except Exception as exc:  # not on Colab, or the user declined the mount
     print(\"drive mount skipped:\", type(exc).__name__)
 
-# Pre-bootstrap update check. A refusal caused by an already-imported runtime
-# MUST stop here: continuing would silently restore /content's stale ZIP and
-# make a rerun look like the latest release was installed. Restart the runtime,
-# then run Cell 1 again. Network/manifest failures may still use the documented
-# archive fallback, but the runtime-loaded case is never allowed to downgrade.
+# Pre-bootstrap update check. NEVER fall through to a cached Drive/local ZIP
+# after REFUSED: endpoint failures, untrusted manifests, digest mismatches and
+# a loaded runtime all mean we cannot prove that the package is current.
+# Fix connectivity/manifest issues or restart the runtime, then rerun Cell 1.
 PACKAGE_UPDATE_RESULT = pkg_try_update(LOCAL_ROOT)
-if (
-    PACKAGE_UPDATE_RESULT.get("outcome") == "refused"
-    and "runtime already loaded" in PACKAGE_UPDATE_RESULT.get("reason", "")
-):
+if PACKAGE_UPDATE_RESULT.get("outcome") == "refused":
     raise RuntimeError(
-        "TeleDrive package update stopped because this runtime already imported "
-        "TeleDrive modules. Use Runtime > Restart session, then run Cells 1–4 "
-        "again; continuing here could silently load an older cached package."
+        "TeleDrive package update could not verify the latest published package: "
+        + str(PACKAGE_UPDATE_RESULT.get("reason", "unknown reason"))
+        + ". No cached ZIP was restored. Check the connection; if TeleDrive "
+        "modules were already imported, use Runtime > Restart session, then "
+        "run Cells 1–4 again."
     )
 
 PACKAGE_ZIP = resolve_package_zip(LOCAL_ROOT)
