@@ -53,8 +53,7 @@ def _client(ctx):
     return client
 
 
-def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflight():
-    ctx = _ctx()
+def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflight(ctx):
     client = _client(ctx)
     try:
         denied = client.get("/api/health", headers={"Authorization": "Bearer wrong-token"})
