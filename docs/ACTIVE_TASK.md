@@ -1,3 +1,14 @@
+# Active Task Update — M52-T02 universal downloader controls (2026-10-21)
+
+## Current branch change
+- Branch: `fix/universal-downloader-controls`
+- Compare Telegram's per-item pause/resume/stop/retry with the Universal URL Downloader. Added real manager actions, cooperative pause gates for yt-dlp/direct HTTP, resume, cancel that wakes paused tasks, retry from stored URL/quality/folder, and UI/API wiring.
+- gdown pause is deliberately unavailable because the blocking backend has no safe pause callback. Drive upload is not force-cancelled. Retry is a new download, not byte-level resume.
+- Added control tests. CI, merge, package publication and live Colab test remain pending until evidence is checked.
+- Detailed report: `docs/PHASE_REPORTS/PHASE_M52_T02_UNIVERSAL_DOWNLOAD_CONTROLS.md`.
+
+---
+
 # Active Task Update — YouTube downloader bot-challenge fallback (2026-10-21)
 
 ## Current change
