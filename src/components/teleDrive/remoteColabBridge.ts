@@ -142,6 +142,13 @@ export class RemoteColabBridge implements TeleDriveBridge {
     }
   }
 
+  async revokePairing(): Promise<void> {
+    await this.fetchJson("api/pairing/revoke", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
   disconnect() {
     this.disposed = true;
     this.connected = false;
