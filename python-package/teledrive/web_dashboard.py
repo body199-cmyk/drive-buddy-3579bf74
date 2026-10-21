@@ -299,7 +299,18 @@ body.drawer-open{overflow:hidden}
 .main-content{min-width:0}
 .wrap{width:100%;max-width:1280px;margin:0 auto;padding:14px 16px 44px}
 .tab-panel[hidden]{display:none!important}
-.mobile-tabs,.mobile-drawer{display:none}
+.mobile-tabs{display:none}
+.mobile-drawer{position:fixed;inset:0;z-index:85;display:flex;align-items:center;justify-content:center;padding:24px}
+.mobile-drawer[hidden]{display:none!important}
+.drawer-backdrop{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;border-radius:0;background:rgba(0,0,0,.48);box-shadow:none;backdrop-filter:blur(2px)}
+.drawer-panel{position:relative;width:min(100%,620px);max-height:min(86vh,820px);overflow:auto;padding:20px;border:1px solid var(--border);border-radius:22px;background:var(--card);box-shadow:0 18px 55px rgba(0,0,0,.24)}
+.drawer-handle{display:none}
+.drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.drawer-header p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.drawer-tools{padding:12px;margin-bottom:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.drawer-tools h3{font-size:13px;margin:0 0 8px}
+.drawer-system-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+.drawer-nav{grid-template-columns:repeat(2,minmax(0,1fr))}
 .app-header{position:static;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
   margin:2px 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:18px;background:var(--header-bg);
   box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
@@ -500,6 +511,10 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .workflow{grid-template-columns:1fr 1fr}
   .overview-heading p{font-size:11.5px}
   .drawer-panel{padding-inline:12px}
+  .mobile-drawer{align-items:flex-end;padding:0}
+  .drawer-panel{width:min(100%,600px);max-height:min(78vh,680px);padding:17px 17px calc(18px + env(safe-area-inset-bottom));border-bottom:0;border-radius:24px 24px 0 0}
+  .drawer-handle{display:block;width:40px;height:4px;border-radius:99px;margin:0 auto 14px;background:var(--bar-bg)}
+  .drawer-nav{grid-template-columns:repeat(2,minmax(0,1fr))}
   .mobile-tab{font-size:9px}
   .workflow-step{min-height:58px;padding:8px}.step-number{width:27px;height:27px}
   .theme-switch button{padding:6px 7px}.theme-switch .theme-name{display:none}
@@ -541,14 +556,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="sub">نفس محرك النقل والطابور الحقيقي، بلا أي بيانات وهمية</div>
     </div>
     <div class="header-actions">
-      <div class="theme-switch" role="group" aria-label="اختيار لون الواجهة">
-        <button type="button" data-theme-choice="light" aria-pressed="false" title="المظهر الفاتح"><span class="theme-swatch sw-light"></span><span class="theme-name">فاتح</span></button>
-        <button type="button" data-theme-choice="dim" aria-pressed="false" title="خافت بأسلوب X — داكن معتدل"><span class="theme-swatch sw-dim"></span><span class="theme-name">رمادي متوسط</span></button>
-        <button type="button" data-theme-choice="dark" aria-pressed="false" title="المظهر الداكن الكامل"><span class="theme-swatch sw-dark"></span><span class="theme-name">داكن</span></button>
-      </div>
-      <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الآن</button>
-      <div class="pill build-pill" id="buildInfo" title="بصمة كود الواجهة المحمّل">الإصدار: جارٍ التحقق…</div>
       <div class="pill" id="syncClock">⏳ الاتصال…</div>
+      <button class="alt" id="btnHeaderMenu" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobileMoreDrawer">⚙ الخيارات</button>
     </div>
   </header>
 
@@ -565,7 +574,19 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <button class="drawer-backdrop" id="btnCloseMoreBackdrop" type="button" aria-label="إغلاق قائمة الأقسام"></button>
     <section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" tabindex="-1">
       <div class="drawer-handle" aria-hidden="true"></div>
-      <div class="drawer-header"><div><h2 id="drawerTitle">أقسام إضافية</h2><p>الحسابات والإعدادات والسجلات وأدوات الصيانة.</p></div><button class="alt small" id="btnCloseMore" type="button">إغلاق</button></div>
+      <div class="drawer-header"><div><h2 id="drawerTitle">القائمة والإعدادات</h2><p>اختصارات الأقسام، المظهر، وتحديث حالة النظام.</p></div><button class="alt small" id="btnCloseMore" type="button">إغلاق</button></div>
+      <section class="drawer-tools" aria-label="إعدادات سريعة">
+        <h3>مظهر الواجهة</h3>
+        <div class="theme-switch" role="group" aria-label="اختيار لون الواجهة">
+          <button type="button" data-theme-choice="light" aria-pressed="false" title="المظهر الفاتح"><span class="theme-swatch sw-light"></span><span class="theme-name">فاتح</span></button>
+          <button type="button" data-theme-choice="dim" aria-pressed="false" title="رمادي متوسط بين الأسود والأبيض"><span class="theme-swatch sw-dim"></span><span class="theme-name">رمادي متوسط</span></button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false" title="المظهر الداكن الكامل"><span class="theme-swatch sw-dark"></span><span class="theme-name">داكن</span></button>
+        </div>
+        <div class="drawer-system-row">
+          <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الحالة الآن</button>
+          <div class="pill build-pill" id="buildInfo" title="بصمة كود الواجهة المحمّل">الإصدار: جارٍ التحقق…</div>
+        </div>
+      </section>
       <nav class="drawer-nav" aria-label="أقسام إضافية">
         <button class="nav-item" type="button" data-section-target="universal"><span class="nav-icon" aria-hidden="true">🌐</span><span class="nav-label">التحميل الشامل (أي رابط)</span></button>
         <button class="nav-item" type="button" data-section-target="connections"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">الحسابات</span></button>
@@ -905,25 +926,33 @@ const $ = (id) => document.getElementById(id);
 const DASHBOARD_SECTIONS=["overview","universal","connections","destination","analyze","results","transfer","settings","logs","maintenance"];
 const MOBILE_PRIMARY_SECTIONS=["overview","destination","analyze","results","transfer"];
 let activeDashboardSection="overview";
+let drawerTriggerId="btnMobileMore";
 function closeMoreDrawer(restoreFocus){
   const drawer=$("mobileMoreDrawer");
   if(!drawer || drawer.hidden) return;
   drawer.hidden=true;
   document.body.classList.remove("drawer-open");
-  const trigger=$("btnMobileMore");
-  if(trigger){
+  ["btnMobileMore","btnHeaderMenu"].forEach(function(id){
+    const trigger=$(id);
+    if(!trigger) return;
     trigger.setAttribute("aria-expanded","false");
-    trigger.classList.toggle("is-active",!MOBILE_PRIMARY_SECTIONS.includes(activeDashboardSection));
-  }
+    if(id==="btnMobileMore") trigger.classList.toggle("is-active",!MOBILE_PRIMARY_SECTIONS.includes(activeDashboardSection));
+  });
+  const trigger=$(drawerTriggerId);
   if(restoreFocus && trigger) trigger.focus();
 }
-function openMoreDrawer(){
+function openMoreDrawer(triggerId){
   const drawer=$("mobileMoreDrawer");
   if(!drawer) return;
+  drawerTriggerId=triggerId||"btnMobileMore";
   drawer.hidden=false;
   document.body.classList.add("drawer-open");
-  const trigger=$("btnMobileMore");
-  if(trigger){trigger.setAttribute("aria-expanded","true");trigger.classList.add("is-active");}
+  ["btnMobileMore","btnHeaderMenu"].forEach(function(id){
+    const trigger=$(id);
+    if(trigger) trigger.setAttribute("aria-expanded",String(id===drawerTriggerId));
+  });
+  const mobileTrigger=$("btnMobileMore");
+  if(mobileTrigger) mobileTrigger.classList.add("is-active");
   const panel=drawer.querySelector(".drawer-panel");
   if(panel) panel.focus();
 }
@@ -959,7 +988,8 @@ document.querySelectorAll("[data-section-target]").forEach(function(button){
     activateSection(this.dataset.sectionTarget,{focusHeading:!!this.closest(".drawer-nav")});
   });
 });
-$("btnMobileMore").addEventListener("click",openMoreDrawer);
+$("btnMobileMore").addEventListener("click",function(){openMoreDrawer("btnMobileMore");});
+$("btnHeaderMenu").addEventListener("click",function(){openMoreDrawer("btnHeaderMenu");});
 $("btnCloseMore").addEventListener("click",function(){closeMoreDrawer(true);});
 $("btnCloseMoreBackdrop").addEventListener("click",function(){closeMoreDrawer(true);});
 document.addEventListener("keydown",function(event){
