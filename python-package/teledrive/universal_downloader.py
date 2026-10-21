@@ -320,6 +320,9 @@ class UniversalDownloadManager:
                 raise RuntimeError("cancelled")
 
             downloaded_files = self._download_to_dir(task_id, url, quality, work_dir)
+            # A pause arriving at the final download callback must still be
+            # honored before Drive upload begins.
+            self._wait_if_paused(task_id)
             if self._is_cancelled(task_id):
                 raise RuntimeError("cancelled")
             if not downloaded_files:
