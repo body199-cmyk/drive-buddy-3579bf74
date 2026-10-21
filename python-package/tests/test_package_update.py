@@ -169,6 +169,15 @@ def test_shipped_cell1_calls_gate_after_mount_and_before_restore():
     assert "package reference:" in cell
 
 
+def test_cell1_has_runtime_refusal_guard_before_archive_restore():
+    cell = notebook_cells.CELLS[0]["code"]
+    update = cell.index('PACKAGE_UPDATE_RESULT = pkg_try_update(LOCAL_ROOT)')
+    guard = cell.index('"runtime already loaded" in PACKAGE_UPDATE_RESULT.get("reason", "")')
+    restore = cell.index('PACKAGE_ZIP = resolve_package_zip(LOCAL_ROOT)')
+    assert update < guard < restore
+    assert "Runtime > Restart session" in cell
+
+
 # ---- verified success --------------------------------------------------------
 
 
