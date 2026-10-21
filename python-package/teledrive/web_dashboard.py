@@ -1770,7 +1770,7 @@ $("qBody").addEventListener("click",function(event){
       tdProg.textContent = (typeof t.progress === "number" ? t.progress.toFixed(1) : "0") + "%";
       const tdSpeed = document.createElement("td");
       const speed = Number(t.speed_bps || 0);
-      tdSpeed.textContent = speed >= 1024 * 1024
+      tdSpeed.textContent = speed <= 0 ? "—" : speed >= 1024 * 1024
         ? (speed / (1024 * 1024)).toFixed(2) + " MB/s"
         : (speed / 1024).toFixed(1) + " KB/s";
       const tdFolder = document.createElement("td");
