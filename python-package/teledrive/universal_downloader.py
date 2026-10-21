@@ -32,6 +32,7 @@ class UniversalDownloadManager:
         self.ctx = ctx
         self._lock = threading.Lock()
         self._tasks: list[dict[str, Any]] = []
+        self._cancel_events: dict[str, threading.Event] = {}
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -42,6 +43,29 @@ class UniversalDownloadManager:
             before = len(self._tasks)
             self._tasks = [t for t in self._tasks if t.get("status") in {"queued", "downloading", "uploading"}]
             return before - len(self._tasks)
+
+    def cancel_task(self, task_id: str) -> dict[str, Any]:
+        """Cancel an active download before it enters the Drive upload phase."""
+        with self._lock:
+            task = next((item for item in self._tasks if item.get("id") == task_id), None)
+            if task is None:
+                return {"ok": False, "message": "مهمة التحميل غير موجودة."}
+            if task.get("status") not in {"queued", "downloading"}:
+                return {
+                    "ok": False,
+                    "message": "لا يمكن الإلغاء بعد بدء الرفع إلى Google Drive.",
+                }
+            event = self._cancel_events.get(task_id)
+            if event is None:
+                return {"ok": False, "message": "المهمة انتهت بالفعل."}
+            event.set()
+            task.update(status="cancelling", status_ar="⏹️ جاري إلغاء التحميل...")
+        return {"ok": True, "message": "تم طلب إلغاء التحميل."}
+
+    def _is_cancelled(self, task_id: str) -> bool:
+        with self._lock:
+            event = self._cancel_events.get(task_id)
+            return bool(event and event.is_set())
 
     def start_download(
         self,
@@ -84,12 +108,14 @@ class UniversalDownloadManager:
             "status_ar": "في الانتظار...",
             "progress": 0.0,
             "size_bytes": 0,
+            "speed_bps": 0.0,
             "drive_file_id": "",
             "error": "",
             "created_at": time.strftime("%H:%M:%S"),
         }
         with self._lock:
             self._tasks.append(task)
+            self._cancel_events[task_id] = threading.Event()
 
         worker = threading.Thread(
             target=self._run_task,
@@ -160,9 +186,15 @@ class UniversalDownloadManager:
         work_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._update(task_id, status="downloading", status_ar="جاري التحضير والتحميل...", progress=2.0)
+            if self._is_cancelled(task_id):
+                raise RuntimeError("cancelled")
             self._ensure_packages()
+            if self._is_cancelled(task_id):
+                raise RuntimeError("cancelled")
 
             downloaded_files = self._download_to_dir(task_id, url, quality, work_dir)
+            if self._is_cancelled(task_id):
+                raise RuntimeError("cancelled")
             if not downloaded_files:
                 raise RuntimeError("لم يتم العثور على ملفات محملة من هذا الرابط.")
 
@@ -174,6 +206,8 @@ class UniversalDownloadManager:
             total_files = len(downloaded_files)
             last_drive_id = ""
             for idx, file_path in enumerate(downloaded_files, start=1):
+                if self._is_cancelled(task_id):
+                    raise RuntimeError("cancelled")
                 fname = file_path.name
                 fsize = file_path.stat().st_size if file_path.exists() else 0
                 self._update(
@@ -183,15 +217,30 @@ class UniversalDownloadManager:
                     status="uploading",
                     status_ar=f"☁️ جاري الرفع إلى Drive ({idx}/{total_files})...",
                     progress=85.0,
+                    speed_bps=0.0,
                 )
 
                 source_hash = hashlib.sha256(f"{url}::{fname}::{quality}".encode("utf-8")).hexdigest()[:24]
                 source_key = f"url:{source_hash}"
                 mime_type, _ = mimetypes.guess_type(str(file_path))
 
+                upload_sample = {"sent": 0, "time": time.monotonic()}
+
                 def _on_upload_prog(sent: int, total: int) -> None:
+                    now = time.monotonic()
+                    elapsed = now - upload_sample["time"]
+                    speed_bps = (
+                        max(0, sent - upload_sample["sent"]) / elapsed
+                        if elapsed > 0
+                        else 0.0
+                    )
+                    upload_sample.update(sent=sent, time=now)
                     pct = 85.0 + (14.0 * (sent / max(total, 1)))
-                    self._update(task_id, progress=round(min(pct, 99.0), 1))
+                    self._update(
+                        task_id,
+                        progress=round(min(pct, 99.0), 1),
+                        speed_bps=round(speed_bps, 1),
+                    )
 
                 res = drive_svc.upload_resumable(
                     file_path=str(file_path),
@@ -208,19 +257,32 @@ class UniversalDownloadManager:
                 status="completed",
                 status_ar="✅ اكتمل الحفظ في Drive",
                 progress=100.0,
+                speed_bps=0.0,
                 drive_file_id=last_drive_id,
             )
             _log.info("universal download completed task=%s files=%d", task_id, total_files)
         except Exception as exc:  # noqa: BLE001
-            err_msg = redact(str(exc))[:240]
-            _log.warning("universal download failed task=%s: %s", task_id, err_msg)
-            self._update(
-                task_id,
-                status="failed",
-                status_ar=f"❌ فشل: {err_msg}",
-                error=err_msg,
-            )
+            if self._is_cancelled(task_id):
+                self._update(
+                    task_id,
+                    status="cancelled",
+                    status_ar="⏹️ تم إلغاء التحميل",
+                    error="",
+                    speed_bps=0.0,
+                )
+            else:
+                err_msg = redact(str(exc))[:240]
+                _log.warning("universal download failed task=%s: %s", task_id, err_msg)
+                self._update(
+                    task_id,
+                    status="failed",
+                    status_ar=f"❌ فشل: {err_msg}",
+                    error=err_msg,
+                    speed_bps=0.0,
+                )
         finally:
+            with self._lock:
+                self._cancel_events.pop(task_id, None)
             shutil.rmtree(work_dir, ignore_errors=True)
 
     def _download_to_dir(self, task_id: str, url: str, quality: str, work_dir: Path) -> list[Path]:
@@ -234,6 +296,8 @@ class UniversalDownloadManager:
                 gdown.download_folder(url=url, output=str(work_dir), quiet=True, use_cookies=False)
             else:
                 gdown.download(url=url, output=str(work_dir) + "/", quiet=True, fuzzy=True)
+            if self._is_cancelled(task_id):
+                raise RuntimeError("cancelled")
             return [p for p in work_dir.rglob("*") if p.is_file() and not p.name.endswith(".part")]
 
         # 2. الروابط المباشرة السريعة للملفات (PDF, ZIP, RAR, إلخ)
@@ -247,14 +311,31 @@ class UniversalDownloadManager:
             with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
                 total = int(resp.headers.get("Content-Length", 0) or 0)
                 read = 0
+                last_sample_bytes = 0
+                last_sample_time = time.monotonic()
                 while True:
+                    if self._is_cancelled(task_id):
+                        raise RuntimeError("cancelled")
                     chunk = resp.read(1024 * 256)
                     if not chunk:
                         break
                     out.write(chunk)
                     read += len(chunk)
-                    if total > 0:
-                        self._update(task_id, progress=round((read / total) * 80.0, 1), size_bytes=total)
+                    now = time.monotonic()
+                    elapsed = now - last_sample_time
+                    speed_bps = (
+                        max(0, read - last_sample_bytes) / elapsed
+                        if elapsed > 0
+                        else 0.0
+                    )
+                    if elapsed >= 0.5:
+                        last_sample_bytes, last_sample_time = read, now
+                    self._update(
+                        task_id,
+                        progress=round((read / total) * 80.0, 1) if total > 0 else 40.0,
+                        size_bytes=total or read,
+                        speed_bps=round(speed_bps, 1),
+                    )
             return [dest]
 
         # 3. جميع مواقع الفيديو والمنصات والصوتيات عبر yt-dlp
@@ -271,6 +352,8 @@ class UniversalDownloadManager:
         selected_fmt = fmt_map.get(quality, fmt_map["best"])
 
         def _yt_hook(d: dict[str, Any]) -> None:
+            if self._is_cancelled(task_id):
+                raise yt_dlp.utils.DownloadError("Download cancelled by user")
             if d.get("status") == "downloading":
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
                 downloaded = d.get("downloaded_bytes") or 0
@@ -282,6 +365,7 @@ class UniversalDownloadManager:
                     title=str(title or url)[:70],
                     progress=round(min(pct, 82.0), 1),
                     size_bytes=int(total or downloaded),
+                    speed_bps=round(float(d.get("speed") or 0.0), 1),
                     status_ar=f"⬇️ جاري التحميل ({int(pct / 0.8)}%)...",
                 )
             elif d.get("status") == "finished":
@@ -308,6 +392,8 @@ class UniversalDownloadManager:
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+        if self._is_cancelled(task_id):
+            raise RuntimeError("cancelled")
 
         return [p for p in work_dir.rglob("*") if p.is_file() and not p.name.endswith((".part", ".ytdl"))]
 

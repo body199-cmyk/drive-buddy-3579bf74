@@ -752,7 +752,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="scroll-pane queue-pane" style="max-height:320px">
         <table>
           <thead>
-            <tr><th>العنوان / الرابط</th><th>الجودة</th><th>الحالة</th><th>التقدم</th><th>المجلد</th></tr>
+            <tr><th>العنوان / الرابط</th><th>الجودة</th><th>الحالة</th><th>التقدم</th><th>السرعة</th><th>المجلد</th><th>إجراء</th></tr>
           </thead>
           <tbody id="udlBody">
             <tr><td colspan="5" class="note">لا توجد مهام تحميل خارجية حالياً — الصق أي رابط بالأعلى واضغط «بدء التحميل والرفع».</td></tr>
@@ -1749,7 +1749,7 @@ $("qBody").addEventListener("click",function(event){
       bodyEl.replaceChildren();
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = 5;
+      td.colSpan = 7;
       td.className = "note";
       td.textContent = "لا توجد مهام تحميل خارجية حالياً — الصق أي رابط بالأعلى واضغط «بدء التحميل والرفع».";
       tr.appendChild(td);
@@ -1768,9 +1768,44 @@ $("qBody").addEventListener("click",function(event){
       tdStatus.textContent = t.status_ar || t.status || "—";
       const tdProg = document.createElement("td");
       tdProg.textContent = (typeof t.progress === "number" ? t.progress.toFixed(1) : "0") + "%";
+      const tdSpeed = document.createElement("td");
+      const speed = Number(t.speed_bps || 0);
+      tdSpeed.textContent = speed <= 0 ? "—" : speed >= 1024 * 1024
+        ? (speed / (1024 * 1024)).toFixed(2) + " MB/s"
+        : (speed / 1024).toFixed(1) + " KB/s";
       const tdFolder = document.createElement("td");
       tdFolder.textContent = t.folder_name || "Drive";
-      tr.append(tdTitle, tdQual, tdStatus, tdProg, tdFolder);
+      const tdAction = document.createElement("td");
+      if(t.status === "queued" || t.status === "downloading"){
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "danger small";
+        cancelBtn.textContent = "إلغاء";
+        cancelBtn.setAttribute("aria-label", "إلغاء مهمة التحميل");
+        cancelBtn.addEventListener("click", async function(){
+          cancelBtn.disabled = true;
+          try{
+            const response = await fetch("api/universal/cancel", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({id: t.id})
+            });
+            const result = await response.json();
+            if(msgEl){
+              msgEl.textContent = (result && result.message) || "تم إرسال طلب الإلغاء.";
+              msgEl.className = result && result.ok ? "msg ok" : "msg err";
+            }
+          }catch(_e){
+            if(msgEl){ msgEl.textContent = "تعذر إرسال طلب الإلغاء."; msgEl.className = "msg err"; }
+          }finally{
+            fetchUdlTasks();
+          }
+        });
+        tdAction.appendChild(cancelBtn);
+      }else{
+        tdAction.textContent = t.status === "uploading" ? "الرفع بدأ؛ لا يمكن إلغاؤه بأمان" : "—";
+      }
+      tr.append(tdTitle, tdQual, tdStatus, tdProg, tdSpeed, tdFolder, tdAction);
       bodyEl.appendChild(tr);
     });
   }
@@ -1921,6 +1956,13 @@ def create_web_app(ctx: Any):
         quality = str((payload or {}).get("quality") or "best")
         folder_id = (payload or {}).get("folder_id")
         return JSONResponse(mgr.start_download(url=url, quality=quality, folder_id=folder_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/cancel")
+    def api_universal_cancel(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        task_id = str((payload or {}).get("id") or "")
+        return JSONResponse(mgr.cancel_task(task_id), headers=_NO_STORE)
 
     @app.post("/api/universal/clear")
     def api_universal_clear():
