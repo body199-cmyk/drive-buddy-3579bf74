@@ -252,6 +252,21 @@ class UniversalDownloadManager:
                     t.update(kwargs)
                     break
 
+    def _begin_upload(self, task_id: str, **kwargs: Any) -> bool:
+        """Atomically cross the download/upload boundary only if not paused."""
+        with self._lock:
+            task = next((item for item in self._tasks if item.get("id") == task_id), None)
+            if task is None:
+                raise RuntimeError("download task disappeared")
+            cancel_event = self._cancel_events.get(task_id)
+            if cancel_event is None or cancel_event.is_set():
+                raise RuntimeError("cancelled")
+            gate = self._resume_events.get(task_id)
+            if gate is not None and not gate.is_set():
+                return False
+            task.update(kwargs)
+            return True
+
     def _ensure_packages(self) -> None:
         """Ensure both optional downloader backends are importable.
 
@@ -340,15 +355,21 @@ class UniversalDownloadManager:
                     raise RuntimeError("cancelled")
                 fname = file_path.name
                 fsize = file_path.stat().st_size if file_path.exists() else 0
-                self._update(
-                    task_id,
-                    title=fname if total_files == 1 else f"({idx}/{total_files}) {fname}",
-                    size_bytes=fsize,
-                    status="uploading",
-                    status_ar=f"☁️ جاري الرفع إلى Drive ({idx}/{total_files})...",
-                    progress=85.0,
-                    speed_bps=0.0,
-                )
+                upload_state = {
+                    "title": fname if total_files == 1 else f"({idx}/{total_files}) {fname}",
+                    "size_bytes": fsize,
+                    "status": "uploading",
+                    "status_ar": f"☁️ جاري الرفع إلى Drive ({idx}/{total_files})...",
+                    "progress": 85.0,
+                    "speed_bps": 0.0,
+                }
+                # The lock makes the phase transition atomic with pause_task:
+                # a pause arriving at this boundary either wins and is honored,
+                # or sees status=uploading and is correctly rejected.
+                while True:
+                    self._wait_if_paused(task_id)
+                    if self._begin_upload(task_id, **upload_state):
+                        break
 
                 source_hash = hashlib.sha256(f"{url}::{fname}::{quality}".encode("utf-8")).hexdigest()[:24]
                 source_key = f"url:{source_hash}"
