@@ -828,6 +828,10 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="queue-toolbar">
         <h3 style="margin:0">⚡ مهام التحميل الخارجي (<span id="udlCount">0</span>)</h3>
         <span style="flex:1"></span>
+        <button class="alt small" id="btnUdlPauseAll" type="button">⏸ إيقاف مؤقت للكل</button>
+        <button class="alt small" id="btnUdlResumeAll" type="button">▶ استئناف الكل</button>
+        <button class="danger small" id="btnUdlCancelAll" type="button">⏹ إيقاف الكل</button>
+        <button class="alt small" id="btnUdlRetryFailed" type="button">🔁 إعادة محاولة الفاشل</button>
         <button class="alt small" id="btnUdlRefresh" type="button">🔄 تحديث</button>
         <button class="alt small" id="btnUdlClear" type="button">🧹 مسح المكتمل</button>
       </div>
@@ -1819,6 +1823,10 @@ $("qBody").addEventListener("click",function(event){
   const btnPaste = $("btnUdlPaste");
   const btnRefresh = $("btnUdlRefresh");
   const btnClear = $("btnUdlClear");
+  const btnPauseAll = $("btnUdlPauseAll");
+  const btnResumeAll = $("btnUdlResumeAll");
+  const btnCancelAll = $("btnUdlCancelAll");
+  const btnRetryFailed = $("btnUdlRetryFailed");
   const urlIn = $("udlUrlIn");
   const qualIn = $("udlQualityIn");
   const msgEl = $("udlMsg");
@@ -1985,6 +1993,33 @@ $("qBody").addEventListener("click",function(event){
     });
   }
 
+  async function runBulkAction(action, button){
+    if(button) button.disabled = true;
+    try{
+      const r = await fetch("api/universal/bulk", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action: action})
+      });
+      const d = await r.json();
+      if(msgEl){
+        msgEl.textContent = (d && d.message) || "تم إرسال الأمر الجماعي.";
+        msgEl.className = d && d.ok ? "msg ok" : "msg err";
+      }
+    }catch(_e){
+      if(msgEl){msgEl.textContent="تعذر الاتصال بمحرك التحميل لتنفيذ الأمر الجماعي.";msgEl.className="msg err";}
+    }finally{
+      if(button) button.disabled = false;
+      fetchUdlTasks();
+    }
+  }
+
+  if(btnPauseAll) btnPauseAll.addEventListener("click", function(){runBulkAction("pause", this);});
+  if(btnResumeAll) btnResumeAll.addEventListener("click", function(){runBulkAction("resume", this);});
+  if(btnCancelAll) btnCancelAll.addEventListener("click", function(){
+    if(window.confirm("سيتم طلب إيقاف كل مهام التنزيل النشطة. هل تريد المتابعة؟")) runBulkAction("cancel", this);
+  });
+  if(btnRetryFailed) btnRetryFailed.addEventListener("click", function(){runBulkAction("retry_failed", this);});
   if(btnRefresh) btnRefresh.addEventListener("click", fetchUdlTasks);
   if(btnClear){
     btnClear.addEventListener("click", async function(){
@@ -2119,6 +2154,13 @@ def create_web_app(ctx: Any):
         mgr = get_universal_downloader(ctx)
         task_id = str((payload or {}).get("id") or "")
         return JSONResponse(mgr.retry_task(task_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/bulk")
+    def api_universal_bulk(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        action = str((payload or {}).get("action") or "")
+        return JSONResponse(mgr.bulk_action(action), headers=_NO_STORE)
 
     @app.post("/api/universal/clear")
     def api_universal_clear():
