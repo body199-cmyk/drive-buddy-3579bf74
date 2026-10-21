@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import TeleDriveSandbox from "../components/teleDrive/TeleDriveSandbox";
+import sandboxCss from "../components/teleDrive/teleDrive.css?url";
 import { RemoteColabBridge } from "../components/teleDrive/remoteColabBridge";
 
 export const Route = createFileRoute("/connect")({
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/connect")({
         content: "Connect the TeleDrive portal directly to your own Google Colab runtime.",
       },
     ],
+    links: [{ rel: "stylesheet", href: sandboxCss }],
   }),
   component: ConnectPage,
 });
