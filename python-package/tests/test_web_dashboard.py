@@ -650,8 +650,12 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
+                health_request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/health",
+                    headers={"Authorization": f"Bearer {ctx.remote_control_token}"},
+                )
                 with urllib.request.urlopen(  # noqa: S310 - loopback test server
-                    f"http://127.0.0.1:{port}/api/health", timeout=2
+                    health_request, timeout=2
                 ) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                 assert payload["ok"] is True
