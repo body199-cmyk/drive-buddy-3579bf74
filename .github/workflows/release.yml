@@ -102,7 +102,7 @@ jobs:
               "build_run_id": int(os.environ["BUILD_RUN_ID"]),
           }
           Path("teledrive_manifest.json").write_text(
-              json.dumps(manifest, indent=2, ensure_ascii=False) + "\\n",
+              json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
               encoding="utf-8",
           )
           print(json.dumps(manifest, indent=2))
