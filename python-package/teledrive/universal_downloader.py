@@ -25,6 +25,43 @@ from .redaction import redact
 _log = get_logger("teledrive.universal_downloader")
 
 
+def _youtube_multiaudio_format(quality: str) -> str:
+    """Prefer Arabic + English YouTube audio tracks, with safe fallbacks.
+
+    yt-dlp uses language metadata on individual audio-only formats. The
+    selector order first asks for both tracks, then either one, then the
+    video's best available audio. Language prefixes also match variants such
+    as en-US. MKV is used by the caller because MP4 is not a reliable
+    container for multiple audio streams.
+    """
+    height = {"1080p": 1080, "720p": 720, "480p": 480}.get(quality)
+    video_candidates = []
+    if height is not None:
+        video_candidates.append(f"bestvideo[height<={height}][ext=mp4]")
+        video_candidates.append(f"bestvideo[height<={height}]")
+    else:
+        video_candidates.append("bestvideo[ext=mp4]")
+        video_candidates.append("bestvideo")
+
+    selectors: list[str] = []
+    audio_sets = (
+        ("ba[language^=ar]", "ba[language^=en]"),
+        ("ba[language^=ar]",),
+        ("ba[language^=en]",),
+        ("bestaudio",),
+    )
+    for video in video_candidates:
+        for audio_tracks in audio_sets:
+            selectors.append("+".join((video, *audio_tracks)))
+    if height is not None:
+        selectors.append(f"best[height<={height}][ext=mp4]")
+        selectors.append(f"best[height<={height}]")
+    else:
+        selectors.append("best[ext=mp4]")
+        selectors.append("best")
+    return "/".join(selectors)
+
+
 class UniversalDownloadManager:
     """Thread-safe background downloader for external URLs."""
 
@@ -357,6 +394,10 @@ class UniversalDownloadManager:
             "audio_m4a": "bestaudio[ext=m4a]/bestaudio/best",
         }
         selected_fmt = fmt_map.get(quality, fmt_map["best"])
+        is_youtube = "youtube.com" in lower_url or "youtu.be" in lower_url
+        youtube_multi_audio = is_youtube and not quality.startswith("audio")
+        if youtube_multi_audio:
+            selected_fmt = _youtube_multiaudio_format(quality)
 
         def _yt_hook(d: dict[str, Any]) -> None:
             if self._is_cancelled(task_id):
@@ -385,10 +426,16 @@ class UniversalDownloadManager:
             "noplaylist": False,
             "quiet": True,
             "no_warnings": True,
-            "merge_output_format": "mp4" if not quality.startswith("audio") else None,
+            "merge_output_format": (
+                "mkv" if youtube_multi_audio else
+                "mp4" if not quality.startswith("audio") else None
+            ),
         }
+        if youtube_multi_audio:
+            # Preserve both requested language tracks in one switchable file.
+            ydl_opts["audio_multistreams"] = True
 
-        if "youtube.com" in lower_url or "youtu.be" in lower_url:
+        if is_youtube:
             # Do not pin a single YouTube player client: YouTube can mark one
             # client LOGIN_REQUIRED while another works. Let current yt-dlp
             # choose its supported defaults and install recommended EJS
@@ -427,7 +474,6 @@ class UniversalDownloadManager:
                 }
             ]
 
-        is_youtube = "youtube.com" in lower_url or "youtu.be" in lower_url
         attempts = [ydl_opts]
         if is_youtube:
             # Try the normal current yt-dlp defaults first. Only after YouTube
