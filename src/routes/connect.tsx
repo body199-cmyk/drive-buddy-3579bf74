@@ -49,7 +49,9 @@ function ConnectPage() {
       await bridge?.revokePairing();
       setNotice("تم إلغاء رمز الربط فورًا. لو حبيت تربط تاني، انسخ الرمز البديل من مخرجات Colab.");
     } catch {
-      setError("فصلنا هذا المتصفح، لكن تعذر إلغاء الرمز من Colab. أوقف الجلسة أو أعد تشغيلها لإبطال الرمز.");
+      setError(
+        "فصلنا هذا المتصفح، لكن تعذر إلغاء الرمز من Colab. أوقف الجلسة أو أعد تشغيلها لإبطال الرمز.",
+      );
     } finally {
       bridge?.disconnect();
       setBridge(null);
@@ -62,8 +64,8 @@ function ConnectPage() {
       <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            Connected directly to your Colab runtime. The pairing token stays in this tab's
-            memory and is revoked when you disconnect.
+            Connected directly to your Colab runtime. The pairing token stays in this tab's memory
+            and is revoked when you disconnect.
           </p>
           <button
             type="button"
@@ -123,7 +125,10 @@ function ConnectPage() {
           </ol>
 
           {notice ? (
-            <p role="status" className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+            <p
+              role="status"
+              className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"
+            >
               {notice}
             </p>
           ) : null}
