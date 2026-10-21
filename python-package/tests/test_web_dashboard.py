@@ -64,6 +64,9 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
         assert allowed.status_code == 200
         assert allowed.json()["service"] == "teledrive-web-dashboard"
 
+        same_origin = client.get("/api/health", headers={"Sec-Fetch-Site": "same-origin"})
+        assert same_origin.status_code == 200
+
         preflight = client.options(
             "/api/action",
             headers={
