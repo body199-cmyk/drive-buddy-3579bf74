@@ -215,6 +215,7 @@ class UniversalDownloadManager:
                     status="uploading",
                     status_ar=f"☁️ جاري الرفع إلى Drive ({idx}/{total_files})...",
                     progress=85.0,
+                    speed_bps=0.0,
                 )
 
                 source_hash = hashlib.sha256(f"{url}::{fname}::{quality}".encode("utf-8")).hexdigest()[:24]
