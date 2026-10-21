@@ -34,7 +34,9 @@ export class RemoteColabBridge implements TeleDriveBridge {
       throw new Error("Enter the HTTPS URL printed by your own Google Colab runtime.");
     }
     if (token.trim().length < 32) {
-      throw new Error("The runtime pairing token looks incomplete. Copy the full token from your Colab output.");
+      throw new Error(
+        "The runtime pairing token looks incomplete. Copy the full token from your Colab output.",
+      );
     }
     this.baseUrl = parsed.origin;
     this.token = token.trim();
@@ -67,7 +69,9 @@ export class RemoteColabBridge implements TeleDriveBridge {
       headers,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new Error("Pairing rejected. Check the token and make sure it belongs to this running Colab session.");
+      throw new Error(
+        "Pairing rejected. Check the token and make sure it belongs to this running Colab session.",
+      );
     }
     if (!response.ok) {
       throw new Error(`Colab runtime returned HTTP ${response.status}.`);
@@ -89,7 +93,11 @@ export class RemoteColabBridge implements TeleDriveBridge {
     });
     if (response.status !== "ok" || !response.state) {
       this.connected = false;
-      throw new Error(response.message ?? response.errorKey ?? "The runtime responded, but did not return live TeleDrive state.");
+      throw new Error(
+        response.message ??
+          response.errorKey ??
+          "The runtime responded, but did not return live TeleDrive state.",
+      );
     }
     this.pollTimer = setInterval(() => {
       if (!this.pollInFlight && this.isLive()) {
@@ -117,10 +125,10 @@ export class RemoteColabBridge implements TeleDriveBridge {
       };
     }
     try {
-      const response = await this.fetchJson("api/action", {
+      const response = (await this.fetchJson("api/action", {
         method: "POST",
         body: JSON.stringify(request),
-      }) as BridgeResponse<T>;
+      })) as BridgeResponse<T>;
       if (response.state) this.publish(response.state);
       return response;
     } catch (error) {
