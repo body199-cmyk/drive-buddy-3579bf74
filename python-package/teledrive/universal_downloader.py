@@ -70,6 +70,10 @@ class UniversalDownloadManager:
         self._lock = threading.Lock()
         self._tasks: list[dict[str, Any]] = []
         self._cancel_events: dict[str, threading.Event] = {}
+        # Each task has a resume gate: set means running, clear means paused.
+        # Backends without cooperative pause support (currently gdown) expose
+        # no pause control rather than pretending a blocking call is paused.
+        self._resume_events: dict[str, threading.Event] = {}
         self._yt_dlp_update_checked = False
 
     def list_tasks(self) -> list[dict[str, Any]]:
@@ -79,7 +83,7 @@ class UniversalDownloadManager:
     def clear_finished(self) -> int:
         with self._lock:
             before = len(self._tasks)
-            self._tasks = [t for t in self._tasks if t.get("status") in {"queued", "downloading", "uploading"}]
+            self._tasks = [t for t in self._tasks if t.get("status") in {"queued", "downloading", "uploading", "paused", "cancelling"}]
             return before - len(self._tasks)
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:
@@ -88,7 +92,7 @@ class UniversalDownloadManager:
             task = next((item for item in self._tasks if item.get("id") == task_id), None)
             if task is None:
                 return {"ok": False, "message": "مهمة التحميل غير موجودة."}
-            if task.get("status") not in {"queued", "downloading"}:
+            if task.get("status") not in {"queued", "downloading", "paused"}:
                 return {
                     "ok": False,
                     "message": "لا يمكن الإلغاء بعد بدء الرفع إلى Google Drive.",
@@ -97,8 +101,72 @@ class UniversalDownloadManager:
             if event is None:
                 return {"ok": False, "message": "المهمة انتهت بالفعل."}
             event.set()
-            task.update(status="cancelling", status_ar="⏹️ جاري إلغاء التحميل...")
-        return {"ok": True, "message": "تم طلب إلغاء التحميل."}
+            # Wake a paused worker so cancellation can finish promptly.
+            resume_gate = self._resume_events.get(task_id)
+            if resume_gate is not None:
+                resume_gate.set()
+            task.update(status="cancelling", status_ar="⏹️ جاري إيقاف التحميل...")
+        return {"ok": True, "message": "تم طلب إيقاف التحميل."}
+
+    def pause_task(self, task_id: str) -> dict[str, Any]:
+        """Pause a backend only when its download loop cooperatively supports it."""
+        with self._lock:
+            task = next((item for item in self._tasks if item.get("id") == task_id), None)
+            if task is None:
+                return {"ok": False, "message": "مهمة التحميل غير موجودة."}
+            if not task.get("pause_supported", False):
+                return {
+                    "ok": False,
+                    "message": "الإيقاف المؤقت غير مدعوم لهذا النوع من الروابط؛ يمكنك إيقاف المهمة أو إعادة المحاولة.",
+                }
+            if task.get("status") not in {"queued", "downloading"}:
+                return {"ok": False, "message": "يمكن إيقاف المهمة مؤقتًا أثناء التحميل فقط."}
+            gate = self._resume_events.get(task_id)
+            if gate is None:
+                return {"ok": False, "message": "المهمة انتهت بالفعل."}
+            gate.clear()
+            task.update(status="paused", status_ar="⏸️ متوقف مؤقتًا", speed_bps=0.0)
+        return {"ok": True, "message": "تم إيقاف التحميل مؤقتًا."}
+
+    def resume_task(self, task_id: str) -> dict[str, Any]:
+        """Resume a paused worker through its cooperative pause gate."""
+        with self._lock:
+            task = next((item for item in self._tasks if item.get("id") == task_id), None)
+            if task is None:
+                return {"ok": False, "message": "مهمة التحميل غير موجودة."}
+            if task.get("status") != "paused":
+                return {"ok": False, "message": "المهمة ليست متوقفة مؤقتًا."}
+            gate = self._resume_events.get(task_id)
+            if gate is None:
+                return {"ok": False, "message": "المهمة انتهت بالفعل."}
+            gate.set()
+            task.update(status="downloading", status_ar="▶️ جارٍ استئناف التحميل...")
+        return {"ok": True, "message": "تم استئناف التحميل."}
+
+    def retry_task(self, task_id: str) -> dict[str, Any]:
+        """Create a fresh real task from a failed/cancelled task's saved inputs."""
+        with self._lock:
+            task = next((item for item in self._tasks if item.get("id") == task_id), None)
+            if task is None:
+                return {"ok": False, "message": "مهمة التحميل غير موجودة."}
+            if task.get("status") not in {"failed", "cancelled"}:
+                return {"ok": False, "message": "إعادة المحاولة متاحة للمهام الفاشلة أو الملغاة فقط."}
+            url = str(task.get("url") or "")
+            quality = str(task.get("quality") or "best")
+            folder_id = str(task.get("folder_id") or "")
+        return self.start_download(url=url, quality=quality, folder_id=folder_id)
+
+    def _wait_if_paused(self, task_id: str) -> None:
+        """Block cooperative backends while paused; cancellation always wakes them."""
+        while True:
+            with self._lock:
+                gate = self._resume_events.get(task_id)
+                cancel_event = self._cancel_events.get(task_id)
+            if cancel_event is None or cancel_event.is_set():
+                raise RuntimeError("cancelled")
+            if gate is None or gate.is_set():
+                return
+            gate.wait(0.2)
 
     def _is_cancelled(self, task_id: str) -> bool:
         with self._lock:
@@ -144,6 +212,9 @@ class UniversalDownloadManager:
             "title": clean_url[:65],
             "status": "queued",
             "status_ar": "في الانتظار...",
+            # yt-dlp progress hooks and direct HTTP chunks can pause safely.
+            # gdown exposes blocking calls without a reliable pause callback.
+            "pause_supported": not ("drive.google.com" in clean_url.lower() or "docs.google.com" in clean_url.lower()),
             "progress": 0.0,
             "size_bytes": 0,
             "speed_bps": 0.0,
@@ -154,6 +225,9 @@ class UniversalDownloadManager:
         with self._lock:
             self._tasks.append(task)
             self._cancel_events[task_id] = threading.Event()
+            resume_gate = threading.Event()
+            resume_gate.set()
+            self._resume_events[task_id] = resume_gate
 
         worker = threading.Thread(
             target=self._run_task,
@@ -168,6 +242,13 @@ class UniversalDownloadManager:
         with self._lock:
             for t in self._tasks:
                 if t["id"] == task_id:
+                    gate = self._resume_events.get(task_id)
+                    # A late progress hook must not overwrite the truthful
+                    # paused status while the worker is waiting on its gate.
+                    if t.get("status") == "paused" and gate is not None and not gate.is_set():
+                        kwargs.pop("status", None)
+                        kwargs.pop("status_ar", None)
+                        kwargs["speed_bps"] = 0.0
                     t.update(kwargs)
                     break
 
@@ -229,7 +310,9 @@ class UniversalDownloadManager:
         work_dir = Path(TEMP_DIR) / "universal_dl" / task_id
         work_dir.mkdir(parents=True, exist_ok=True)
         try:
+            self._wait_if_paused(task_id)
             self._update(task_id, status="downloading", status_ar="جاري التحضير والتحميل...", progress=2.0)
+            self._wait_if_paused(task_id)
             if self._is_cancelled(task_id):
                 raise RuntimeError("cancelled")
             self._ensure_packages()
@@ -327,6 +410,7 @@ class UniversalDownloadManager:
         finally:
             with self._lock:
                 self._cancel_events.pop(task_id, None)
+                self._resume_events.pop(task_id, None)
             shutil.rmtree(work_dir, ignore_errors=True)
 
     def _download_to_dir(self, task_id: str, url: str, quality: str, work_dir: Path) -> list[Path]:
@@ -358,6 +442,7 @@ class UniversalDownloadManager:
                 last_sample_bytes = 0
                 last_sample_time = time.monotonic()
                 while True:
+                    self._wait_if_paused(task_id)
                     if self._is_cancelled(task_id):
                         raise RuntimeError("cancelled")
                     chunk = resp.read(1024 * 256)
@@ -400,6 +485,10 @@ class UniversalDownloadManager:
             selected_fmt = _youtube_multiaudio_format(quality)
 
         def _yt_hook(d: dict[str, Any]) -> None:
+            try:
+                self._wait_if_paused(task_id)
+            except RuntimeError as exc:
+                raise yt_dlp.utils.DownloadError("Download cancelled by user") from exc
             if self._is_cancelled(task_id):
                 raise yt_dlp.utils.DownloadError("Download cancelled by user")
             if d.get("status") == "downloading":
