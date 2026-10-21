@@ -29,7 +29,7 @@ def test_ensure_packages_installs_gdown_when_yt_dlp_already_exists(monkeypatch):
 
     assert len(install_calls) == 1
     assert "gdown" in install_calls[0]
-    assert "yt-dlp" in install_calls[0]
+    assert "yt-dlp[default]" in install_calls[0]
     assert "--upgrade" in install_calls[0]
 
 
