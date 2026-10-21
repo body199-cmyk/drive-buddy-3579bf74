@@ -77,6 +77,7 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
         )
         assert preflight.status_code == 200
         assert preflight.headers.get("access-control-allow-origin") == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
+        assert preflight.headers.get("access-control-allow-credentials") == "true"
     finally:
         client.close()
 
