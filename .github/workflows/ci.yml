@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: ["**"]
@@ -38,6 +41,9 @@ jobs:
           pip install -r requirements.lock
           pip install pytest
 
+      - name: Regenerate notebook artifacts from the canonical source
+        run: python -m teledrive.notebook_cells --write
+
       - name: Byte-compile the package
         run: python -m compileall teledrive
 
@@ -66,6 +72,19 @@ jobs:
           name: teledrive-package
           path: python-package/teledrive_v4.5.zip
           if-no-files-found: error
+
+      - name: Commit regenerated notebook artifacts on main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notebook/TeleDrive.ipynb ../public/TeleDrive.ipynb teledrive/colab_cells.json
+          if git diff --cached --quiet; then
+            echo "Notebook artifacts are already in sync."
+          else
+            git commit -m "chore: regenerate Colab notebooks from canonical source"
+            git push origin HEAD:main
+          fi
 
   frontend:
     name: Frontend build
