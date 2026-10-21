@@ -56,16 +56,15 @@ export class RemoteColabBridge implements TeleDriveBridge {
   }
 
   private async fetchJson(path: string, init: RequestInit = {}) {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${this.token}`);
+    if (init.body) headers.set("Content-Type", "application/json");
     const response = await fetch(new URL(path, this.baseUrl + "/").toString(), {
       ...init,
       cache: "no-store",
       mode: "cors",
       credentials: "omit",
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${this.token}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-      },
+      headers,
     });
     if (response.status === 401 || response.status === 403) {
       throw new Error("Pairing rejected. Check the token and make sure it belongs to this running Colab session.");
