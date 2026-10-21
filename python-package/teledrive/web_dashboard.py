@@ -244,14 +244,14 @@ HTML_PAGE = r"""<!DOCTYPE html>
   --shadow:0 10px 28px rgba(15,23,42,.07); --radius:16px;
 }
 :root[data-theme="dim"]{
-  /* X/Twitter Dim: a moderate blue-grey dark, intentionally not near-black. */
+  /* Medium neutral grey: clearly lighter than black, with readable contrast. */
   color-scheme:dark;
-  --bg:#15202b; --card:rgba(27,40,54,.97); --border:#38444d;
-  --text:#f7f9f9; --muted:#8b98a5; --blue:#1d9bf0; --primary-2:#0f7ae5; --green:#00ba7c;
-  --red:#f4212e; --amber:#ffad1f; --input:#22303c; --surface-2:#22303c;
-  --log-bg:#1b2836; --bar-bg:#38444d; --glow:rgba(29,155,240,.16);
-  --header-bg:rgba(21,32,43,.92); --selected:rgba(29,155,240,.13);
-  --shadow:0 12px 30px rgba(0,0,0,.22);
+  --bg:#383b40; --card:rgba(67,71,77,.98); --border:#62666d;
+  --text:#f7f7f7; --muted:#d0d2d5; --blue:#58a6ff; --primary-2:#388bfd; --green:#3fb950;
+  --red:#ff7b72; --amber:#e3b341; --input:#50545b; --surface-2:#4a4e55;
+  --log-bg:#41454b; --bar-bg:#747982; --glow:rgba(140,170,210,.12);
+  --header-bg:rgba(56,59,64,.96); --selected:rgba(88,166,255,.18);
+  --shadow:0 12px 30px rgba(0,0,0,.18);
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -438,6 +438,42 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .workflow{grid-template-columns:repeat(2,minmax(0,1fr))}
   .stats-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
+/* Universal downloader: keep the core workflow compact on desktop and thumb-friendly on phones. */
+#universal .destination-summary{padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+#universal .destination-summary strong{overflow-wrap:anywhere}
+#universal .analyze-main{align-items:stretch;gap:10px}
+#universal #udlUrlIn{min-width:0;width:100%;min-height:48px}
+#universal #udlQualityIn{min-width:0;min-height:46px}
+#universal #btnUdlStart{min-height:46px;white-space:normal}
+#universal .queue-toolbar{flex-wrap:wrap;align-items:center;gap:8px}
+#universal .queue-toolbar h3{flex:1 1 100%;font-size:15px}
+#universal .queue-toolbar button{min-height:40px}
+#universal .queue-pane{max-width:100%;overscroll-behavior-x:contain}
+#universal .queue-pane table{min-width:760px}
+#universal .queue-pane th,#universal .queue-pane td{padding:9px 8px;vertical-align:middle}
+@media(max-width:720px){
+  #universal{padding:13px 11px}
+  #universal .section-head{gap:8px}
+  #universal .section-head>div{flex:1 1 calc(100% - 55px);min-width:0}
+  #universal .section-head h2{font-size:18px;line-height:1.45}
+  #universal .section-head p{font-size:12px}
+  #universal .section-status{margin-inline-start:0}
+  #universal .destination-summary{align-items:stretch!important;gap:9px!important}
+  #universal .destination-summary>div{line-height:1.7}
+  #universal .destination-summary button{width:100%;min-height:42px}
+  #universal .analyze-main{grid-template-columns:minmax(0,1fr)!important;gap:10px}
+  #universal #udlUrlIn{font-size:14px;padding:12px;direction:ltr}
+  #universal #udlQualityIn{width:100%;font-size:13px;white-space:normal}
+  #universal #btnUdlStart{width:100%;min-height:48px}
+  #universal .queue-toolbar{display:flex;align-items:stretch}
+  #universal .queue-toolbar h3{flex-basis:100%;font-size:14px}
+  #universal .queue-toolbar>span{display:none}
+  #universal .queue-toolbar button{flex:1 1 calc(50% - 8px);padding:9px 7px}
+  #universal .queue-pane{height:auto;max-height:48vh;min-height:170px;border-radius:12px}
+  #universal .queue-pane table{min-width:700px;font-size:12px}
+  #universal .queue-pane th,#universal .queue-pane td{padding:8px 7px}
+  #universal .msg{overflow-wrap:anywhere}
+}
 @media(max-width:720px){
   .app-header{align-items:flex-start;gap:9px}
   .brand-block{min-width:0;flex-basis:100%}
@@ -503,7 +539,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div class="header-actions">
       <div class="theme-switch" role="group" aria-label="اختيار لون الواجهة">
         <button type="button" data-theme-choice="light" aria-pressed="false" title="المظهر الفاتح"><span class="theme-swatch sw-light"></span><span class="theme-name">فاتح</span></button>
-        <button type="button" data-theme-choice="dim" aria-pressed="false" title="خافت بأسلوب X — داكن معتدل"><span class="theme-swatch sw-dim"></span><span class="theme-name">X خافت</span></button>
+        <button type="button" data-theme-choice="dim" aria-pressed="false" title="خافت بأسلوب X — داكن معتدل"><span class="theme-swatch sw-dim"></span><span class="theme-name">رمادي متوسط</span></button>
         <button type="button" data-theme-choice="dark" aria-pressed="false" title="المظهر الداكن الكامل"><span class="theme-swatch sw-dark"></span><span class="theme-name">داكن</span></button>
       </div>
       <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الآن</button>
@@ -787,7 +823,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
         <div class="row" style="margin-top:8px">
           <select id="themeIn" aria-label="المظهر">
             <option value="light">فاتح</option>
-            <option value="dim">خافت — داكن معتدل بأسلوب X</option>
+            <option value="dim">رمادي متوسط بين الأسود والأبيض</option>
             <option value="dark">داكن كامل</option>
           </select>
         </div>
