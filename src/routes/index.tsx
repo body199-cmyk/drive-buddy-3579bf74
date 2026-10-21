@@ -94,6 +94,20 @@ function Index() {
           </p>
         </header>
 
+        <section className="mb-8 rounded-lg border border-primary/30 bg-primary/5 p-6">
+          <h2 className="mb-2 text-lg font-semibold">عندك جلسة Colab شغالة بالفعل؟</h2>
+          <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
+            افتح لوحة التحكم من الموقع واربطها برابط ورمز سري صادرين من جلسة Colab الخاصة بك.
+            اتصال مباشر ببيئتك، من غير تخزين الرمز على خادم الموقع.
+          </p>
+          <a
+            href="/connect"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            ربط Colab وفتح لوحة التحكم
+          </a>
+        </section>
+
         <section className="mb-8 rounded-lg border border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold">1) حمّل الملفين</h2>
           <div className="flex flex-col gap-3 sm:flex-row">
