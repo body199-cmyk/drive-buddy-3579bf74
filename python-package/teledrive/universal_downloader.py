@@ -164,7 +164,7 @@ class UniversalDownloadManager:
                 detail = (proc.stderr or proc.stdout or "").strip()[-500:]
                 raise RuntimeError(
                     "تعذر تثبيت مكونات التحميل المطلوبة "
-                    f"({', '.join(missing)}). "
+                    f"({', '.join(missing) or 'yt-dlp update'}). "
                     f"{detail or 'تحقق من اتصال الإنترنت ثم أعد المحاولة.'}"
                 )
 
