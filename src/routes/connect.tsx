@@ -34,7 +34,7 @@ function ConnectPage() {
     if (!fragment) return;
     const params = new URLSearchParams(fragment.slice(1));
     const handoffUrl = params.get("url");
-    const handoffToken = params.get("token");
+    const handoffToken = params.get("handoff");
     if (!handoffUrl || !handoffToken) return;
     handoffHandled.current = true;
 
@@ -45,25 +45,46 @@ function ConnectPage() {
       window.location.pathname + window.location.search,
     );
     setRuntimeUrl(handoffUrl);
-    setToken(handoffToken);
     setNotice("وصلت بيانات الربط من Colab. جاري اختبار الاتصال...");
     setBusy(true);
     let candidate: RemoteColabBridge | null = null;
-    try {
-      candidate = new RemoteColabBridge(handoffUrl, handoffToken);
-      void candidate.connect().then(() => {
+    void (async () => {
+      try {
+        // Validate the target host before making any request to it.
+        new RemoteColabBridge(handoffUrl, "validation-token-placeholder-32chars");
+        const exchangeUrl = new URL("api/pairing/exchange", handoffUrl + "/");
+        const response = await fetch(exchangeUrl.toString(), {
+          method: "POST",
+          mode: "cors",
+          credentials: "omit",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handoff_token: handoffToken }),
+        });
+        const contentType = response.headers.get("content-type") || "";
+        if (!response.ok || !contentType.toLowerCase().includes("application/json")) {
+          throw new Error(
+            response.status === 401
+              ? "انتهت صلاحية رابط الربط أو تم استخدامه. شغّل خلية الربط في Colab مرة أخرى."
+              : "تعذر تأكيد رابط الربط مع Colab. جرّب تشغيل خلية الربط مرة أخرى.",
+          );
+        }
+        const exchanged = await response.json();
+        if (exchanged?.ok !== true || typeof exchanged.token !== "string" || exchanged.token.length < 32) {
+          throw new Error("استجابة الربط غير صالحة. شغّل خلية الربط في Colab مرة أخرى.");
+        }
+        setToken(exchanged.token);
+        candidate = new RemoteColabBridge(handoffUrl, exchanged.token);
+        await candidate.connect();
         setBridge(candidate);
-      }).catch((reason) => {
+      } catch (reason) {
         candidate?.disconnect();
         setError(reason instanceof Error ? reason.message : "Could not connect to Colab.");
-      }).finally(() => setBusy(false));
-    } catch (reason) {
-      candidate?.disconnect();
-      setError(reason instanceof Error ? reason.message : "Could not connect to Colab.");
-      setBusy(false);
-    }
+      } finally {
+        setBusy(false);
+      }
+    })();
   }, []);
-
 
   async function connect() {
     setError("");
