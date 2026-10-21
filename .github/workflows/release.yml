@@ -108,15 +108,6 @@ jobs:
           test "$archive_size"  = "$EXPECTED_SIZE"  || { echo "size drift: $archive_size != $EXPECTED_SIZE"; exit 1; }
           echo "byte identity verified: $archive_sha256 ($archive_size bytes)"
 
-      # M37-T01 note (§17 honesty): this workflow republishes the PINNED
-      # historical v4.5 archive whose bytes are hard-gated below
-      # (EXPECTED_SHA256 / EXPECTED_SIZE). Therefore `product_version: "4.5.0"`
-      # and the "TeleDrive v4.5" release title in this file FAITHFULLY DESCRIBE
-      # THAT PINNED ARCHIVE — they are not stale identity leftovers and must
-      # NOT be bumped to 5.0.0 while the byte gate still pins v4.5 bytes.
-      # The current product identity (v5.0.0, owner decision M35-T01) is
-      # published through release-current.yml, whose manifest already carries
-      # PRODUCT_VERSION=5.0.0 for the live package.
       - name: Stage the public manifest
         run: |
           python - <<'PY'
