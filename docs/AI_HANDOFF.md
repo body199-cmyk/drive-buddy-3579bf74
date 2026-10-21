@@ -1,3 +1,35 @@
+# بطاقة التسليم — M49-T01: حارس منع ZIP القديم في Colab
+
+| الحقل | القيمة |
+|---|---|
+| Updated | `2026-10-21` |
+| Base SHA | `36b9aec7b031007fce4c9b7ba784dda8730bb78c` |
+| الفرع | `fix/colab-package-stale-fallback` |
+| الحالة | **IMPLEMENTED ON BRANCH; PR/CI and live Colab verification pending** |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M49_T01_COLAB_STALE_PACKAGE_GUARD.md` |
+
+## ما تغير في هذه الجلسة
+
+- السبب المحدد: Cell 1 كان يتجاهل نتيجة `REFUSED` ثم يستدعي `resolve_package_zip()`. عند اكتشاف وحدات TeleDrive محمّلة، كان ذلك يسمح باستخدام ZIP محلي قديم بدل التوقف وطلب Restart.
+- المصدر `python-package/teledrive/notebook_cells.py` يحفظ نتيجة التحديث ويوقف التنفيذ برسالة صريحة في حالة `runtime already loaded` قبل fallback.
+- أُضيف اختبار ترتيب في `python-package/tests/test_package_update.py`، وحُدّثت نسختا `TeleDrive.ipynb` و`colab_cells.json`.
+- `.github/workflows/release-current.yml` حُدّث ليعمل على تغييرات الحزمة في `main` أو dispatch يدويًا؛ يبني ويختبر قبل النشر، ويضع `build_run_id` في manifest، ويرفع ZIP قبل manifest ثم يتحقق من البصمات العامة.
+- تم تحديث `CHANGELOG.md` و`TODO.md` و`KNOWN_ISSUES.md` وإضافة تقرير المرحلة.
+
+## ما لم يُثبت بعد
+
+لم تُشغّل اختبارات Python أو بوابات CI في checkout محلي خلال هذه الجلسة. لا تدمج قبل نجاح PR CI، خصوصًا `python -m teledrive.notebook_cells --check` وتطابق نسختي النوتبوك. لا يوجد اختبار Google Colab حي، ولا تأكيد Telegram/Drive أو نقل ملف حقيقي.
+
+## الخطوات التالية للوكيل
+
+1. راجع diff كاملًا على الفرع؛ انتبه لتطابق مولّد النوتبوك والنسختين و`colab_cells.json`.
+2. شغّل البوابات المنصوص عليها في `docs/PROJECT_CONTEXT.md` أو افتح PR وانتظر CI: `compileall`, `pytest -q`, launcher check، notebook check، `cmp`، package build، وfrontend lint/build.
+3. أصلح أي فشل على نفس الفرع وسجّل نتائج حقيقية فقط.
+4. بعد الدمج، راقب Workflow النشر الآلي وتحقق من manifest وZIP وSHA-256 وcommit.
+5. افتح النوتبوك من `main` في Colab، نفّذ Restart ثم Cells 1–4، وتحقق من تحديث الحزمة والواجهتين، ثم جرّب نقل ملف صغير إلى Drive قبل إغلاق Known Issue.
+
+---
+
 # بطاقة التسليم — M48-T01: أقسام تنقّل مستقلة للوحة الويب الحديثة
 
 | الحقل | القيمة |

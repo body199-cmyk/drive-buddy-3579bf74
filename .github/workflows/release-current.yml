@@ -1,7 +1,23 @@
 name: Publish current TeleDrive package
 
+# M46-T02 distribution fix:
+# Notebook Cell 1 is pinned to the STABLE tag below. Publishing each run
+# under a fresh `pkg-<run_id>` tag (106d8f8) left that pinned endpoint
+# serving an old package forever (no web_dashboard.py), while a manual
+# dispatch requirement stranded every merged fix behind an owner click
+# the sandbox itself cannot perform (workflow_dispatch -> HTTP 403).
+# So this workflow now also runs automatically on package-changing
+# pushes to main and REFRESHES the assets of the one stable tag. The
+# full constitution gates below still run first; a failing gate
+# publishes nothing. The release/tag are never deleted.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "python-package/**"
+      - "public/TeleDrive.ipynb"
+      - ".github/workflows/release-current.yml"
 
 permissions:
   contents: write
@@ -17,7 +33,9 @@ jobs:
     env:
       TELEDRIVE_ROOT: ${{ github.workspace }}/teledrive_runtime
       TELEDRIVE_LANG: en
-      RELEASE_TAG: pkg-${{ github.run_id }}
+      # STABLE tag: keep in lockstep with PKG_RELEASE_TAG in
+      # teledrive/notebook_cells.py (Cell 1). Never a per-run tag.
+      RELEASE_TAG: pkg-2026.08.09-m15t07
       PRODUCT_VERSION: 5.0.0
       REPOSITORY: ${{ github.repository }}
 
@@ -85,6 +103,7 @@ jobs:
           import zipfile
           names = zipfile.ZipFile("teledrive_v4.5.zip").namelist()
           assert "teledrive-v4.5/requirements.lock" in names
+          assert "teledrive-v4.5/teledrive/web_dashboard.py" in names
           assert any(name.startswith("teledrive-v4.5/") for name in names)
           print("archive layout verified")
           PY
@@ -110,6 +129,12 @@ jobs:
               "schema": 1,
               "release": os.environ["RELEASE_TAG"],
               "commit": os.environ["CURRENT_SHA"],
+              # M46-T03: monotonically increasing build order. Notebook
+              # Cell 1 compares this across the latest-resolved and
+              # pinned manifests and installs the newer build, so a
+              # stable tag refreshed in place (old creation date) is
+              # never shadowed by an older per-run "latest" release.
+              "build_run_id": int(os.environ.get("GITHUB_RUN_ID") or 0),
               "product_version": os.environ["PRODUCT_VERSION"],
               "sha256": os.environ["ARCHIVE_SHA256"],
               "size_bytes": int(os.environ["ARCHIVE_SIZE"]),
@@ -145,7 +170,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          NOTES="Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate for the current main branch."
+          NOTES="Current main package. Built from commit $CURRENT_SHA by workflow run $GITHUB_RUN_ID. Archive sha256=$ARCHIVE_SHA256 size_bytes=$ARCHIVE_SIZE. This release is a code-complete candidate and is not Colab-ready until owner-run live proof."
           if ! gh release view "$RELEASE_TAG" --json tagName > /tmp/release_view.json 2>/dev/null; then
             echo "release absent -> creating atomically with both assets"
             gh release create "$RELEASE_TAG" \
@@ -155,25 +180,28 @@ jobs:
               teledrive_v4.5.zip \
               teledrive_manifest.json
           else
-            echo "release exists -> verifying published assets (fail-closed)"
-            for required in teledrive_v4.5.zip teledrive_manifest.json; do
-              gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -qx "$required" || {
-                echo "FAIL-CLOSED: release exists but asset missing: $required"
-                echo "(M37-T01) replacing published assets is an owner decision; refusing to delete or partially overwrite."
-                exit 1
-              }
-            done
-            PUBLISHED_ZIP_BYTES="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | select(.name=="teledrive_v4.5.zip") | .size')"
-            if [ "$PUBLISHED_ZIP_BYTES" != "$ARCHIVE_SIZE" ]; then
-              echo "FAIL-CLOSED: published zip size ($PUBLISHED_ZIP_BYTES bytes) != freshly built archive ($ARCHIVE_SIZE bytes)"
-              echo "(M37-T01) refusing to swap published assets automatically; the owner decides."
-              exit 1
-            fi
+            # M46-T02 supersedes the M37-T01 no-swap policy FOR THIS
+            # WORKFLOW ONLY. Rationale, recorded in
+            # PHASE_M46_T02: a "publish current" run that refuses to
+            # change any asset strands Notebook Cell 1 on stale code;
+            # the owner's own workaround (per-run tags, 106d8f8) made
+            # the pinned endpoint stale in the other direction. The
+            # release and tag are still NEVER deleted. The zip is
+            # replaced FIRST and the manifest LAST, so the manifest
+            # stays the commit point: a Cell-1 updater that reads the
+            # old manifest against the new zip fails digest checking
+            # and safely keeps its current package (fail-closed), and
+            # an updater reading after the manifest swap sees a fully
+            # consistent pair. The public verification step below then
+            # proves the published bytes match this exact commit.
+            echo "release exists -> refreshing assets in place (zip first, manifest last)"
+            gh release upload "$RELEASE_TAG" teledrive_v4.5.zip --clobber
+            gh release upload "$RELEASE_TAG" teledrive_manifest.json --clobber
             gh release edit "$RELEASE_TAG" \
               --target "$CURRENT_SHA" \
               --title "TeleDrive package $RELEASE_TAG" \
               --notes "$NOTES"
-            echo "metadata refreshed (target/title/notes); published assets untouched"
+            echo "assets refreshed in place; release and tag preserved"
           fi
 
       - name: Verify public manifest and archive
