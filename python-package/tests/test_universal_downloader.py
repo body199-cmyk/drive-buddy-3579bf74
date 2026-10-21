@@ -89,14 +89,10 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
 
     assert len(attempts) == 2
     assert "extractor_args" not in attempts[0]
+    assert attempts[0]["sleep_interval_requests"] == 1
     assert attempts[1]["extractor_args"]["youtube"]["player_client"] == [
         "tv",
         "web_safari",
     ]
     assert [path.name for path in files] == ["sample.mp4"]
 
-
-def test_youtube_sleep_option_uses_yt_dlp_python_api_name():
-    # Protect against a silently ignored option typo.
-    source = UniversalDownloadManager._download_to_dir.__code__.co_names
-    assert "sleep_interval_requests" in source
