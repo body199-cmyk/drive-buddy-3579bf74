@@ -19,8 +19,7 @@ export const Route = createFileRoute("/portal")({
       { title: "TeleDrive Portal — لوحة التحكم" },
       {
         name: "description",
-        content:
-          "بوابة TeleDrive الموحدة لإدارة اتصالات Google Drive وTelegram ومحرك النقل.",
+        content: "بوابة TeleDrive الموحدة لإدارة اتصالات Google Drive وTelegram ومحرك النقل.",
       },
     ],
   }),
@@ -83,9 +82,7 @@ function PortalPage() {
               <FolderSync size={25} />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">
-                بوابة التحكم الموحدة
-              </p>
+              <p className="text-sm text-muted-foreground">بوابة التحكم الموحدة</p>
               <h1 className="text-2xl font-bold tracking-tight">TeleDrive</h1>
             </div>
           </div>
@@ -102,9 +99,8 @@ function PortalPage() {
               كل اتصالاتك ومهامك من مكان واحد.
             </h2>
             <p className="mt-4 max-w-2xl leading-7 text-muted-foreground">
-              اربط حساباتك، جهّز محرك النقل، وتابع الطابور من لوحة واحدة.
-              ستظهر حالة الاتصال الفعلية فقط؛ لن نعرض تقدّمًا أو مهامًا تجريبية
-              على أنها حقيقية.
+              اربط حساباتك، جهّز محرك النقل، وتابع الطابور من لوحة واحدة. ستظهر حالة الاتصال الفعلية
+              فقط؛ لن نعرض تقدّمًا أو مهامًا تجريبية على أنها حقيقية.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <button
@@ -137,16 +133,14 @@ function PortalPage() {
                   key={label}
                   className="flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0"
                 >
-                  <span className="text-sm text-muted-foreground">
-                    {label}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{label}</span>
                   <Status>{value}</Status>
                 </div>
               ))}
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              هذه حالة التهيئة الحالية وليست فحصًا حيًا للمحرك. ستتحول الحالة
-              إلى حية بعد إضافة المصادقة وخدمة heartbeat الآمنة.
+              هذه حالة التهيئة الحالية وليست فحصًا حيًا للمحرك. ستتحول الحالة إلى حية بعد إضافة
+              المصادقة وخدمة heartbeat الآمنة.
             </p>
           </div>
         </section>
@@ -160,10 +154,7 @@ function PortalPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {connections.map(({ name, detail, icon: Icon }, index) => (
-              <article
-                key={name}
-                className="rounded-2xl border border-border bg-card p-5"
-              >
+              <article key={name} className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-start gap-4">
                   <div className="rounded-xl bg-muted p-3">
                     <Icon size={21} />
@@ -173,13 +164,9 @@ function PortalPage() {
                       <h3 className="font-semibold">
                         {index + 1}. {name}
                       </h3>
-                      <Status>
-                        {index === 0 ? "غير مهيأ" : "غير متصل"}
-                      </Status>
+                      <Status>{index === 0 ? "غير مهيأ" : "غير متصل"}</Status>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {detail}
-                    </p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
                   </div>
                 </div>
               </article>
@@ -193,10 +180,9 @@ function PortalPage() {
             <div>
               <h2 className="font-semibold">المحرك الحالي على Colab محفوظ</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                هذه البوابة لا تستبدل Notebook الحالي ولا تغيّر تشغيله. في
-                مرحلة الربط سيبدأ العامل اتصالًا صادرًا ومصادقًا إلى البوابة؛
-                وإذا انتهت جلسة Colab ستعرض البوابة أنه غير متصل بدل إظهار نجاح
-                غير مؤكد.
+                هذه البوابة لا تستبدل Notebook الحالي ولا تغيّر تشغيله. في مرحلة الربط سيبدأ العامل
+                اتصالًا صادرًا ومصادقًا إلى البوابة؛ وإذا انتهت جلسة Colab ستعرض البوابة أنه غير
+                متصل بدل إظهار نجاح غير مؤكد.
               </p>
             </div>
           </div>
@@ -208,13 +194,12 @@ function PortalPage() {
             <h2 className="font-semibold">لوحة المهام</h2>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            لن تظهر أوامر بدء التنزيل أو الطابور أو السرعة إلا بعد ربط API
-            موثّق بالمحرك الحقيقي. لا توجد مهام تجريبية في هذه الصفحة.
+            لن تظهر أوامر بدء التنزيل أو الطابور أو السرعة إلا بعد ربط API موثّق بالمحرك الحقيقي. لا
+            توجد مهام تجريبية في هذه الصفحة.
           </p>
         </section>
         <footer className="py-8 text-center text-xs text-muted-foreground">
-          TeleDrive Portal · مرحلة تأسيس الواجهة · لا تُدخل كلمات مرور أو رموز
-          جلسات في هذه الصفحة.
+          TeleDrive Portal · مرحلة تأسيس الواجهة · لا تُدخل كلمات مرور أو رموز جلسات في هذه الصفحة.
         </footer>
       </div>
     </main>
