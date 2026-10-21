@@ -75,6 +75,35 @@ def test_clear_finished_preserves_paused_tasks():
     assert manager._tasks[0]["id"] == task_id
 
 
+def test_bulk_pause_and_resume_apply_to_real_eligible_tasks():
+    manager, task_id, _cancel_event = _manager_with_task("downloading")
+
+    paused = manager.bulk_action("pause")
+    assert paused["ok"] is True
+    assert paused["succeeded"] == 1
+    assert manager._tasks[0]["status"] == "paused"
+
+    resumed = manager.bulk_action("resume")
+    assert resumed["ok"] is True
+    assert resumed["succeeded"] == 1
+    assert manager._tasks[0]["status"] == "downloading"
+
+
+def test_bulk_retry_failed_restarts_failed_task(monkeypatch):
+    manager, task_id, _cancel_event = _manager_with_task("failed")
+    calls = []
+    monkeypatch.setattr(
+        manager, "start_download",
+        lambda **kwargs: calls.append(kwargs) or {"ok": True, "message": "started"},
+    )
+
+    result = manager.bulk_action("retry_failed")
+
+    assert result["ok"] is True
+    assert result["succeeded"] == 1
+    assert calls[0]["url"] == "https://example.com/file.zip"
+
+
 def test_pause_refuses_backend_without_real_pause_support():
     manager, task_id, _cancel_event = _manager_with_task("downloading")
     manager._tasks[0]["pause_supported"] = False
@@ -138,9 +167,15 @@ def test_dashboard_exposes_cancel_and_speed_without_unsafe_html_rendering():
     dashboard_path = Path(__file__).parents[1] / "teledrive" / "web_dashboard.py"
     source = dashboard_path.read_text(encoding="utf-8")
 
-    for action in ("cancel", "pause", "resume", "retry"):
+    for action in ("cancel", "pause", "resume", "retry", "bulk"):
         assert f'@app.post("/api/universal/{action}")' in source
-        assert f'fetch("api/universal/" + action' in source
+    assert 'fetch("api/universal/" + action' in source
+    for button_id in ("btnUdlPauseAll", "btnUdlResumeAll", "btnUdlCancelAll", "btnUdlRetryFailed"):
+        assert f'id="{button_id}"' in source
+    assert 'runBulkAction("pause"' in source
+    assert 'runBulkAction("resume"' in source
+    assert 'runBulkAction("cancel"' in source
+    assert 'runBulkAction("retry_failed"' in source
     assert 'addTaskAction("إيقاف مؤقت", "pause"' in source
     assert 'addTaskAction("استئناف", "resume"' in source
     assert 'addTaskAction("إعادة المحاولة", "retry"' in source
