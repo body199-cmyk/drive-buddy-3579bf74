@@ -156,7 +156,7 @@ class UniversalDownloadManager:
 
         install_args = list(missing)
         if not self._yt_dlp_update_checked:
-            install_args = ["--upgrade", "yt-dlp", *install_args]
+            install_args = ["--upgrade", "yt-dlp[default]", *install_args]
 
         if install_args:
             proc = subprocess.run(
@@ -389,10 +389,30 @@ class UniversalDownloadManager:
         }
 
         if "youtube.com" in lower_url or "youtu.be" in lower_url:
-            ydl_opts["extractor_args"] = {
-                "youtube": {"player_client": ["tv", "web_safari"]}
-            }
+            # Do not pin a single YouTube player client: YouTube can mark one
+            # client LOGIN_REQUIRED while another works. Let current yt-dlp
+            # choose its supported defaults and install recommended EJS
+            # dependencies through yt-dlp[default].
             ydl_opts["sleep_requests"] = 1
+            ydl_opts["extractor_retries"] = 3
+            ydl_opts["retries"] = 3
+            ydl_opts["socket_timeout"] = 30
+
+            # Optional Netscape-format cookies can be uploaded to Colab by the
+            # user. Never store cookies in the repository or log their contents.
+            cookie_candidates = [
+                os.environ.get("YTDLP_COOKIES_FILE", ""),
+                "/content/youtube_cookies.txt",
+                "/content/cookies.txt",
+                str(Path(TEMP_DIR) / "youtube_cookies.txt"),
+            ]
+            cookie_file = next(
+                (Path(p).expanduser() for p in cookie_candidates
+                 if p and Path(p).expanduser().is_file()),
+                None,
+            )
+            if cookie_file is not None:
+                ydl_opts["cookiefile"] = str(cookie_file)
 
         if quality == "audio_mp3":
             ydl_opts["postprocessors"] = [
@@ -403,8 +423,30 @@ class UniversalDownloadManager:
                 }
             ]
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        except yt_dlp.utils.DownloadError as exc:
+            message = str(exc)
+            if (
+                ("Sign in to confirm you're not a bot" in message)
+                or ("LOGIN_REQUIRED" in message)
+            ) and ("youtube.com" in lower_url or "youtu.be" in lower_url):
+                cookie_hint = (
+                    " تم العثور على ملف cookies محليًا واستخدامه؛ "
+                    "إذا استمر الخطأ فصدّر Cookies حديثة من المتصفح."
+                    if ydl_opts.get("cookiefile")
+                    else
+                    " للحل العملي: صدّر Cookies يوتيوب بصيغة Netscape من متصفحك "
+                    "وارفع الملف إلى Colab باسم /content/youtube_cookies.txt ثم أعد المحاولة. "
+                    "لا ترسل الملف لأي شخص ولا ترفعه إلى GitHub لأنه يحتوي بيانات جلسة حسابك."
+                )
+                raise RuntimeError(
+                    "يوتيوب رفض طلب التحميل برسالة التحقق من الروبوت. "
+                    "تم تحديث yt-dlp وتجربة إعدادات العميل الافتراضية، لكن قد تكون قيود IP في Colab هي السبب."
+                    + cookie_hint
+                ) from exc
+            raise
         if self._is_cancelled(task_id):
             raise RuntimeError("cancelled")
 
