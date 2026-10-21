@@ -526,20 +526,20 @@ def test_queue_routes_are_allowlisted(ctx):
     assert "metrics" in paused.json()
 
 
-def test_busy_port_raises_cleanly_and_the_application_loop_survives(ctx):
-    """M46-T02: a dead dashboard must never take ctx.aio down with it."""
+def test_busy_port_automatically_falls_back_and_application_loop_survives(ctx):
+    """An occupied requested port must not prevent dashboard startup."""
     pytest.importorskip("uvicorn")
     blocker = socket.socket()
     blocker.bind(("127.0.0.1", 0))
     blocker.listen(1)
     port = int(blocker.getsockname()[1])
+    server = None
     try:
         assert ctx.aio.is_running
-        with pytest.raises(RuntimeError, match="already in use"):
-            launch_web_dashboard(ctx, port=port)
-        # No zombie handle, and the one application loop is untouched:
-        # this is exactly what kept Gradio responsive in the live bug.
-        assert ctx.web_dashboard is None
+        server = launch_web_dashboard(ctx, port=port)
+        actual_port = int(server.config.port)
+        assert actual_port != port
+        assert ctx.web_dashboard is server
         assert ctx.aio.is_running
 
         async def _ping() -> str:
@@ -547,6 +547,8 @@ def test_busy_port_raises_cleanly_and_the_application_loop_survives(ctx):
 
         assert ctx.aio.run(_ping(), timeout=5) == "pong"
     finally:
+        if server is not None:
+            stop_web_dashboard(ctx)
         blocker.close()
 
 
