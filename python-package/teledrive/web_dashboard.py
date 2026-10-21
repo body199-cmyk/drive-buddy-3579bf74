@@ -51,7 +51,6 @@ fallback — never depends on them. They are pinned in
 """
 from __future__ import annotations
 
-import html
 import json
 import socket
 import threading
@@ -2131,25 +2130,11 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
     if is_colab():
         proxy_url = colab_proxy_url(int(port))
         if proxy_url:
+            # Keep notebook output plain-text only. Rendering an IPython HTML
+            # card here relies on Colab's JavaScript output renderer and can
+            # make the entire cell output disappear on mobile browsers when
+            # that renderer fails. Colab auto-links this official proxy URL.
             print(f"TeleDrive Web Dashboard URL: {proxy_url}")
-            try:  # pragma: no cover - Colab-only display path
-                from IPython.display import HTML, display
-
-                display(
-                    HTML(
-                        '<div style="border:2px solid #3b82f6;border-radius:14px;'
-                        'padding:16px;margin:10px 0;direction:rtl;text-align:right;'
-                        'font-family:sans-serif">'
-                        "<h3 style=\"margin:0 0 10px\">⚡ واجهة الويب الحديثة جاهزة "
-                        "(TeleDrive Web Dashboard)</h3>"
-                        f'<a href="{html.escape(proxy_url, quote=True)}" target="_blank" '
-                        'style="display:inline-block;background:#2563eb;color:#fff;'
-                        'padding:11px 22px;border-radius:10px;text-decoration:none;'
-                        'font-weight:bold">🌐 افتح لوحة التحكم الحديثة ↗️</a></div>'
-                    )
-                )
-            except Exception:
-                pass
         else:  # pragma: no cover - Colab-only branch
             print(
                 f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
