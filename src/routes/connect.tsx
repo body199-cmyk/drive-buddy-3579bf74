@@ -76,18 +76,39 @@ function ConnectPage() {
         <header className="mt-5 mb-7">
           <h1 className="text-3xl font-bold tracking-tight">اربط TeleDrive بـ Colab بتاعك</h1>
           <p className="mt-3 leading-7 text-muted-foreground">
-            الموقع بيتصل مباشرة ببيئة Colab اللي إنت مشغّلها. الملفات وGoogle Drive وTelegram ومحرك النقل يفضلوا داخل بيئتك؛
-            الموقع مش بيشغّل Colab بدلًا منك ومش بيخزن رمز الربط على السيرفر.
+            الموقع بيتصل مباشرة ببيئة Colab اللي إنت مشغّلها. الملفات وGoogle Drive وTelegram ومحرك
+            النقل يفضلوا داخل بيئتك؛ الموقع مش بيشغّل Colab بدلًا منك ومش بيخزن رمز الربط على
+            السيرفر.
           </p>
         </header>
 
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="text-lg font-semibold">قبل الربط</h2>
           <ol className="mt-3 list-decimal space-y-2 pr-6 text-sm leading-6">
-            <li>افتح <a className="text-primary underline" href="/TeleDrive.ipynb" target="_blank" rel="noreferrer">دفتر TeleDrive على Colab</a> وشغّل الخلايا المطلوبة بالترتيب.</li>
-            <li>بعد تشغيل الواجهة الحديثة، انسخ رابط <code>TeleDrive Web Dashboard URL</code> المطبوع في مخرجات Colab.</li>
-            <li>انسخ <code>TeleDrive pairing token</code> من مخرجات نفس جلسة Colab. الرمز ده سري؛ ما تبعتوش لأي حد.</li>
-            <li>الصق الرابط والرمز هنا. لو الجلسة انتهت أو اتغيرت، شغّلها من جديد واستخدم الرابط والرمز الجديدين.</li>
+            <li>
+              افتح{" "}
+              <a
+                className="text-primary underline"
+                href="/TeleDrive.ipynb"
+                target="_blank"
+                rel="noreferrer"
+              >
+                دفتر TeleDrive على Colab
+              </a>{" "}
+              وشغّل الخلايا المطلوبة بالترتيب.
+            </li>
+            <li>
+              بعد تشغيل الواجهة الحديثة، انسخ رابط <code>TeleDrive Web Dashboard URL</code> المطبوع
+              في مخرجات Colab.
+            </li>
+            <li>
+              انسخ <code>TeleDrive pairing token</code> من مخرجات نفس جلسة Colab. الرمز ده سري؛ ما
+              تبعتوش لأي حد.
+            </li>
+            <li>
+              الصق الرابط والرمز هنا. لو الجلسة انتهت أو اتغيرت، شغّلها من جديد واستخدم الرابط
+              والرمز الجديدين.
+            </li>
           </ol>
 
           <div className="mt-6 grid gap-4">
@@ -118,7 +139,10 @@ function ConnectPage() {
               />
             </label>
             {error ? (
-              <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <p
+                role="alert"
+                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              >
                 {error}
               </p>
             ) : null}
@@ -134,8 +158,9 @@ function ConnectPage() {
         </section>
 
         <aside className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm leading-6">
-          <strong>مهم للخصوصية:</strong> رمز الربط يمنح صلاحية التحكم في جلسة Colab دي. ما تحطّوش في رابط URL أو رسالة عامة.
-          الاتصال بيكون مباشر من المتصفح إلى Colab، والرمز لا يُحفظ في localStorage أو قاعدة بيانات الموقع.
+          <strong>مهم للخصوصية:</strong> رمز الربط يمنح صلاحية التحكم في جلسة Colab دي. ما تحطّوش في
+          رابط URL أو رسالة عامة. الاتصال بيكون مباشر من المتصفح إلى Colab، والرمز لا يُحفظ في
+          localStorage أو قاعدة بيانات الموقع.
         </aside>
       </div>
     </main>
