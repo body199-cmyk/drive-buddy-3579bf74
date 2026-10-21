@@ -1896,7 +1896,13 @@ $("qBody").addEventListener("click",function(event){
         tdAction.appendChild(actionBtn);
       }
       if(t.status === "queued" || t.status === "downloading"){
-        if(t.pause_supported) addTaskAction("إيقاف مؤقت", "pause", "secondary");
+        if(t.pause_supported){
+          addTaskAction("إيقاف مؤقت", "pause", "secondary");
+        }else{
+          const pauseNote = document.createElement("span");
+          pauseNote.textContent = "الإيقاف المؤقت غير مدعوم لهذا المصدر";
+          tdAction.appendChild(pauseNote);
+        }
         addTaskAction("إيقاف", "cancel", "danger");
       }else if(t.status === "paused"){
         addTaskAction("استئناف", "resume", "primary");
