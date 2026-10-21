@@ -108,13 +108,52 @@ class UniversalDownloadManager:
                     break
 
     def _ensure_packages(self) -> None:
-        """Install yt-dlp and gdown on the fly if missing in runtime."""
+        """Ensure both optional downloader backends are importable.
+
+        Some Colab sessions already have yt-dlp but not gdown. Checking only
+        yt-dlp silently skipped installation and made every Google Drive URL
+        fail later with ModuleNotFoundError. Verify both modules and surface a
+        useful error if the runtime cannot install them.
+        """
+        import importlib
         import subprocess
         import sys
-        try:
-            import yt_dlp  # noqa: F401
-        except ImportError:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "yt-dlp", "gdown"], check=False)
+
+        packages = {"yt_dlp": "yt-dlp", "gdown": "gdown"}
+        missing = []
+        for module_name in packages:
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                missing.append(packages[module_name])
+
+        if missing:
+            proc = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", *missing],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()[-500:]
+                raise RuntimeError(
+                    "تعذر تثبيت مكونات التحميل المطلوبة "
+                    f"({', '.join(missing)}). "
+                    f"{detail or 'تحقق من اتصال الإنترنت ثم أعد المحاولة.'}"
+                )
+
+        importlib.invalidate_caches()
+        still_missing = []
+        for module_name, package_name in packages.items():
+            try:
+                importlib.import_module(module_name)
+            except ImportError:
+                still_missing.append(package_name)
+        if still_missing:
+            raise RuntimeError(
+                "تمت محاولة تثبيت مكونات التحميل لكنها ما زالت غير متاحة: "
+                + ", ".join(still_missing)
+            )
 
     def _run_task(self, task_id: str, url: str, quality: str, folder_id: str) -> None:
         work_dir = Path(TEMP_DIR) / "universal_dl" / task_id

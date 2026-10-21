@@ -104,6 +104,10 @@ jobs:
           names = zipfile.ZipFile("teledrive_v4.5.zip").namelist()
           assert "teledrive-v4.5/requirements.lock" in names
           assert "teledrive-v4.5/teledrive/web_dashboard.py" in names
+          # Guard against publishing a notebook ZIP that silently omits the
+          # Universal Downloader module while the dashboard still renders.
+          assert "teledrive-v4.5/teledrive/universal_downloader.py" in names
+          assert "teledrive-v4.5/requirements.lock" in names
           assert any(name.startswith("teledrive-v4.5/") for name in names)
           print("archive layout verified")
           PY
