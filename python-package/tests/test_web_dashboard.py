@@ -80,6 +80,25 @@ def test_dashboard_header_scrolls_away_and_mobile_navigation_remains_fixed():
     assert ".mobile-tabs{position:fixed;inset-inline:0;bottom:0;" in HTML_PAGE
 
 
+def test_header_keeps_only_live_status_and_moves_controls_to_options_drawer():
+    """Keep the top bar compact; theme, refresh and build details belong in
+    the shared options drawer on both desktop and mobile."""
+    header = HTML_PAGE.split('<header class="app-header">', 1)[1].split("</header>", 1)[0]
+    drawer = HTML_PAGE.split('<div class="mobile-drawer" id="mobileMoreDrawer"', 1)[1].split("</div>\n\n  <section", 1)[0]
+    assert 'id="syncClock"' in header
+    assert 'id="btnHeaderMenu"' in header
+    assert 'id="btnRefreshMetrics"' not in header
+    assert 'id="buildInfo"' not in header
+    assert 'data-theme-choice="dim"' not in header
+    assert 'id="btnRefreshMetrics"' in drawer
+    assert 'id="buildInfo"' in drawer
+    assert 'data-theme-choice="dim"' in drawer
+    assert '$("btnHeaderMenu").addEventListener("click"' in HTML_PAGE
+    assert 'function openMoreDrawer(triggerId)' in HTML_PAGE
+    assert ".mobile-drawer{position:fixed;inset:0;" in HTML_PAGE
+    assert ".drawer-panel{position:relative;width:min(100%,620px);" in HTML_PAGE
+
+
 def test_page_is_self_contained_and_polls_relative_metrics():
     assert "api/metrics" in HTML_PAGE
     assert "configurePolling(1000)" in HTML_PAGE
