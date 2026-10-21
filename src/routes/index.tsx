@@ -97,8 +97,8 @@ function Index() {
         <section className="mb-8 rounded-lg border border-primary/30 bg-primary/5 p-6">
           <h2 className="mb-2 text-lg font-semibold">عندك جلسة Colab شغالة بالفعل؟</h2>
           <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
-            افتح لوحة التحكم من الموقع واربطها برابط ورمز سري صادرين من جلسة Colab الخاصة بك،
-            واتصل مباشرة ببيئتك من غير تخزين الرمز على خادم الموقع.
+            افتح لوحة التحكم من الموقع واربطها برابط ورمز سري صادرين من جلسة Colab الخاصة بك، واتصل
+            مباشرة ببيئتك من غير تخزين الرمز على خادم الموقع.
           </p>
           <a
             href="/connect"
