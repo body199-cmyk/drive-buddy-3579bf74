@@ -156,6 +156,61 @@ class UniversalDownloadManager:
             folder_id = str(task.get("folder_id") or "")
         return self.start_download(url=url, quality=quality, folder_id=folder_id)
 
+    def bulk_action(self, action: str) -> dict[str, Any]:
+        """Apply real per-task actions to all eligible universal-download tasks."""
+        allowed = {"pause", "resume", "cancel", "retry_failed"}
+        if action not in allowed:
+            return {"ok": False, "message": "أمر جماعي غير معروف."}
+
+        with self._lock:
+            if action == "pause":
+                ids = [
+                    str(t.get("id")) for t in self._tasks
+                    if t.get("status") in {"queued", "downloading"}
+                    and t.get("pause_supported", False)
+                ]
+            elif action == "resume":
+                ids = [str(t.get("id")) for t in self._tasks if t.get("status") == "paused"]
+            elif action == "cancel":
+                ids = [
+                    str(t.get("id")) for t in self._tasks
+                    if t.get("status") in {"queued", "downloading", "paused"}
+                ]
+            else:
+                ids = [
+                    str(t.get("id")) for t in self._tasks
+                    if t.get("status") in {"failed", "cancelled"}
+                ]
+
+        if not ids:
+            messages = {
+                "pause": "لا توجد مهام تنزيل تدعم الإيقاف المؤقت حاليًا.",
+                "resume": "لا توجد مهام متوقفة مؤقتًا للاستئناف.",
+                "cancel": "لا توجد مهام قابلة للإيقاف حاليًا.",
+                "retry_failed": "لا توجد مهام فاشلة أو ملغاة لإعادة المحاولة.",
+            }
+            return {"ok": False, "succeeded": 0, "failed": 0, "message": messages[action]}
+
+        handlers = {
+            "pause": self.pause_task,
+            "resume": self.resume_task,
+            "cancel": self.cancel_task,
+            "retry_failed": self.retry_task,
+        }
+        results = [handlers[action](task_id) for task_id in ids]
+        succeeded = sum(1 for result in results if result.get("ok"))
+        failed = len(results) - succeeded
+        if action == "retry_failed":
+            label = "إعادة المحاولة"
+        else:
+            label = {"pause": "الإيقاف المؤقت", "resume": "الاستئناف", "cancel": "الإيقاف"}[action]
+        return {
+            "ok": succeeded > 0,
+            "succeeded": succeeded,
+            "failed": failed,
+            "message": f"{label}: نجح الأمر لـ {succeeded} مهمة، وتعذر لـ {failed} مهمة.",
+        }
+
     def _wait_if_paused(self, task_id: str) -> None:
         """Block cooperative backends while paused; cancellation always wakes them."""
         while True:
