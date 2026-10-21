@@ -146,7 +146,29 @@ def _pkg_runtime_refusal_reason():
 
 
 def _pkg_fetch(url, timeout=30):
-    request = urllib.request.Request(url, headers={"User-Agent": "teledrive-update-check"})
+    # GitHub release assets are replaced IN PLACE under the stable tag. Some
+    # Colab/mobile/CDN paths cache old bytes for that unchanged URL, making a
+    # correct publication appear stale. A unique query parameter and explicit
+    # no-cache headers force each request to revalidate manifests and ZIPs.
+    # Manifest validation still checks the canonical archive_url and the
+    # downloaded bytes against the manifest size and SHA-256.
+    import time
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    query.append(("_td_cache_bust", str(time.time_ns())))
+    fresh_url = urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
+    )
+    request = urllib.request.Request(
+        fresh_url,
+        headers={
+            "User-Agent": "teledrive-update-check",
+            "Cache-Control": "no-cache, no-store, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
     return urllib.request.urlopen(request, timeout=timeout)  # caller closes
 
 
