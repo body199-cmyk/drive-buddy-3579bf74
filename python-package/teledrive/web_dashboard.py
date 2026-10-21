@@ -51,6 +51,8 @@ fallback — never depends on them. They are pinned in
 """
 from __future__ import annotations
 
+import html
+
 import json
 import socket
 import threading
