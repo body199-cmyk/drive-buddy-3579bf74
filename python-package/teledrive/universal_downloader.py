@@ -186,6 +186,8 @@ class UniversalDownloadManager:
         work_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._update(task_id, status="downloading", status_ar="جاري التحضير والتحميل...", progress=2.0)
+            if self._is_cancelled(task_id):
+                raise RuntimeError("cancelled")
             self._ensure_packages()
             if self._is_cancelled(task_id):
                 raise RuntimeError("cancelled")
@@ -255,6 +257,7 @@ class UniversalDownloadManager:
                 status="completed",
                 status_ar="✅ اكتمل الحفظ في Drive",
                 progress=100.0,
+                speed_bps=0.0,
                 drive_file_id=last_drive_id,
             )
             _log.info("universal download completed task=%s files=%d", task_id, total_files)
