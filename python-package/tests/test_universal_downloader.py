@@ -51,3 +51,52 @@ def test_ensure_packages_reports_failed_install(monkeypatch):
 
     with pytest.raises(RuntimeError, match="network unavailable"):
         UniversalDownloadManager(ctx=None)._ensure_packages()
+
+
+def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_path):
+    import yt_dlp
+
+    attempts = []
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            attempts.append(dict(options))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            if len(attempts) == 1:
+                raise yt_dlp.utils.DownloadError(
+                    "Sign in to confirm you're not a bot"
+                )
+            (tmp_path / "sample.mp4").write_bytes(b"video")
+
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
+
+    files = manager._download_to_dir(
+        "test-task",
+        "https://www.youtube.com/watch?v=NynTjmmYIlg",
+        "best",
+        tmp_path,
+    )
+
+    assert len(attempts) == 2
+    assert "extractor_args" not in attempts[0]
+    assert attempts[1]["extractor_args"]["youtube"]["player_client"] == [
+        "tv",
+        "web_safari",
+    ]
+    assert [path.name for path in files] == ["sample.mp4"]
+
+
+def test_youtube_sleep_option_uses_yt_dlp_python_api_name():
+    # Protect against a silently ignored option typo.
+    source = UniversalDownloadManager._download_to_dir.__code__.co_names
+    assert "sleep_interval_requests" in source
