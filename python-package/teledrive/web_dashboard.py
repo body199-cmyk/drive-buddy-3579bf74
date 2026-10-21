@@ -828,6 +828,10 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <div class="queue-toolbar">
         <h3 style="margin:0">⚡ مهام التحميل الخارجي (<span id="udlCount">0</span>)</h3>
         <span style="flex:1"></span>
+        <button class="alt small" id="btnUdlPauseAll" type="button">⏸ إيقاف مؤقت للكل</button>
+        <button class="alt small" id="btnUdlResumeAll" type="button">▶ استئناف الكل</button>
+        <button class="danger small" id="btnUdlCancelAll" type="button">⏹ إيقاف الكل</button>
+        <button class="alt small" id="btnUdlRetryFailed" type="button">🔁 إعادة محاولة الفاشل</button>
         <button class="alt small" id="btnUdlRefresh" type="button">🔄 تحديث</button>
         <button class="alt small" id="btnUdlClear" type="button">🧹 مسح المكتمل</button>
       </div>
@@ -1819,6 +1823,10 @@ $("qBody").addEventListener("click",function(event){
   const btnPaste = $("btnUdlPaste");
   const btnRefresh = $("btnUdlRefresh");
   const btnClear = $("btnUdlClear");
+  const btnPauseAll = $("btnUdlPauseAll");
+  const btnResumeAll = $("btnUdlResumeAll");
+  const btnCancelAll = $("btnUdlCancelAll");
+  const btnRetryFailed = $("btnUdlRetryFailed");
   const urlIn = $("udlUrlIn");
   const qualIn = $("udlQualityIn");
   const msgEl = $("udlMsg");
@@ -1869,34 +1877,54 @@ $("qBody").addEventListener("click",function(event){
       const tdFolder = document.createElement("td");
       tdFolder.textContent = t.folder_name || "Drive";
       const tdAction = document.createElement("td");
-      if(t.status === "queued" || t.status === "downloading"){
-        const cancelBtn = document.createElement("button");
-        cancelBtn.type = "button";
-        cancelBtn.className = "danger small";
-        cancelBtn.textContent = "إلغاء";
-        cancelBtn.setAttribute("aria-label", "إلغاء مهمة التحميل");
-        cancelBtn.addEventListener("click", async function(){
-          cancelBtn.disabled = true;
+      function addTaskAction(label, action, className){
+        const actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.className = (className || "small") + " small";
+        actionBtn.textContent = label;
+        actionBtn.addEventListener("click", async function(){
+          actionBtn.disabled = true;
           try{
-            const response = await fetch("api/universal/cancel", {
+            const response = await fetch("api/universal/" + action, {
               method: "POST",
               headers: {"Content-Type": "application/json"},
               body: JSON.stringify({id: t.id})
             });
             const result = await response.json();
             if(msgEl){
-              msgEl.textContent = (result && result.message) || "تم إرسال طلب الإلغاء.";
+              msgEl.textContent = (result && result.message) || "تم إرسال الأمر.";
               msgEl.className = result && result.ok ? "msg ok" : "msg err";
             }
           }catch(_e){
-            if(msgEl){ msgEl.textContent = "تعذر إرسال طلب الإلغاء."; msgEl.className = "msg err"; }
+            if(msgEl){ msgEl.textContent = "تعذر الاتصال بمحرك التحميل لتنفيذ الأمر."; msgEl.className = "msg err"; }
           }finally{
             fetchUdlTasks();
           }
         });
-        tdAction.appendChild(cancelBtn);
+        tdAction.appendChild(actionBtn);
+      }
+      if(t.status === "queued" || t.status === "downloading"){
+        if(t.pause_supported){
+          addTaskAction("إيقاف مؤقت", "pause", "secondary");
+        }else{
+          const pauseNote = document.createElement("span");
+          pauseNote.textContent = "الإيقاف المؤقت غير مدعوم لهذا المصدر";
+          tdAction.appendChild(pauseNote);
+        }
+        addTaskAction("إيقاف", "cancel", "danger");
+      }else if(t.status === "paused"){
+        addTaskAction("استئناف", "resume", "primary");
+        addTaskAction("إيقاف", "cancel", "danger");
+      }else if(t.status === "failed" || t.status === "cancelled"){
+        addTaskAction("إعادة المحاولة", "retry", "primary");
+      }else if(t.status === "uploading"){
+        tdAction.textContent = "جاري الرفع إلى Drive؛ الإيقاف غير مدعوم بأمان أثناء هذه المرحلة";
+      }else if(t.status === "completed"){
+        tdAction.textContent = "اكتمل";
+      }else if(!t.pause_supported && (t.status === "queued" || t.status === "downloading")){
+        tdAction.textContent = "الإيقاف المؤقت غير مدعوم لهذا النوع";
       }else{
-        tdAction.textContent = t.status === "uploading" ? "الرفع بدأ؛ لا يمكن إلغاؤه بأمان" : "—";
+        tdAction.textContent = "—";
       }
       tr.append(tdTitle, tdQual, tdStatus, tdProg, tdSpeed, tdFolder, tdAction);
       bodyEl.appendChild(tr);
@@ -1965,6 +1993,33 @@ $("qBody").addEventListener("click",function(event){
     });
   }
 
+  async function runBulkAction(action, button){
+    if(button) button.disabled = true;
+    try{
+      const r = await fetch("api/universal/bulk", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action: action})
+      });
+      const d = await r.json();
+      if(msgEl){
+        msgEl.textContent = (d && d.message) || "تم إرسال الأمر الجماعي.";
+        msgEl.className = d && d.ok ? "msg ok" : "msg err";
+      }
+    }catch(_e){
+      if(msgEl){msgEl.textContent="تعذر الاتصال بمحرك التحميل لتنفيذ الأمر الجماعي.";msgEl.className="msg err";}
+    }finally{
+      if(button) button.disabled = false;
+      fetchUdlTasks();
+    }
+  }
+
+  if(btnPauseAll) btnPauseAll.addEventListener("click", function(){runBulkAction("pause", this);});
+  if(btnResumeAll) btnResumeAll.addEventListener("click", function(){runBulkAction("resume", this);});
+  if(btnCancelAll) btnCancelAll.addEventListener("click", function(){
+    if(window.confirm("سيتم طلب إيقاف كل مهام التنزيل النشطة. هل تريد المتابعة؟")) runBulkAction("cancel", this);
+  });
+  if(btnRetryFailed) btnRetryFailed.addEventListener("click", function(){runBulkAction("retry_failed", this);});
   if(btnRefresh) btnRefresh.addEventListener("click", fetchUdlTasks);
   if(btnClear){
     btnClear.addEventListener("click", async function(){
@@ -2078,6 +2133,34 @@ def create_web_app(ctx: Any):
         mgr = get_universal_downloader(ctx)
         task_id = str((payload or {}).get("id") or "")
         return JSONResponse(mgr.cancel_task(task_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/pause")
+    def api_universal_pause(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        task_id = str((payload or {}).get("id") or "")
+        return JSONResponse(mgr.pause_task(task_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/resume")
+    def api_universal_resume(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        task_id = str((payload or {}).get("id") or "")
+        return JSONResponse(mgr.resume_task(task_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/retry")
+    def api_universal_retry(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        task_id = str((payload or {}).get("id") or "")
+        return JSONResponse(mgr.retry_task(task_id), headers=_NO_STORE)
+
+    @app.post("/api/universal/bulk")
+    def api_universal_bulk(payload: dict):
+        from .universal_downloader import get_universal_downloader
+        mgr = get_universal_downloader(ctx)
+        action = str((payload or {}).get("action") or "")
+        return JSONResponse(mgr.bulk_action(action), headers=_NO_STORE)
 
     @app.post("/api/universal/clear")
     def api_universal_clear():

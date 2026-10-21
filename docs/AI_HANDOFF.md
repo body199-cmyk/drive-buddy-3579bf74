@@ -1,3 +1,19 @@
+# بطاقة تسليم M52-T02 — أدوات التحكم في التنزيل الخارجي (2026-10-21)
+
+| الحقل | القيمة |
+|---|---|
+| الحالة | **Implemented on branch; CI / PR / merge / release / live Colab test pending** |
+| الفرع | `fix/universal-downloader-controls` |
+| الملفات الأساسية | `python-package/teledrive/universal_downloader.py`, `python-package/teledrive/web_dashboard.py`, `python-package/tests/test_universal_downloader_controls.py` |
+| التقرير | `docs/PHASE_REPORTS/PHASE_M52_T02_UNIVERSAL_DOWNLOAD_CONTROLS.md` |
+| المقارنة | Telegram queue had per-item pause/resume/stop/retry actions; Universal URL Downloader only had start/cancel. These are separate engines, so web URL controls now call UniversalDownloadManager, not Telegram QueueManager. |
+| التنفيذ | Added cooperative pause/resume gates for yt-dlp and direct HTTP, real cancel that wakes paused tasks, and retry creating a new task from saved URL/quality/Drive folder. New API routes: `/api/universal/pause`, `resume`, `retry`; existing cancel retained. |
+| حدود مهمة | `gdown` blocking calls do not safely support pause; `pause_supported=false` prevents a fake pause button. Drive upload is not forcibly interrupted. Retry is a fresh task, not byte-level resume. |
+| التحقق | Tests added on branch; no CI result claimed until Actions completes. No live Colab/Drive transfer test yet. |
+| التالي | Run CI; fix failures; merge only after gates pass; regenerate Colab notebooks via `notebook_cells.py`; publish package; perform live Colab test before declaring fully complete. |
+
+---
+
 # بطاقة تسليم M52-T01 — بوابة TeleDrive العامة عبر Vercel (2026-10-21)
 
 | الحقل | القيمة |
