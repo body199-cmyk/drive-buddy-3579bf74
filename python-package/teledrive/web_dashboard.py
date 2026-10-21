@@ -2088,11 +2088,25 @@ def create_web_app(ctx: Any):
     async def require_runtime_capability(request: Request, call_next):
         path = request.url.path
         if path.startswith("/api/") and request.method != "OPTIONS":
-            # Same-origin browser requests are protected by the user's Colab
-            # session/proxy. Cross-origin portal calls and non-browser clients
-            # must prove possession of the per-runtime pairing capability.
-            same_origin_browser = request.headers.get("sec-fetch-site") == "same-origin"
-            if not same_origin_browser:
+            # The one-time handoff exchange validates its short-lived capability
+            # inside the endpoint; all other public-tunnel API calls need bearer auth.
+            if path == "/api/pairing/exchange":
+                return await call_next(request)
+
+            # Only the official Colab proxy may use the same-origin UI shortcut.
+            # A public trycloudflare.com URL is not trusted just because someone
+            # opened the tunnel's own HTML page in their browser.
+            request_host = (request.url.hostname or "").lower()
+            trusted_colab_proxy = (
+                request_host.endswith(".googleusercontent.com")
+                or request_host.endswith(".colab.google")
+                or request_host.endswith(".prod.colab.dev")
+            )
+            same_origin_colab_ui = (
+                trusted_colab_proxy
+                and request.headers.get("sec-fetch-site") == "same-origin"
+            )
+            if not same_origin_colab_ui:
                 authorization = request.headers.get("authorization", "")
                 supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
                 active_token = str(getattr(ctx, "remote_control_token", "") or "")
@@ -2128,6 +2142,34 @@ def create_web_app(ctx: Any):
         page = page.replace("__GRADIO_URL__", gradio_url)
         page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
         return HTMLResponse(page)
+
+    @app.post("/api/pairing/exchange")
+    def api_exchange_handoff(payload: dict):
+        # Exchange a random, short-lived, single-use token created by the current
+        # Colab runtime. The long-lived runtime capability is not placed in the
+        # notebook's handoff URL/output.
+        handoff_token = str((payload or {}).get("handoff_token") or "")
+        handoffs = getattr(ctx, "remote_handoff_tokens", {})
+        expiry = float(handoffs.pop(handoff_token, 0) or 0) if handoff_token else 0
+        setattr(ctx, "remote_handoff_tokens", handoffs)
+        if not handoff_token or expiry <= time.time():
+            return JSONResponse(
+                {"ok": False, "message": "Handoff link expired or already used. Run the Colab handoff cell again."},
+                status_code=401,
+                headers=_NO_STORE,
+            )
+        active_token = str(getattr(ctx, "remote_control_token", "") or "")
+        active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+        if not active_token or active_expiry <= time.time():
+            return JSONResponse(
+                {"ok": False, "message": "Runtime pairing token expired. Restart the Colab runtime."},
+                status_code=401,
+                headers=_NO_STORE,
+            )
+        return JSONResponse(
+            {"ok": True, "token": active_token, "expires_at": active_expiry},
+            headers=_NO_STORE,
+        )
 
     @app.post("/api/pairing/revoke")
     def api_revoke_pairing():
