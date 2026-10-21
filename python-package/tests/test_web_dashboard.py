@@ -78,6 +78,17 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
         assert preflight.status_code == 200
         assert preflight.headers.get("access-control-allow-origin") == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
         assert preflight.headers.get("access-control-allow-credentials") == "true"
+
+        previous_token = ctx.remote_control_token
+        revoked = client.post("/api/pairing/revoke", json={})
+        assert revoked.status_code == 200
+        assert revoked.json()["ok"] is True
+        assert ctx.remote_control_token != previous_token
+        rejected_after_revoke = client.get(
+            "/api/health",
+            headers={"Authorization": f"Bearer {previous_token}"},
+        )
+        assert rejected_after_revoke.status_code == 401
     finally:
         client.close()
 
