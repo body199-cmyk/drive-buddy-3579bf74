@@ -499,6 +499,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <button class="mobile-tab is-active" type="button" data-section-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span>الرئيسية</span></button>
     <button class="mobile-tab" type="button" data-section-target="destination"><span class="nav-icon" aria-hidden="true">▣</span><span>الوجهة</span></button>
     <button class="mobile-tab" type="button" data-section-target="analyze"><span class="nav-icon" aria-hidden="true">⌕</span><span>تحليل</span></button>
+    <button class="mobile-tab" type="button" data-section-target="universal"><span class="nav-icon" aria-hidden="true">🌐</span><span>تحميل شامل</span></button>
     <button class="mobile-tab" type="button" data-section-target="results"><span class="nav-icon" aria-hidden="true">☷</span><span>النتائج</span></button>
     <button class="mobile-tab" type="button" data-section-target="transfer"><span class="nav-icon" aria-hidden="true">⇄</span><span>الطابور</span></button>
     <button class="mobile-tab" id="btnMobileMore" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobileMoreDrawer"><span class="nav-icon" aria-hidden="true">⋯</span><span>المزيد</span></button>
@@ -708,7 +709,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   </section>
 
 
-  <section class="card step-card tab-panel" id="universal" data-tab-panel="universal" hidden aria-labelledby="universalTitle">
+  <section class="card step-card tab-panel" id="universal" data-tab-panel="universal" aria-labelledby="universalTitle">
     <div class="section-head">
       <span class="step-badge">🌐</span>
       <div>
