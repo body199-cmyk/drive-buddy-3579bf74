@@ -82,6 +82,9 @@ jobs:
           pip install -r requirements.lock
           pip install pytest
 
+      - name: Regenerate notebook artifacts before release gates
+        run: python -m teledrive.notebook_cells --write
+
       - name: Run constitution gates
         run: |
           set -euo pipefail
