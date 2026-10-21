@@ -223,7 +223,7 @@ def test_page_has_three_themes_clear_workflow_and_independent_panes():
     assert '--card:rgba(67,71,77,.98)' in HTML_PAGE  # lighter grey cards
     assert '--blue:#58a6ff' in HTML_PAGE  # readable blue action colour
     assert 'رمادي متوسط بين الأسود والأبيض' in HTML_PAGE
-    assert '#universal .analyze-main{grid-template-columns:minmax(0,1fr)!important}' in HTML_PAGE
+    assert '#universal .analyze-main{grid-template-columns:minmax(0,1fr)!important;gap:10px}' in HTML_PAGE
     assert '#universal .queue-pane table{min-width:700px;font-size:12px}' in HTML_PAGE
     assert 'const THEMES=["light","dim","dark"]' in HTML_PAGE
     assert "function saveTheme" in HTML_PAGE
