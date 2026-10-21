@@ -2064,10 +2064,14 @@ def create_web_app(ctx: Any):
     # One random capability per Colab runtime. It is never stored on Vercel;
     # the user explicitly copies it from their own runtime output to pair a tab.
     runtime_token = str(getattr(ctx, "remote_control_token", "") or "")
-    if not runtime_token:
+    token_expires_at = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+    if not runtime_token or token_expires_at <= time.time():
         runtime_token = secrets.token_urlsafe(32)
+        token_expires_at = time.time() + (8 * 60 * 60)
         setattr(ctx, "remote_control_token", runtime_token)
+        setattr(ctx, "remote_control_token_expires_at", token_expires_at)
     app.state.remote_control_token = runtime_token
+    app.state.remote_control_token_expires_at = token_expires_at
 
     # Browser CORS is only a convenience gate; the random bearer token is the
     # actual authorization. Never use wildcard origins or allow credentials.
@@ -2091,6 +2095,12 @@ def create_web_app(ctx: Any):
             if not same_origin_browser:
                 authorization = request.headers.get("authorization", "")
                 supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+                if time.time() >= token_expires_at:
+                    return JSONResponse(
+                        {"ok": False, "status": "unauthorized", "message": "Runtime pairing token expired; restart the Colab runtime to pair again"},
+                        status_code=401,
+                        headers=_NO_STORE,
+                    )
                 if not supplied or not hmac.compare_digest(supplied, runtime_token):
                     return JSONResponse(
                         {"ok": False, "status": "unauthorized", "message": "Invalid or missing runtime pairing token"},
@@ -2218,6 +2228,9 @@ def create_web_app(ctx: Any):
 
         authorization = ws.headers.get("authorization", "")
         supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        if time.time() >= token_expires_at:
+            await ws.close(code=4401, reason="Runtime pairing token expired")
+            return
         if not supplied or not hmac.compare_digest(supplied, runtime_token):
             await ws.close(code=4401, reason="Runtime pairing token required")
             return
@@ -2390,7 +2403,7 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
     # Print a per-runtime pairing secret only in the user's own Colab output.
     # Anyone with this token and the runtime URL can control that runtime:
     # do not share it, and disconnect/restart the runtime to rotate it.
-    print("TeleDrive pairing token (private; paste into your own portal tab):", getattr(ctx, "remote_control_token", ""))
+    print("TeleDrive pairing token (private; expires in 8 hours; paste into your own portal tab):", getattr(ctx, "remote_control_token", ""))
     if is_colab():
         proxy_url = colab_proxy_url(actual_port)
         if proxy_url:
