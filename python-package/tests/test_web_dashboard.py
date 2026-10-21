@@ -76,8 +76,25 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
             },
         )
         assert preflight.status_code == 200
-        assert preflight.headers.get("access-control-allow-origin") == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
+        assert (
+            preflight.headers.get("access-control-allow-origin")
+            == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
+        )
         assert preflight.headers.get("access-control-allow-credentials") == "true"
+
+        production_preflight = client.options(
+            "/api/action",
+            headers={
+                "Origin": "https://teledrive-abdullah-74f3.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert production_preflight.status_code == 200
+        assert (
+            production_preflight.headers.get("access-control-allow-origin")
+            == "https://teledrive-abdullah-74f3.vercel.app"
+        )
 
         previous_token = ctx.remote_control_token
         revoked = client.post("/api/pairing/revoke", json={})
