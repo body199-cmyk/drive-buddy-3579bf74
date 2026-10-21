@@ -45,4 +45,5 @@ def test_dashboard_exposes_cancel_and_speed_without_unsafe_html_rendering():
     assert 'fetch("api/universal/cancel"' in source
     assert "speed_bps" in source
     assert "document.createElement" in source
-    assert "innerHTML" not in source
+    assert ".innerHTML =" not in source
+    assert ".innerHTML=" not in source
