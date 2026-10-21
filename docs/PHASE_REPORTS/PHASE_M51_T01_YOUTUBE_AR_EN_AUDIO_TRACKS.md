@@ -1,8 +1,10 @@
 # M51-T01 — YouTube Arabic + English audio tracks
 
 **Date:** 2026-10-21  
-**Status:** Implemented on branch; PR/CI and real YouTube validation pending.  
-**Branch:** `feature/youtube-ar-en-audio-tracks`
+**Status:** Merged to main; CI passed; live YouTube/Colab validation and a release containing this commit are still pending.  
+**PR:** [#123](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/123) (merged)  
+**Merge commit:** `325848978f1f4def008df8210bc6ca15284626ca`  
+**CI:** [Run #39624150025](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39624150025) passed Python package/tests + Colab contract checks, archive build, and frontend lint/build.
 
 ## Requirement
 
@@ -20,17 +22,16 @@ When downloading a YouTube video through the Universal Downloader, keep Arabic a
 ## Evidence and limits
 
 - The implementation follows yt-dlp's multi-audio format-selection and merge options; multiple audio streams require a compatible container and FFmpeg.
-- Automated tests have been added, but have **not yet been run in this task**. The PR CI result must be checked before calling the code test-passed.
+- Automated tests and package checks passed in CI run #39624150025. The frontend lint/build also passed. This is CI evidence only, not live runtime verification.
 - No real YouTube video has been downloaded with this change, and no Colab/Google Drive runtime test has been performed.
 - Some videos may not expose audio language metadata consistently, and not every YouTube video offers both Arabic and English tracks. In those cases the selector falls back rather than intentionally failing the download.
 - Switching tracks after download depends on the playback app supporting multiple MKV audio tracks. VLC is a common option; some gallery players may only play the default track.
 
 ## Next steps
 
-1. Review the diff and ensure the selector works with current yt-dlp format syntax.
-2. Run the existing Python test suite and package/CI checks.
-3. After merge and release publication, test a public YouTube video known to have Arabic and English tracks in Colab; verify both tracks are listed in the resulting MKV and can be switched in a player.
-4. Update the handoff with the actual CI result and separately record live validation. Do not claim Colab or real-video success from unit tests alone.
+1. After publishing a new package/release containing merge commit `325848978f1f4def008df8210bc6ca15284626ca`, verify the release ZIP + manifest/hash/commit so Colab will not use a stale package.
+2. Test a public YouTube video known to expose Arabic and English tracks in Colab; verify both streams exist in the resulting MKV and can be switched in a compatible player.
+3. Update the handoff with the actual release and live-test evidence. Do not claim Colab or real-video success from unit tests alone.
 
 ## Rollback
 
