@@ -709,7 +709,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   </section>
 
 
-  <section class="card step-card tab-panel" id="universal" data-tab-panel="universal" aria-labelledby="universalTitle">
+  <section class="card step-card tab-panel" id="universal" data-tab-panel="universal" hidden aria-labelledby="universalTitle">
     <div class="section-head">
       <span class="step-badge">🌐</span>
       <div>
