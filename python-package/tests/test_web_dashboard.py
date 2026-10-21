@@ -81,6 +81,26 @@ def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflig
         client.close()
 
 
+def test_pairing_token_from_runtime_a_cannot_authorize_runtime_b():
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app_a = create_web_app(SimpleNamespace())
+    app_b = create_web_app(SimpleNamespace())
+    token_a = app_a.state.remote_control_token
+    token_b = app_b.state.remote_control_token
+    assert token_a != token_b
+
+    with TestClient(app_b) as client_b:
+        response = client_b.get(
+            "/api/health",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+    assert response.status_code == 401
+    assert response.json()["status"] == "unauthorized"
+
+
 def test_module_imports_without_web_framework_at_top_level():
     # FastAPI/uvicorn are lazy: the classic Gradio fallback must never
     # break just because the modern stack is absent.
