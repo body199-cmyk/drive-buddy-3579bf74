@@ -52,6 +52,8 @@ fallback — never depends on them. They are pinned in
 from __future__ import annotations
 
 import html
+import hashlib
+from pathlib import Path
 
 import json
 import socket
@@ -66,6 +68,13 @@ from .logging_config import get_logger
 from .redaction import redact
 
 _log = get_logger("teledrive.web_dashboard")
+
+# Fingerprint the actual dashboard module loaded by this runtime. Unlike a
+# marketing version label, this changes whenever the shipped dashboard code changes.
+try:
+    DASHBOARD_BUILD_ID = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:12]
+except OSError:  # pragma: no cover - defensive fallback for unusual loaders
+    DASHBOARD_BUILD_ID = "unavailable"
 
 #: Fixed port for the Modern Web Dashboard. Distinct from Gradio's 7860
 #: so ``Run_Both_Together`` can serve both UIs from the one runtime.
@@ -162,6 +171,7 @@ class TeleDriveWebBridge:
         return {
             "ok": True,
             "version": __version__,
+            "build_id": DASHBOARD_BUILD_ID,
             "server_time": time.strftime("%H:%M:%S"),
             "engine": str(queue.get("status") or ""),
             "is_running": bool(getattr(self.ctx.queue_manager, "running", lambda: False)()),
@@ -429,6 +439,11 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .stats-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
 @media(max-width:720px){
+  .app-header{align-items:flex-start;gap:9px}
+  .brand-block{min-width:0;flex-basis:100%}
+  .header-actions{width:100%;gap:6px}
+  .header-actions .pill{font-size:11px;padding:6px 8px}
+  .build-pill{white-space:normal;overflow-wrap:anywhere;max-width:100%}
   html{scroll-padding-top:100px}
   .wrap{padding:10px 9px 100px}
   .app-header{top:6px;padding:10px}
@@ -492,6 +507,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
         <button type="button" data-theme-choice="dark" aria-pressed="false" title="المظهر الداكن الكامل"><span class="theme-swatch sw-dark"></span><span class="theme-name">داكن</span></button>
       </div>
       <button class="alt" id="btnRefreshMetrics" type="button">🔄 تحديث الآن</button>
+      <div class="pill build-pill" id="buildInfo" title="بصمة كود الواجهة المحمّل">الإصدار: جارٍ التحقق…</div>
       <div class="pill" id="syncClock">⏳ الاتصال…</div>
     </div>
   </header>
@@ -1224,6 +1240,7 @@ function updateWorkflow(state,data){
 }
 function applyData(data){
   if(!data) return;
+  setText("buildInfo","الإصدار "+(data.version||"؟")+" • Build "+(data.build_id||"غير معروف"));
   setText("syncClock","🟢 متصل لحظياً • "+(data.server_time||""));
   setText("mState", data.is_running ? "🔥 يعمل" : (data.engine || "جاهز"));
   setText("mSpeed", data.total_speed_mbps || 0);
