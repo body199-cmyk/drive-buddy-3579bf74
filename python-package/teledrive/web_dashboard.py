@@ -300,7 +300,7 @@ body.drawer-open{overflow:hidden}
 .wrap{width:100%;max-width:1280px;margin:0 auto;padding:14px 16px 44px}
 .tab-panel[hidden]{display:none!important}
 .mobile-tabs,.mobile-drawer{display:none}
-.app-header{position:sticky;top:10px;z-index:40;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+.app-header{position:static;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
   margin:2px 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:18px;background:var(--header-bg);
   box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .brand-block{min-width:min(100%,330px);flex:1 1 330px}
@@ -486,7 +486,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .build-pill{white-space:normal;overflow-wrap:anywhere;max-width:100%}
   html{scroll-padding-top:100px}
   .wrap{padding:10px 9px 100px}
-  .app-header{top:6px;padding:10px}
+  .app-header{padding:10px}
   .header-actions{justify-content:flex-start}
   h1{font-size:18px}
   .analyze-main{grid-template-columns:1fr}
