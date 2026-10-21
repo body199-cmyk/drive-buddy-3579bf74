@@ -28,8 +28,9 @@ def test_ensure_packages_installs_gdown_when_yt_dlp_already_exists(monkeypatch):
     UniversalDownloadManager(ctx=None)._ensure_packages()
 
     assert len(install_calls) == 1
-    assert install_calls[0][-1] == "gdown"
-    assert "yt-dlp" not in install_calls[0]
+    assert "gdown" in install_calls[0]
+    assert "yt-dlp" in install_calls[0]
+    assert "--upgrade" in install_calls[0]
 
 
 def test_ensure_packages_reports_failed_install(monkeypatch):
