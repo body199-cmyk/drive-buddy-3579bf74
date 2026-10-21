@@ -92,6 +92,8 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
     assert len(attempts) == 2
     assert "extractor_args" not in attempts[0]
     assert attempts[0]["sleep_interval_requests"] == 1
+    assert attempts[0]["concurrent_fragment_downloads"] == 4
+    assert attempts[1]["concurrent_fragment_downloads"] == 4
     assert attempts[1]["extractor_args"]["youtube"]["player_client"] == [
         "tv",
         "web_safari",
