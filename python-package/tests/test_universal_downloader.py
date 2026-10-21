@@ -73,8 +73,10 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
                 raise yt_dlp.utils.DownloadError(
                     "Sign in to confirm you're not a bot"
                 )
-            (tmp_path / "sample.mp4").write_bytes(b"video")
+            (download_dir / "sample.mp4").write_bytes(b"video")
 
+    download_dir = tmp_path / "download"
+    download_dir.mkdir()
     manager = UniversalDownloadManager(ctx=None)
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
@@ -84,7 +86,7 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
         "test-task",
         "https://www.youtube.com/watch?v=NynTjmmYIlg",
         "best",
-        tmp_path,
+        download_dir,
     )
 
     assert len(attempts) == 2
@@ -95,4 +97,3 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
         "web_safari",
     ]
     assert [path.name for path in files] == ["sample.mp4"]
-
