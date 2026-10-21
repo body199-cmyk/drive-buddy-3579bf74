@@ -393,6 +393,10 @@ class UniversalDownloadManager:
             # client LOGIN_REQUIRED while another works. Let current yt-dlp
             # choose its supported defaults and install recommended EJS
             # dependencies through yt-dlp[default].
+            # Download HLS/DASH fragments concurrently to improve throughput
+            # when the source supports it. This is not a guarantee against
+            # source-side throttling, and a modest value avoids excess requests.
+            ydl_opts["concurrent_fragment_downloads"] = 4
             ydl_opts["sleep_interval_requests"] = 1
             ydl_opts["extractor_retries"] = 3
             ydl_opts["retries"] = 3
