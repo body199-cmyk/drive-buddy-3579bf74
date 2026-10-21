@@ -87,10 +87,11 @@ CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restor
 # and before extraction), then the archived-ZIP restore (unchanged, still the
 # sanctioned fallback), then the requirements.lock install.
 #
-# The gate is fail-closed and side-effect free on refusal:
-#   * REFUSED when any teledrive module is already imported — a loaded
-#     ApplicationContext / event loop / UI is never hot-swapped. Use
-#     Runtime > Restart runtime, then re-run Cell 1 for a clean update.
+# The gate is fail-closed and stops Cell 1 on every refusal:
+#   * no ApplicationContext / event loop / UI is ever hot-swapped;
+#   * an unverified endpoint, manifest, archive size or SHA-256 never falls
+#     through to an older local/Drive ZIP;
+#   * if modules are already loaded, restart the runtime before retrying.
 #   * the versioned manifest (release tag + commit + sha256 + size) comes
 #     from the pinned GitHub RELEASE of the canonical repo — a stable public
 #     endpoint, NOT an ephemeral Actions artifact URL;
@@ -523,7 +524,7 @@ def pkg_try_update(local_root, manifest_url=PKG_MANIFEST_URL, fetch=None,
             release, _pkg_short(manifest.get("commit")), _pkg_short(digest))
         emit(line)
         return {"outcome": "success", "release": release, "sha256": digest, "line": line}
-    except Exception as exc:  # the gate must never break the cell or the fallback
+    except Exception as exc:  # return REFUSED; Cell 1 stops before ZIP restore
         for leftover in (part_path, staging):
             if leftover is not None:
                 leftover = pathlib.Path(leftover)
