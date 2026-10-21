@@ -51,6 +51,30 @@ def test_pause_and_resume_change_the_live_task_gate_and_status():
     assert manager._resume_events[task_id].is_set()
 
 
+def test_pause_wins_race_at_download_to_upload_boundary():
+    manager, task_id, _cancel_event = _manager_with_task("downloading")
+    assert manager.pause_task(task_id)["ok"] is True
+
+    entered_upload = manager._begin_upload(task_id, status="uploading", status_ar="uploading")
+
+    assert entered_upload is False
+    assert manager._tasks[0]["status"] == "paused"
+
+    assert manager.resume_task(task_id)["ok"] is True
+    entered_upload = manager._begin_upload(task_id, status="uploading", status_ar="uploading")
+    assert entered_upload is True
+    assert manager._tasks[0]["status"] == "uploading"
+
+
+def test_clear_finished_preserves_paused_tasks():
+    manager, task_id, _cancel_event = _manager_with_task("paused")
+
+    cleared = manager.clear_finished()
+
+    assert cleared == 0
+    assert manager._tasks[0]["id"] == task_id
+
+
 def test_pause_refuses_backend_without_real_pause_support():
     manager, task_id, _cancel_event = _manager_with_task("downloading")
     manager._tasks[0]["pause_supported"] = False
