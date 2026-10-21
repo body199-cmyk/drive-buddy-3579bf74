@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from threading import Event
 from pathlib import Path
 
