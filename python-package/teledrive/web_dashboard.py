@@ -441,6 +441,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 /* Universal downloader: keep the core workflow compact on desktop and thumb-friendly on phones. */
 #universal .destination-summary{padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
 #universal .destination-summary strong{overflow-wrap:anywhere}
+#universal .url-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 9px;color:var(--muted);font-size:13px}
+#universal .url-tools button{flex:0 0 auto;min-height:40px}
 #universal .analyze-main{align-items:stretch;gap:10px}
 #universal #udlUrlIn{min-width:0;width:100%;min-height:48px}
 #universal #udlQualityIn{min-width:0;min-height:46px}
@@ -461,6 +463,8 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   #universal .destination-summary{align-items:stretch!important;gap:9px!important}
   #universal .destination-summary>div{line-height:1.7}
   #universal .destination-summary button{width:100%;min-height:42px}
+  #universal .url-tools{align-items:stretch;flex-direction:column;gap:7px;font-size:12px}
+  #universal .url-tools button{width:100%;min-height:44px}
   #universal .analyze-main{grid-template-columns:minmax(0,1fr)!important;gap:10px}
   #universal #udlUrlIn{font-size:14px;padding:12px;direction:ltr}
   #universal #udlQualityIn{width:100%;font-size:13px;white-space:normal}
@@ -780,8 +784,12 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <button class="alt small" type="button" data-section-target="destination" onclick="document.querySelector('[data-section-target=destination]').click()">تغيير مجلد الحفظ ↗</button>
     </div>
 
+    <div class="url-tools">
+      <span>الصق رابط الفيديو أو الملف هنا، ثم اختر الجودة ومجلد الحفظ.</span>
+      <button class="alt small" id="btnUdlPaste" type="button">📋 لصق من الحافظة</button>
+    </div>
     <div class="analyze-main" style="grid-template-columns:1fr auto auto">
-      <input class="ltr-input" type="url" id="udlUrlIn" dir="ltr" placeholder="https://www.youtube.com/watch?v=... أو رابط فيسبوك / منصة / ملف مباشر / Drive" aria-label="الرابط الخارجي">
+      <input class="ltr-input" type="url" id="udlUrlIn" dir="ltr" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="https://…" aria-label="الرابط الخارجي">
       <select id="udlQualityIn" aria-label="اختيار الجودة أو الصوت">
         <option value="best" selected>🎬 أعلى جودة فيديو متاحة (Best MP4)</option>
         <option value="1080p">🎬 فيديو جودة عالية (1080p Full HD)</option>
@@ -1778,6 +1786,7 @@ $("qBody").addEventListener("click",function(event){
 // --- Universal URL Downloader UI Logic ---
 (function(){
   const btnStart = $("btnUdlStart");
+  const btnPaste = $("btnUdlPaste");
   const btnRefresh = $("btnUdlRefresh");
   const btnClear = $("btnUdlClear");
   const urlIn = $("udlUrlIn");
@@ -1870,6 +1879,28 @@ $("qBody").addEventListener("click",function(event){
       const d = await r.json();
       if(d && Array.isArray(d.tasks)) renderUdlTasks(d.tasks);
     }catch(_e){}
+  }
+
+  if(btnPaste){
+    btnPaste.addEventListener("click", async function(){
+      if(!urlIn) return;
+      try{
+        if(!navigator.clipboard || typeof navigator.clipboard.readText !== "function"){
+          throw new Error("clipboard unavailable");
+        }
+        const copied = (await navigator.clipboard.readText()).trim();
+        if(!copied){
+          if(msgEl){msgEl.textContent="الحافظة فارغة؛ انسخ الرابط أولًا ثم اضغط لصق.";msgEl.className="msg err";}
+          return;
+        }
+        urlIn.value = copied;
+        urlIn.focus();
+        if(msgEl){msgEl.textContent="✅ تم لصق الرابط. اختر الجودة ثم ابدأ التحميل.";msgEl.className="msg ok";}
+      }catch(_e){
+        if(msgEl){msgEl.textContent="تعذر الوصول للحافظة من المتصفح. اضغط مطولًا داخل خانة الرابط واختر «لصق».";msgEl.className="msg err";}
+        if(urlIn) urlIn.focus();
+      }
+    });
   }
 
   if(btnStart){
