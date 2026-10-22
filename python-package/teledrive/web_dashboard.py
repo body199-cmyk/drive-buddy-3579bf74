@@ -2052,6 +2052,11 @@ def create_web_app(ctx: Any, access_token: str | None = None):
     except ImportError as exc:  # pragma: no cover - lock installs it
         raise RuntimeError(_missing_deps_message()) from exc
 
+    # With postponed annotations enabled, FastAPI resolves Request/Response/
+    # WebSocket annotations against this module's globals (not this factory's
+    # locals). Keep imports lazy while making those runtime types resolvable.
+    globals().update({"Request": Request, "Response": Response, "WebSocket": WebSocket})
+
     bridge = TeleDriveWebBridge(ctx)
     app = FastAPI(title="TeleDrive v5.0 Turbo Web Dashboard", version=__version__)
     app.state.bridge = bridge
