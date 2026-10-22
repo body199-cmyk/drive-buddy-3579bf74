@@ -524,7 +524,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 </style>
 
 </head>
-<body data-gradio-available="__GRADIO_AVAILABLE__">
+<body data-gradio-available="pending">
 <div class="app-shell">
   <aside class="sidebar" aria-label="التنقل الرئيسي">
     <div class="sidebar-brand">
@@ -1453,7 +1453,7 @@ async function queueAction(name, btn){
 // Telegram authentication remains in the secure Gradio controls. The modern
 // page can safely inspect status or sign out before switching accounts.
 const telegramLoginLink=$("telegramLoginLink");
-if(document.body.dataset.gradioAvailable!=="true"){
+if(document.body.dataset.gradioAvailable==="false"){
   telegramLoginLink.classList.add("disabled");
   telegramLoginLink.href="#";
   telegramLoginLink.setAttribute("aria-disabled","true");
@@ -2108,16 +2108,11 @@ def create_web_app(ctx: Any, access_token: str | None = None):
         theme = preferences.current_theme() if preferences is not None else "light"
         if theme not in WEB_THEMES:
             theme = "light"
-        raw_gradio_url = str(getattr(ctx, "gradio_proxy_url", "") or "").strip()
-        parsed_gradio_url = urlsplit(raw_gradio_url)
-        gradio_available = (
-            parsed_gradio_url.scheme in {"http", "https"}
-            and bool(parsed_gradio_url.netloc)
-        )
-        gradio_url = html.escape(raw_gradio_url, quote=True) if gradio_available else "#"
+        # The public shell must not disclose the private Gradio proxy URL.
+        # The owner receives it later from /api/private-config after auth.
         page = HTML_PAGE.replace("__INITIAL_THEME__", theme)
-        page = page.replace("__GRADIO_URL__", gradio_url)
-        page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
+        page = page.replace("__GRADIO_URL__", "#")
+        page = page.replace("__GRADIO_AVAILABLE__", "pending")
         # Authenticate in-memory before the dashboard's existing fetch calls run.
         # The token is carried in a URL fragment, exchanged for an HttpOnly cookie,
         # and immediately removed from browser history. Never persist it in storage.
@@ -2141,7 +2136,31 @@ def create_web_app(ctx: Any, access_token: str | None = None):
     });
   };
   ready.then(function(ok){
-    if (ok) return;
+    if (ok) {
+      nativeFetch("api/private-config", {cache:"no-store"})
+        .then(function(r){ if(!r.ok) throw new Error("private config unavailable"); return r.json(); })
+        .then(function(config){
+          const link = document.getElementById("telegramLoginLink");
+          const available = !!(config && config.gradio_available &&
+            typeof config.gradio_url === "string" && /^https?:\/\//.test(config.gradio_url));
+          document.body.dataset.gradioAvailable = available ? "true" : "false";
+          if (!link) return;
+          if (available) {
+            link.href = config.gradio_url;
+            link.classList.remove("disabled");
+            link.removeAttribute("aria-disabled");
+            link.title = "";
+          } else {
+            link.href = "#";
+            link.classList.add("disabled");
+            link.setAttribute("aria-disabled", "true");
+          }
+        }).catch(function(){
+          document.body.dataset.gradioAvailable = "false";
+        });
+      return;
+    }
+    if (document.body) document.body.dataset.gradioAvailable = "false";
     const show = function(){
       if (!document.body || document.getElementById("td-private-warning")) return;
       const note = document.createElement("div");
@@ -2162,6 +2181,17 @@ def create_web_app(ctx: Any, access_token: str | None = None):
         else:  # fail closed if the dashboard template is unexpectedly changed
             return HTMLResponse("Dashboard template is missing its authentication bootstrap.", status_code=500)
         return HTMLResponse(page, headers=_NO_STORE)
+
+    @app.get("/api/private-config")
+    def api_private_config():
+        # This endpoint is protected by require_runtime_owner like every data route.
+        raw_url = str(getattr(ctx, "gradio_proxy_url", "") or "").strip()
+        parsed = urlsplit(raw_url)
+        available = parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+        return JSONResponse(
+            {"gradio_available": available, "gradio_url": raw_url if available else "#"},
+            headers=_NO_STORE,
+        )
 
     @app.get("/api/health")
     def api_health():
