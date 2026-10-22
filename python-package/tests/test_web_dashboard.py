@@ -391,7 +391,7 @@ def test_dashboard_rejects_anonymous_access_and_accepts_only_runtime_token(ctx):
     # is default-deny until the owner exchanges the runtime token for a cookie.
     assert client.get("/").status_code == 200
     for path in ("/api/health", "/api/metrics", "/api/state", "/api/logs",
-                 "/api/universal/tasks"):
+                 "/api/private-config", "/api/universal/tasks"):
         response = client.get(path)
         assert response.status_code == 401, (path, response.text)
 
