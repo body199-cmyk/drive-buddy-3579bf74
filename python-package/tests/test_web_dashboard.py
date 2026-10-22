@@ -474,23 +474,36 @@ def test_index_and_metrics_render_saved_dim_theme(ctx):
     assert client.get("/api/metrics").json()["state"]["webTheme"] == "dim"
 
 
-def test_index_renders_saved_theme_and_escaped_secure_gradio_handoff(ctx):
+def test_index_does_not_disclose_gradio_proxy_until_authenticated(ctx):
     ctx.handlers.h_settings_set_theme("dark")
     ctx.gradio_proxy_url = "https://colab.example/gradio?cell=4&view=secure"
-    page = _client(ctx).get("/").text
+    client = _client(ctx)
+    page = client.get("/").text
     assert 'data-theme="dark"' in page
-    assert 'data-gradio-available="true"' in page
-    assert 'href="https://colab.example/gradio?cell=4&amp;view=secure"' in page
+    assert 'data-gradio-available="pending"' in page
+    assert 'href="#"' in page
+    assert "https://colab.example/gradio?cell=4" not in page
     assert "__INITIAL_THEME__" not in page
     assert "__GRADIO_URL__" not in page
 
+    private_config = client.get("/api/private-config")
+    assert private_config.status_code == 200
+    assert private_config.json() == {
+        "gradio_available": True,
+        "gradio_url": "https://colab.example/gradio?cell=4&view=secure",
+    }
 
-def test_index_refuses_non_http_gradio_login_link(ctx):
+
+def test_private_config_refuses_non_http_gradio_login_link(ctx):
     ctx.gradio_proxy_url = "javascript:alert(1)"
-    page = _client(ctx).get("/").text
-    assert 'data-gradio-available="false"' in page
+    client = _client(ctx)
+    page = client.get("/").text
+    assert 'data-gradio-available="pending"' in page
     assert 'href="#"' in page
     assert "javascript:" not in page
+    config = client.get("/api/private-config")
+    assert config.status_code == 200
+    assert config.json() == {"gradio_available": False, "gradio_url": "#"}
 
 
 def test_web_folder_actions_browse_create_and_select_through_live_drive(ctx):
