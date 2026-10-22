@@ -62,6 +62,90 @@ def _youtube_multiaudio_format(quality: str) -> str:
     return "/".join(selectors)
 
 
+#: Fallback serialization when no TransferManager exists yet. Telegram
+#: transfers and universal downloads share the ONE googleapiclient service
+#: (and its non-thread-safe httplib2 transport) owned by the context.
+_FALLBACK_DRIVE_LOCK = threading.Lock()
+
+
+class _SharedDriveChunkLock:
+    """Context manager resolving the context's Drive lock at each chunk.
+
+    ``TransferManager`` serializes every call on the shared Drive service
+    with its ``_drive_lock``. A universal-download upload running in its own
+    thread must take the SAME lock per chunk; otherwise two threads can drive
+    one httplib2 connection concurrently. The lock is resolved lazily so a
+    TransferManager created after the upload started is still honored for
+    subsequent chunks. One instance is used by one upload thread only.
+    """
+
+    def __init__(self, ctx: Any) -> None:
+        self._ctx = ctx
+        self._held: Any = None
+
+    def _resolve(self) -> Any:
+        manager = getattr(self._ctx, "transfer_manager", None)
+        lock = getattr(manager, "_drive_lock", None)
+        if lock is not None and hasattr(lock, "acquire") and hasattr(lock, "release"):
+            return lock
+        return _FALLBACK_DRIVE_LOCK
+
+    def __enter__(self) -> "_SharedDriveChunkLock":
+        lock = self._resolve()
+        lock.acquire()
+        self._held = lock
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        lock, self._held = self._held, None
+        if lock is not None:
+            lock.release()
+
+
+_BLOCKED_HOSTNAMES = {"localhost", "metadata", "metadata.google.internal"}
+
+
+def _url_targets_private_network(url: str) -> bool:
+    """True when ``url`` points at loopback/private/link-local/metadata hosts.
+
+    Best-effort SSRF guard for user-supplied URLs on the Colab VM, whose
+    link-local metadata server can hand out runtime credentials. It checks
+    the literal host and every address it currently resolves to. It does not
+    defend against DNS rebinding or redirects issued later by the remote
+    server; it blocks the direct, obvious cases. DNS failures are allowed
+    through so the real downloader reports its own error.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlsplit
+
+    try:
+        host = (urlsplit(url).hostname or "").strip().lower().rstrip(".")
+    except ValueError:
+        return True
+    if not host:
+        return True
+    if host in _BLOCKED_HOSTNAMES or host.endswith(".localhost") or host.endswith(".internal"):
+        return True
+
+    def _is_private(addr: str) -> bool:
+        try:
+            ip = ipaddress.ip_address(addr.split("%", 1)[0])
+        except ValueError:
+            return False
+        if getattr(ip, "ipv4_mapped", None) is not None:
+            ip = ip.ipv4_mapped
+        return not ip.is_global or ip.is_multicast
+
+    if _is_private(host):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (OSError, UnicodeError):
+        return False
+    return any(_is_private(str(info[4][0])) for info in infos)
+
+
 class UniversalDownloadManager:
     """Thread-safe background downloader for external URLs."""
 
@@ -237,6 +321,11 @@ class UniversalDownloadManager:
         clean_url = (url or "").strip()
         if not clean_url or not (clean_url.startswith("http://") or clean_url.startswith("https://")):
             return {"ok": False, "message": "يرجى إدخال رابط صحيح يبدأ بـ http:// أو https://"}
+        if _url_targets_private_network(clean_url):
+            return {
+                "ok": False,
+                "message": "هذا الرابط يشير إلى عنوان داخلي أو محلي غير مسموح بتحميله لأسباب أمنية.",
+            }
 
         # التحقق من اتصال Google Drive واختيار المجلد
         try:
@@ -448,7 +537,7 @@ class UniversalDownloadManager:
                         speed_bps=round(speed_bps, 1),
                     )
 
-                res = drive_svc.upload_resumable(
+                upload_kwargs = dict(
                     file_path=str(file_path),
                     drive_name=fname,
                     parent_id=folder_id,
@@ -456,6 +545,20 @@ class UniversalDownloadManager:
                     progress_cb=_on_upload_prog,
                     mime_type=mime_type or "application/octet-stream",
                 )
+                try:
+                    # Share the Telegram engine's Drive lock per chunk so the
+                    # single non-thread-safe Drive transport is never used by
+                    # two threads at once.
+                    res = drive_svc.upload_resumable(
+                        **upload_kwargs, chunk_lock=_SharedDriveChunkLock(self.ctx)
+                    )
+                except TypeError as exc:
+                    # Older/test Drive doubles without ``chunk_lock``: hold the
+                    # shared lock for the whole call (same as TransferManager).
+                    if "chunk_lock" not in str(exc):
+                        raise
+                    with _SharedDriveChunkLock(self.ctx):
+                        res = drive_svc.upload_resumable(**upload_kwargs)
                 last_drive_id = str(res.get("id") or "")
 
             self._update(
