@@ -525,3 +525,35 @@ The persisted refresh toggle and 512 KiB fast sequential Telegram path are prese
 ## التراجع
 
 يعكس merge `2d5893d…` ثم يُنشر ZIP/manifest متطابقان مع SHA السابق عبر مسار release fail-closed. لا يحذف التراجع release/tag ولا Vault تلقائيًا.
+
+
+---
+
+# Security handoff — Colab runtime ownership and dashboard privacy (2026-10-22)
+
+## User requirement
+Each person runs their own Colab runtime and connects their own Google Drive and Telegram account. Runtime state, queues, download history, logs, Telegram session and Drive connection must not be exposed to other visitors. Preserve the working transfer engine and never wipe the owner's Drive vault as a generic cleanup step.
+
+## Findings
+- The app is intentionally built around one `ApplicationContext` and one runtime. It is not a multi-tenant server; do not host one shared runtime for multiple users.
+- Telegram session persistence is implemented by `SessionVault` under the currently authenticated Drive account's `TeleDrive_AppData` folder. The actual SQLite session is local to the Colab runtime and the vault is restored/saved through that runtime's connected Drive. This is the intended per-owner persistence boundary; it is not a central repository session.
+- The repository's `.gitignore` already excluded `*.session`, `telegram_creds.json`, and `/content/teledrive_runtime/`. Additional local SQLite/WAL/session snapshot and vault metadata patterns have been added. No real user's session file or Drive vault was intentionally deleted.
+- Before this patch, the Web Dashboard exposed data/actions without app-level auth: metrics, state, logs, queues, Universal Downloader tasks/actions, health, and WebSocket.
+
+## Changes on branch `fix/colab-user-session-isolation`
+- Added an unpredictable owner token generated per dashboard launch.
+- The printed dashboard link carries the token in a URL fragment (not in the HTTP request); the page exchanges it for a short-lived HttpOnly, SameSite=Strict cookie and removes the fragment from browser history.
+- Protected every HTTP route except the data-free HTML shell and the authentication exchange; this includes health, logs, metrics, state, queue aliases, downloader endpoints and mutations.
+- Protected `/ws` separately; unauthenticated WebSocket connections are closed.
+- Added tests for anonymous denial, wrong-token denial, authenticated access, HttpOnly cookie attributes, and anonymous WebSocket denial.
+- The transfer engine, queue manager, Telegram authentication flow, Drive client and vault restore/save code were deliberately not rewritten.
+
+## Security limits / owner action
+- The runtime remains single-owner. This is **not** multi-user isolation inside one shared Colab process. Each person must launch their own Colab runtime and authenticate their own Drive/Telegram.
+- Treat the printed URL as a private bearer link; do not share notebook outputs containing it. Token rotates on each dashboard launch.
+- Vault format 3 follows the existing owner-approved Drive-managed design; it is not independent cryptographic encryption against someone who already has full access to that Drive vault.
+- Existing live Colab runtime files and the owner's Drive vault were not accessible through GitHub and were not deleted. Only explicitly tracked repository files were changed.
+- Do not claim production-ready until CI passes and the owner restarts Colab using the newly published package, then verifies the dashboard works and anonymous API calls return 401.
+
+## Status
+**Branch changes committed; CI/live Colab verification pending. Do not merge/release or claim full verification until checks pass.** If a regression appears, revert this branch's dashboard-auth change; no Telegram/Drive data migration is required.
