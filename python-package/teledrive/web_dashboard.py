@@ -2441,7 +2441,7 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
             # card here relies on Colab's JavaScript output renderer and can
             # make the entire cell output disappear on mobile browsers when
             # that renderer fails. Colab auto-links this official proxy URL.
-            print(f"TeleDrive Web Dashboard URL: {proxy_url.split("#", 1)[0]}#td_token={access_token}")
+            print(f"TeleDrive Web Dashboard URL: {proxy_url.split('#', 1)[0]}#td_token={access_token}")
         else:  # pragma: no cover - Colab-only branch
             print(
                 f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
