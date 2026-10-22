@@ -39,7 +39,7 @@ def test_colab_launch_output_does_not_depend_on_ipython_html_renderer():
     """Mobile Colab output can disappear when its HTML/JS renderer fails.
     Keep the dashboard launch result as a plain, auto-linkable URL."""
     assert "from IPython.display import HTML, display" not in SOURCE
-    assert 'print(f"TeleDrive Web Dashboard URL: {proxy_url}")' in SOURCE
+    assert 'print(f"TeleDrive Web Dashboard URL: {proxy_url.split(\'#\', 1)[0]}#td_token={access_token}")' in SOURCE
 
 
 def _client(ctx):
@@ -47,7 +47,13 @@ def _client(ctx):
     pytest.importorskip("httpx")  # TestClient transport (via gradio deps)
     from fastapi.testclient import TestClient
 
-    return TestClient(create_web_app(ctx))
+    app = create_web_app(ctx)
+    client = TestClient(app)
+    # Existing integration tests exercise the owner-authorized browser session.
+    response = client.post("/api/auth", json={"token": app.state.access_token})
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    return client
 
 
 def test_module_imports_without_web_framework_at_top_level():
@@ -371,6 +377,50 @@ class _FakeScanTelegram:
     async def iter_messages(self, _chat, limit=None, **_kwargs):
         for item in self.messages[:limit]:
             yield item
+
+
+def test_dashboard_rejects_anonymous_access_and_accepts_only_runtime_token(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app = create_web_app(ctx, access_token="test-owner-token")
+    client = TestClient(app)
+
+    # The public HTML shell carries no runtime state; every data/action route
+    # is default-deny until the owner exchanges the runtime token for a cookie.
+    assert client.get("/").status_code == 200
+    for path in ("/api/health", "/api/metrics", "/api/state", "/api/logs",
+                 "/api/universal/tasks"):
+        response = client.get(path)
+        assert response.status_code == 401, (path, response.text)
+
+    refused = client.post("/api/action", json={"actionId": "queue.refresh", "payload": {}})
+    assert refused.status_code == 401
+    refused_start = client.post("/api/universal/start", json={"url": "https://example.test"})
+    assert refused_start.status_code == 401
+
+    wrong = client.post("/api/auth", json={"token": "not-the-owner-token"})
+    assert wrong.status_code == 401
+    authorized = client.post("/api/auth", json={"token": "test-owner-token"})
+    assert authorized.status_code == 200
+    assert authorized.json()["ok"] is True
+    cookie = authorized.headers.get("set-cookie", "").lower()
+    assert "httponly" in cookie
+    assert "samesite=strict" in cookie
+    assert client.get("/api/metrics").status_code == 200
+
+
+def test_dashboard_websocket_rejects_anonymous_clients(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(create_web_app(ctx, access_token="test-owner-token"))
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
 
 
 def test_http_analyze_channel_and_message_links(ctx):
