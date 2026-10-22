@@ -660,11 +660,13 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
+                # The public shell is the correct unauthenticated liveness probe;
+                # runtime health data itself now requires the owner cookie.
                 with urllib.request.urlopen(  # noqa: S310 - loopback test server
-                    f"http://127.0.0.1:{port}/api/health", timeout=2
+                    f"http://127.0.0.1:{port}/", timeout=2
                 ) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                assert payload["ok"] is True
+                    page = response.read().decode("utf-8")
+                assert "TeleDrive" in page
                 break
             except Exception as exc:  # server still starting
                 last_error = exc
