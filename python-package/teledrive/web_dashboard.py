@@ -2078,8 +2078,12 @@ def create_web_app(ctx: Any, access_token: str | None = None):
         return response
 
     @app.post("/api/auth")
-    def api_auth(payload: dict, request: Request, response: Response):
-        supplied = str((payload or {}).get("token") or "")
+    async def api_auth(request: Request, response: Response):
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        supplied = str((payload or {}).get("token") or "") if isinstance(payload, dict) else ""
         cookie = request.cookies.get("td_access", "")
         if supplied and secrets.compare_digest(supplied, app.state.access_token):
             forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
