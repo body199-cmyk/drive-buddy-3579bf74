@@ -38,3 +38,16 @@ public/teledrive-package.zip
 *.session
 telegram_creds.json
 .audit/
+
+# Runtime-private data: never commit local sessions, SQLite/WAL, or Drive-vault metadata.
+*.session-journal
+*.session-wal
+*.session-shm
+*.session.snapshot
+telegram.session*
+td_telegram*.vault
+td_telegram.active.json
+teledrive.db*
+.env
+.env.*
+!.env.example

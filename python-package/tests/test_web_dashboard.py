@@ -39,7 +39,7 @@ def test_colab_launch_output_does_not_depend_on_ipython_html_renderer():
     """Mobile Colab output can disappear when its HTML/JS renderer fails.
     Keep the dashboard launch result as a plain, auto-linkable URL."""
     assert "from IPython.display import HTML, display" not in SOURCE
-    assert 'print(f"TeleDrive Web Dashboard URL: {proxy_url}")' in SOURCE
+    assert 'print(f"TeleDrive Web Dashboard URL: {proxy_url.split(\'#\', 1)[0]}#td_token={access_token}")' in SOURCE
 
 
 def _client(ctx):
@@ -47,7 +47,13 @@ def _client(ctx):
     pytest.importorskip("httpx")  # TestClient transport (via gradio deps)
     from fastapi.testclient import TestClient
 
-    return TestClient(create_web_app(ctx))
+    app = create_web_app(ctx)
+    client = TestClient(app)
+    # Existing integration tests exercise the owner-authorized browser session.
+    response = client.post("/api/auth", json={"token": app.state.access_token})
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    return client
 
 
 def test_module_imports_without_web_framework_at_top_level():
@@ -373,6 +379,50 @@ class _FakeScanTelegram:
             yield item
 
 
+def test_dashboard_rejects_anonymous_access_and_accepts_only_runtime_token(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app = create_web_app(ctx, access_token="test-owner-token")
+    client = TestClient(app)
+
+    # The public HTML shell carries no runtime state; every data/action route
+    # is default-deny until the owner exchanges the runtime token for a cookie.
+    assert client.get("/").status_code == 200
+    for path in ("/api/health", "/api/metrics", "/api/state", "/api/logs",
+                 "/api/private-config", "/api/universal/tasks"):
+        response = client.get(path)
+        assert response.status_code == 401, (path, response.text)
+
+    refused = client.post("/api/action", json={"actionId": "queue.refresh", "payload": {}})
+    assert refused.status_code == 401
+    refused_start = client.post("/api/universal/start", json={"url": "https://example.test"})
+    assert refused_start.status_code == 401
+
+    wrong = client.post("/api/auth", json={"token": "not-the-owner-token"})
+    assert wrong.status_code == 401
+    authorized = client.post("/api/auth", json={"token": "test-owner-token"})
+    assert authorized.status_code == 200
+    assert authorized.json()["ok"] is True
+    cookie = authorized.headers.get("set-cookie", "").lower()
+    assert "httponly" in cookie
+    assert "samesite=strict" in cookie
+    assert client.get("/api/metrics").status_code == 200
+
+
+def test_dashboard_websocket_rejects_anonymous_clients(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(create_web_app(ctx, access_token="test-owner-token"))
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+
+
 def test_http_analyze_channel_and_message_links(ctx):
     """The exact HTTP bridge payload used by the redesigned page must
     return real candidates for both a channel and a direct message, and
@@ -424,23 +474,36 @@ def test_index_and_metrics_render_saved_dim_theme(ctx):
     assert client.get("/api/metrics").json()["state"]["webTheme"] == "dim"
 
 
-def test_index_renders_saved_theme_and_escaped_secure_gradio_handoff(ctx):
+def test_index_does_not_disclose_gradio_proxy_until_authenticated(ctx):
     ctx.handlers.h_settings_set_theme("dark")
     ctx.gradio_proxy_url = "https://colab.example/gradio?cell=4&view=secure"
-    page = _client(ctx).get("/").text
+    client = _client(ctx)
+    page = client.get("/").text
     assert 'data-theme="dark"' in page
-    assert 'data-gradio-available="true"' in page
-    assert 'href="https://colab.example/gradio?cell=4&amp;view=secure"' in page
+    assert 'data-gradio-available="pending"' in page
+    assert 'href="#"' in page
+    assert "https://colab.example/gradio?cell=4" not in page
     assert "__INITIAL_THEME__" not in page
     assert "__GRADIO_URL__" not in page
 
+    private_config = client.get("/api/private-config")
+    assert private_config.status_code == 200
+    assert private_config.json() == {
+        "gradio_available": True,
+        "gradio_url": "https://colab.example/gradio?cell=4&view=secure",
+    }
 
-def test_index_refuses_non_http_gradio_login_link(ctx):
+
+def test_private_config_refuses_non_http_gradio_login_link(ctx):
     ctx.gradio_proxy_url = "javascript:alert(1)"
-    page = _client(ctx).get("/").text
-    assert 'data-gradio-available="false"' in page
+    client = _client(ctx)
+    page = client.get("/").text
+    assert 'data-gradio-available="pending"' in page
     assert 'href="#"' in page
     assert "javascript:" not in page
+    config = client.get("/api/private-config")
+    assert config.status_code == 200
+    assert config.json() == {"gradio_available": False, "gradio_url": "#"}
 
 
 def test_web_folder_actions_browse_create_and_select_through_live_drive(ctx):
@@ -597,11 +660,13 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
+                # The public shell is the correct unauthenticated liveness probe;
+                # runtime health data itself now requires the owner cookie.
                 with urllib.request.urlopen(  # noqa: S310 - loopback test server
-                    f"http://127.0.0.1:{port}/api/health", timeout=2
+                    f"http://127.0.0.1:{port}/", timeout=2
                 ) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                assert payload["ok"] is True
+                    page = response.read().decode("utf-8")
+                assert "TeleDrive" in page
                 break
             except Exception as exc:  # server still starting
                 last_error = exc
