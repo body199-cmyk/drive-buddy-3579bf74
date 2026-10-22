@@ -56,6 +56,7 @@ import hashlib
 from pathlib import Path
 
 import json
+import secrets
 import socket
 import threading
 import time
@@ -2037,7 +2038,7 @@ $("qBody").addEventListener("click",function(event){
 """
 
 
-def create_web_app(ctx: Any):
+def create_web_app(ctx: Any, access_token: str | None = None):
     """Build the FastAPI app bound to the ONE ``ApplicationContext``.
 
     Sync ``def`` endpoints run in Starlette's threadpool — the same
@@ -2046,7 +2047,7 @@ def create_web_app(ctx: Any):
     and it reads snapshots via ``asyncio.to_thread``.
     """
     try:
-        from fastapi import FastAPI, Request, WebSocket
+        from fastapi import FastAPI, Request, Response, WebSocket
         from fastapi.responses import HTMLResponse, JSONResponse
     except ImportError as exc:  # pragma: no cover - lock installs it
         raise RuntimeError(_missing_deps_message()) from exc
@@ -2055,6 +2056,51 @@ def create_web_app(ctx: Any):
     app = FastAPI(title="TeleDrive v5.0 Turbo Web Dashboard", version=__version__)
     app.state.bridge = bridge
     app.state.ctx = ctx
+    # One unguessable bearer secret per Colab runtime. Only the owner receives
+    # it in the printed URL fragment; fragments are not sent in HTTP requests.
+    app.state.access_token = str(access_token or secrets.token_urlsafe(32))
+
+    @app.middleware("http")
+    async def require_runtime_owner(request: Request, call_next):
+        # The shell is intentionally public but contains no runtime data.
+        # All health, state, log, queue, downloader and mutation routes default-deny.
+        if request.url.path not in {"/", "/api/auth"}:
+            supplied = request.cookies.get("td_access", "")
+            if not supplied or not secrets.compare_digest(supplied, app.state.access_token):
+                return JSONResponse(
+                    {"ok": False, "error": "authentication_required"},
+                    status_code=401,
+                    headers=_NO_STORE,
+                )
+        response = await call_next(request)
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+    @app.post("/api/auth")
+    def api_auth(payload: dict, request: Request, response: Response):
+        supplied = str((payload or {}).get("token") or "")
+        cookie = request.cookies.get("td_access", "")
+        if supplied and secrets.compare_digest(supplied, app.state.access_token):
+            forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+            secure_cookie = request.url.scheme == "https" or forwarded_proto == "https"
+            response.set_cookie(
+                "td_access",
+                app.state.access_token,
+                httponly=True,
+                secure=secure_cookie,
+                samesite="strict",
+                max_age=12 * 60 * 60,
+                path="/",
+            )
+            return {"ok": True}
+        if cookie and secrets.compare_digest(cookie, app.state.access_token):
+            return {"ok": True}
+        return JSONResponse(
+            {"ok": False, "error": "authentication_failed"},
+            status_code=401,
+            headers=_NO_STORE,
+        )
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -2072,7 +2118,50 @@ def create_web_app(ctx: Any):
         page = HTML_PAGE.replace("__INITIAL_THEME__", theme)
         page = page.replace("__GRADIO_URL__", gradio_url)
         page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
-        return HTMLResponse(page)
+        # Authenticate in-memory before the dashboard's existing fetch calls run.
+        # The token is carried in a URL fragment, exchanged for an HttpOnly cookie,
+        # and immediately removed from browser history. Never persist it in storage.
+        auth_bootstrap = r"""<script>
+(function(){
+  const nativeFetch = window.fetch.bind(window);
+  const fragment = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+  const token = fragment.get("td_token") || "";
+  if (token) history.replaceState(null, "", location.pathname + location.search);
+  const ready = nativeFetch("api/auth", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({token: token})
+  }).then(function(r){ return !!r.ok; }).catch(function(){ return false; });
+  window.fetch = function(input, init){
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    if (url.indexOf("api/auth") >= 0) return nativeFetch(input, init);
+    return ready.then(function(ok){
+      if (!ok) throw new Error("TeleDrive private runtime authentication required");
+      return nativeFetch(input, init);
+    });
+  };
+  ready.then(function(ok){
+    if (ok) return;
+    const show = function(){
+      if (!document.body || document.getElementById("td-private-warning")) return;
+      const note = document.createElement("div");
+      note.id = "td-private-warning";
+      note.setAttribute("role", "alert");
+      note.textContent = "هذه لوحة خاصة. افتح الرابط الذي طبعه حساب Colab الخاص بك، ولا تشارك الرابط مع أحد.";
+      note.style.cssText = "position:fixed;z-index:99999;top:12px;left:12px;right:12px;padding:14px;background:#7f1d1d;color:#fff;border-radius:10px;font:16px sans-serif;text-align:center";
+      document.body.appendChild(note);
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show, {once:true});
+    else show();
+  });
+})();
+</script>
+"""
+        if "<script>" in page:
+            page = page.replace("<script>", auth_bootstrap + "<script>", 1)
+        else:  # fail closed if the dashboard template is unexpectedly changed
+            return HTMLResponse("Dashboard template is missing its authentication bootstrap.", status_code=500)
+        return HTMLResponse(page, headers=_NO_STORE)
 
     @app.get("/api/health")
     def api_health():
@@ -2173,6 +2262,10 @@ def create_web_app(ctx: Any):
     async def ws_endpoint(ws: WebSocket):
         import asyncio
 
+        supplied = ws.cookies.get("td_access", "")
+        if not supplied or not secrets.compare_digest(supplied, app.state.access_token):
+            await ws.close(code=1008)
+            return
         await ws.accept()
         try:
             while True:
@@ -2311,11 +2404,13 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
     if actual_port != requested_port:
         _log.warning("requested dashboard port %s is occupied; using fallback port %s", requested_port, actual_port)
         print(f"⚠️ المنفذ {requested_port} مشغول؛ تم اختيار منفذ بديل تلقائيًا: {actual_port}")
-    app = create_web_app(ctx)
+    access_token = secrets.token_urlsafe(32)
+    app = create_web_app(ctx, access_token=access_token)
     config = uvicorn.Config(
         app, host=BIND_ADDRESS, port=actual_port, log_level="warning", access_log=False
     )
     server = uvicorn.Server(config)
+    server._td_access_token = access_token
     server._td_error = None
     _ensure_localhost_bypasses_proxy()
     if not ctx.aio.is_running:
@@ -2346,7 +2441,7 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
             # card here relies on Colab's JavaScript output renderer and can
             # make the entire cell output disappear on mobile browsers when
             # that renderer fails. Colab auto-links this official proxy URL.
-            print(f"TeleDrive Web Dashboard URL: {proxy_url}")
+            print(f"TeleDrive Web Dashboard URL: {proxy_url.split("#", 1)[0]}#td_token={access_token}")
         else:  # pragma: no cover - Colab-only branch
             print(
                 f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
@@ -2361,5 +2456,5 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
             except Exception:
                 pass
     else:
-        print(f"TeleDrive Web Dashboard URL: http://localhost:{actual_port}/")
+        print(f"TeleDrive Web Dashboard URL: http://localhost:{actual_port}/#td_token={access_token}")
     return server
