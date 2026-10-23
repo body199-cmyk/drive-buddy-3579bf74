@@ -2307,10 +2307,26 @@ def create_web_app(ctx: Any):
                 or request_host.endswith(".colab.google")
                 or request_host.endswith(".prod.colab.dev")
             )
-            same_origin_colab_ui = (
-                trusted_colab_proxy
-                and request.headers.get("sec-fetch-site") == "same-origin"
-            )
+            # Colab's proxy and embedded/mobile browsers do not consistently
+            # send Sec-Fetch-Site on same-origin fetches. Trust the UI shortcut
+            # only when the request is same-origin by at least one browser signal;
+            # never infer trust from the Colab hostname alone.
+            origin = str(request.headers.get("origin") or "").strip()
+            referer = str(request.headers.get("referer") or "").strip()
+            same_origin_signal = request.headers.get("sec-fetch-site") == "same-origin"
+            if origin:
+                parsed_origin = urlsplit(origin)
+                same_origin_signal = same_origin_signal or (
+                    parsed_origin.scheme == request.url.scheme
+                    and parsed_origin.netloc.lower() == request.url.netloc.lower()
+                )
+            if referer:
+                parsed_referer = urlsplit(referer)
+                same_origin_signal = same_origin_signal or (
+                    parsed_referer.scheme == request.url.scheme
+                    and parsed_referer.netloc.lower() == request.url.netloc.lower()
+                )
+            same_origin_colab_ui = trusted_colab_proxy and same_origin_signal
             if not same_origin_colab_ui:
                 authorization = request.headers.get("authorization", "")
                 supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
