@@ -47,11 +47,11 @@ CELLS_JSON = Path(__file__).resolve().parent / "colab_cells.json"
 
 HEADER_MARKDOWN = f"""# {TITLE}
 
-Run the cells top to bottom after every **new** Colab VM (cells 1–4).
+Run cells 1–5 in order after every **new** Colab VM. Cell 5 attempts the optional Vercel handoff; if it fails, the local UI still runs.
 A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 
 > 💡 **واجهة مبسطة لغير المبرمجين / Friendly view for non-coders**
-> كل خلية الآن تظهر كـ **كارت بعنوان واضح** والكود مخفي افتراضيًا — سترى فقط الوظيفة (مثل \"تثبيت الحزمة\" أو \"تشغيل الواجهة\").
+> كل خلية الآن تظهر كـ **كارت بعنوان واضح** والكود مخفي افتراضيًا — سترى فقط الوظيفة (مثل "تثبيت الحزمة" أو "تشغيل الواجهة").
 > اضغط زر التشغيل ▶️ بجانب كل عنوان لتنفيذه بالترتيب. إذا أردت رؤية الكود، اضغط **Show code / عرض الكود** بجانب العنوان — لا تحتاج لإخفائه يدويًا كل مرة، فهو يبقى مخفيًا تلقائيًا عند فتح النوت‌بوك.
 > Every cell now shows as a **titled card** with the code hidden by default — you only see what it does. Press ▶️ to run in order; click **Show code** near the title only if you want to inspect the code.
 
@@ -71,16 +71,27 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   `Run_Both_Together` — the default, so both interfaces (and their two
   printed URLs) come up together. Telegram login secrets are only ever
   typed into the Gradio fields, never into the Web Dashboard.
-* Cell 4 starts the UI only. Run optional Cell 8 afterward if you want the
-  best-effort heartbeat and silent browser audio; run Cell 9 to stop both, then
-  Cell 7 for cleanup/shutdown. Autoplay may be blocked, and this cannot override
-  Colab's runtime limits or guarantee a live session.
+* Cell 4 starts the UI; Cell 5 attempts the optional Vercel handoff. Cell 11 is the
+  live download monitor: run it after starting downloads (you can run it directly
+  after Cell 4 without executing cleanup). Do **not** run Cell 8 until downloads
+  finish, because it shuts down the app. Optional Cell 9 starts best-effort keep-alive;
+  Cell 10 stops it. The monitor/wake lock cannot override Colab's runtime limits.
 * The interface runs **locally in this runtime** (`share=False`).
 * The database and temporary files live on local `/content`; only finished
   uploads and the session vault go to Google Drive.
 * Cell 1 first runs an integrity-verified update check against the pinned
   release manifest. The tested Drive ZIP remains the fallback.
-"""
+
+## 🔐 ربط الموقع بـ Vercel (خطوة اختيارية)
+
+لو فتحت صفحة TeleDrive على Vercel وطلبت **رمز الربط السري**، فالرمز ليس كلمة مرور Google ولا تحتاج إلى إنشائه بنفسك.
+
+1. شغّل الخلايا 1–4 بالترتيب. بعد تشغيل الواجهة، نفّذ **الخلية 5: الربط التلقائي مع Vercel**.
+2. الخلية 5 تحاول إنشاء نفق HTTPS مؤقت وتعرض زر **Open Vercel Dashboard**. اضغطه لفتح الموقع وربطه تلقائيًا دون نسخ الرمز.
+3. لو فشل النفق أو التحويل، استخدم الربط اليدوي أدناه: انسخ `TeleDrive Web Dashboard URL` ورمز `TeleDrive pairing token` من مخرجات الخلية 4.
+4. افتح صفحة `/connect` في Vercel والصق الرابط والرمز في الخانتين.
+
+**تنبيه أمان:** رابط الربط التلقائي يحتوي رمزًا سريًا داخل جزء الرابط (#). لا تشاركه ولا تنشر صورة له. النفق مؤقت ويتوقف إذا انتهت جلسة Colab أو توقفت العملية؛ لا توجد آلية مجانية تضمن بقاء Colab متصلًا دائمًا."""
 
 CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restore + pinned dependencies ====
 # Pre-bootstrap order: the update gate first (BEFORE any `import teledrive`
@@ -861,7 +872,7 @@ WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 # localhost), and prints ONE usable "TeleDrive URL:" line below. A clickable
 # external proxy URL is preferred over a fragile inline iframe.
 # blocking=False: the cell returns immediately (non-blocking), so cells 5-7
-# (handoff, tests, maintenance) stay runnable while the interface keeps
+# (session report, health check, cleanup) remain available while the interface keeps
 # serving. The Gradio handle lives on ctx.ui, the Web Dashboard handle on
 # ctx.web_dashboard; both are closed by ctx.shutdown() in cell 7.
 # Classic Gradio launches FIRST (M46-T02): it is the recovery surface, so
@@ -910,7 +921,7 @@ if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
                 )
 
 if _classic_launched or web_server is not None:
-    print("ui running (non-blocking); use optional Cell 8 to start keep-alive and Cell 9 to stop it")
+    print("ui running (non-blocking); use optional Cell 9 to start keep-alive and Cell 10 to stop it")
 else:
     print("⚠️ no UI is serving; check the startup errors above, free ports 7860/8765, and re-run Cell 4")
 '''
@@ -1068,6 +1079,16 @@ from teledrive import storage_manager
 report = storage_manager.cleanup_verified_temp()
 print("deleted verified temp files:", report["deleted"])
 print("quarantined unknown/incomplete files:", report["quarantined"])
+
+_td_proc = globals().get('_teledrive_tunnel')
+if _td_proc is not None and _td_proc.poll() is None:
+    _td_proc.terminate()
+    try:
+        _td_proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        _td_proc.kill()
+        _td_proc.wait(timeout=5)
+    print('Cloudflare tunnel stopped')
 
 ctx.shutdown()      # closes the UI handle, stops the async runtime, closes SQLite
 print("runtime closed")
