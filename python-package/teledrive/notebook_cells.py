@@ -915,6 +915,125 @@ else:
     print("⚠️ no UI is serving; check the startup errors above, free ports 7860/8765, and re-run Cell 4")
 '''
 
+
+
+CELL_4B_VERCEL_HANDOFF = '''#@title ⚡ خطوة الربط التلقائي — فتح لوحة Vercel | One-click handoff
+# Experimental: creates a temporary public HTTPS tunnel to this runtime.
+# Only share the handoff link with yourself. The bearer token grants runtime control.
+import os, re, time, queue, threading, subprocess, urllib.request, urllib.parse, html, secrets
+from IPython.display import display, HTML
+
+VERCEL_CONNECT_URL = "https://teledrive-git-feat-auto-colab-tunnel-handoff-abdullah-74f3.vercel.app/connect"
+
+if "web_server" not in globals() or web_server is None:
+    print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
+else:
+    try:
+        _port = int(web_server.config.port)
+        _token = str(getattr(ctx, "remote_control_token", "") or "")
+        _expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+        if len(_token) < 32 or _expiry <= time.time():
+            raise RuntimeError("رمز الربط غير متاح أو انتهت صلاحيته. أعد تشغيل الخلية 4.")
+
+        import hashlib
+        _tunnel_bin = "/content/cloudflared"
+        _cloudflared_url = "https://github.com/cloudflare/cloudflared/releases/download/2026.10.2/cloudflared-linux-amd64"
+        _cloudflared_sha256 = "35fbdd2beb378436c7da377d7358cea8e33f9c94a6705d1d8036bf9b0d6d8005"
+
+        def _sha256_file(_path):
+            _digest = hashlib.sha256()
+            with open(_path, "rb") as _stream:
+                for _chunk in iter(lambda: _stream.read(1024 * 1024), b""):
+                    _digest.update(_chunk)
+            return _digest.hexdigest()
+
+        if not os.path.isfile(_tunnel_bin) or _sha256_file(_tunnel_bin) != _cloudflared_sha256:
+            print("Downloading pinned Cloudflare Tunnel client (2026.10.2) and verifying SHA-256...")
+            _download_tmp = _tunnel_bin + ".download"
+            try:
+                urllib.request.urlretrieve(_cloudflared_url, _download_tmp)
+                if _sha256_file(_download_tmp) != _cloudflared_sha256:
+                    raise RuntimeError("cloudflared SHA-256 mismatch; refusing to execute downloaded binary.")
+                os.replace(_download_tmp, _tunnel_bin)
+            finally:
+                if os.path.exists(_download_tmp):
+                    os.remove(_download_tmp)
+        os.chmod(_tunnel_bin, 0o755)
+
+        # Stop the previous process if this cell is run again.
+        _old_tunnel = globals().get("_teledrive_tunnel")
+        if _old_tunnel is not None and _old_tunnel.poll() is None:
+            _old_tunnel.terminate()
+            try:
+                _old_tunnel.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _old_tunnel.kill()
+                _old_tunnel.wait(timeout=5)
+
+        _tunnel_log = queue.Queue()
+        _teledrive_tunnel = subprocess.Popen(
+            [_tunnel_bin, "tunnel", "--url", f"http://127.0.0.1:{_port}", "--no-autoupdate"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        def _read_tunnel_log():
+            if _teledrive_tunnel.stdout:
+                for _line in _teledrive_tunnel.stdout:
+                    _tunnel_log.put(_line.rstrip())
+
+        threading.Thread(target=_read_tunnel_log, daemon=True).start()
+        _tunnel_url = None
+        _deadline = time.time() + 60
+        while time.time() < _deadline:
+            if _teledrive_tunnel.poll() is not None:
+                raise RuntimeError("Cloudflare Tunnel exited before returning a URL.")
+            try:
+                _line = _tunnel_log.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            _match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", _line, re.I)
+            if _match:
+                _tunnel_url = _match.group(0)
+                break
+
+        if not _tunnel_url:
+            raise RuntimeError("Timed out waiting for a Cloudflare Quick Tunnel URL.")
+
+        _now = time.time()
+        _handoffs = getattr(ctx, "remote_handoff_tokens", {})
+        _handoffs = {k: v for k, v in _handoffs.items() if float(v) > _now}
+        _handoff_token = secrets.token_urlsafe(32)
+        _handoffs[_handoff_token] = _now + 300
+        setattr(ctx, "remote_handoff_tokens", _handoffs)
+        _handoff = (
+            VERCEL_CONNECT_URL.split("#", 1)[0]
+            + "#url=" + urllib.parse.quote(_tunnel_url, safe="")
+            + "&handoff=" + urllib.parse.quote(_handoff_token, safe="")
+        )
+        display(HTML(
+            '<div style="border:1px solid #16a34a;border-radius:12px;padding:16px;margin:12px 0">'
+            '<strong style="font-size:18px">⚡ Open TeleDrive on Vercel</strong>'
+            '<p>اضغط الزر للرجوع إلى لوحة التحكم. الرابط يحتوي رمزًا سريًا مؤقتًا، لا تشاركه.</p>'
+            f'<a href="{html.escape(_handoff, quote=True)}" target="_blank" rel="noopener noreferrer" '
+            'style="display:inline-block;background:#15803d;color:white;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700">Open Vercel Dashboard</a></div>'
+        ))
+        print("Tunnel established. It will stop when this Colab runtime/process stops.")
+    except Exception as _handoff_exc:
+        print("⚠️ تعذر الربط التلقائي؛ الواجهة المحلية تظل متاحة ويمكنك استخدام الربط اليدوي.")
+        print(type(_handoff_exc).__name__ + ":", str(_handoff_exc))
+        _td_proc = globals().get("_teledrive_tunnel")
+        if _td_proc is not None and _td_proc.poll() is None:
+            _td_proc.terminate()
+            try:
+                _td_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _td_proc.kill()
+                _td_proc.wait(timeout=5)
+'''
+
 CELL_5 = '''# ==== Cell 5: redacted handoff snapshot ====
 from teledrive import handoff
 
@@ -1000,6 +1119,169 @@ print("keep-alive:", "stopped" if _stop_result["stopped"] else "not active")
 print("If the audio player is still playing, press its Pause button.")
 '''
 
+
+
+CELL_10_MONITOR = '''#@title 🟢 مراقبة TeleDrive — تعمل تلقائياً طوال فترة التحميل
+import sys
+import time
+import logging
+from datetime import datetime
+from IPython.display import display, HTML, clear_output
+
+def extract_queue_counts(snap):
+    """قراءة أعداد المهام النشطة والمتبقية من ctx.queue_manager.snapshot()"""
+    active = 0
+    remaining = 0
+    terminal_states = {'completed', 'done', 'failed', 'cancelled', 'canceled', 'error', 'finished'}
+    active_states = {'active', 'running', 'downloading', 'uploading', 'processing', 'in_progress'}
+
+    if isinstance(snap, dict):
+        if 'active' in snap and 'remaining' in snap and isinstance(snap['active'], int):
+            return snap['active'], snap['remaining']
+
+        items_list = None
+        for k in ('tasks', 'items', 'jobs', 'queue', 'downloads'):
+            if k in snap and isinstance(snap[k], (list, tuple, set)):
+                items_list = snap[k]
+                break
+
+        if items_list is not None:
+            snap = items_list
+        else:
+            for k, v in snap.items():
+                state_name = str(k).split('.')[-1].lower()
+                count = len(v) if isinstance(v, (list, tuple, set, dict)) else (v if isinstance(v, int) else 0)
+                if state_name in active_states:
+                    active += count
+                elif state_name not in terminal_states:
+                    remaining += count
+            return active, remaining
+
+    if not isinstance(snap, (list, tuple, set, dict)):
+        for attr in ('tasks', 'items', 'jobs', 'queue'):
+            if hasattr(snap, attr):
+                val = getattr(snap, attr)
+                if isinstance(val, (list, tuple, set, dict)):
+                    return extract_queue_counts(val)
+        if hasattr(snap, 'active') and hasattr(snap, 'remaining'):
+            return int(getattr(snap, 'active')), int(getattr(snap, 'remaining'))
+
+    if isinstance(snap, (list, tuple, set)):
+        for item in snap:
+            state = item.get('status') or item.get('state') if isinstance(item, dict) else getattr(item, 'status', getattr(item, 'state', None))
+            state_name = getattr(state, 'name', str(state)).split('.')[-1].lower()
+            if state_name in active_states:
+                active += 1
+            elif state_name not in terminal_states:
+                remaining += 1
+
+    return active, remaining
+
+def build_status_card(active_count, remaining_count, updated_at, finished=False):
+    status_icon = "✅" if finished else "🟢"
+    title_text = "TeleDrive — اكتملت التنزيلات" if finished else "TeleDrive — المراقبة تعمل"
+    state_text = "اكتملت جميع المهام" if finished else "تعمل (الموقع يحمّل الآن)"
+
+    return f"""
+    <div dir="rtl" style="font-family: system-ui, -apple-system, sans-serif; max-width: 320px; padding: 18px; border-radius: 16px; border: 1px solid #e0e0e0; background: #ffffff; color: #1f1f1f; box-shadow: 0 2px 6px rgba(0,0,0,0.04); line-height: 1.8;">
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: flex-start; gap: 8px;">
+                <span>{status_icon}</span> <span>{title_text}</span>
+            </div>
+            <div style="font-size: 14px; color: #333; margin-bottom: 10px; text-align: right;">
+                • <b>حالة المراقبة:</b> {state_text}<br>
+                • <b>المهام النشطة:</b> <span style="font-weight: 700; color: #0b57d0;">{active_count}</span><br>
+                • <b>المهام المتبقية:</b> <span style="font-weight: 700; color: #b06000;">{remaining_count}</span><br>
+                • <b>تحديث تلقائي:</b> كل 30 ثانية
+            </div>
+            <div style="font-size: 12px; color: #777; border-top: 1px solid #f0f0f0; padding-top: 8px; text-align: right;">
+                آخر تحديث: {updated_at}
+            </div>
+    </div>
+    <script>
+    (async () => {{
+        try {{
+            if ('wakeLock' in navigator && !window._tdWakeLock) {{
+                window._tdWakeLock = await navigator.wakeLock.request('screen');
+            }}
+        }} catch (e) {{}}
+    }})();
+    </script>
+    """
+
+# حفظ إعدادات التسجيل والمجاري الأصلية لاستعادتها عند الانتهاء
+_orig_disable_level = logging.root.manager.disable
+_target_streams = {sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__}
+for _h in logging.root.handlers:
+    if hasattr(_h, 'stream') and _h.stream is not None:
+        _target_streams.add(_h.stream)
+
+for _lg in list(logging.Logger.manager.loggerDict.values()):
+    if isinstance(_lg, logging.Logger):
+        for _h in _lg.handlers:
+            if hasattr(_h, 'stream') and _h.stream is not None:
+                _target_streams.add(_h.stream)
+
+_saved_methods = {}
+for _s in _target_streams:
+    if _s is not None and hasattr(_s, 'write'):
+        _saved_methods[_s] = (
+            getattr(_s, 'write', None),
+            getattr(_s, 'writelines', None),
+            getattr(_s, 'flush', None)
+        )
+
+def _silent_write(text, *args, **kwargs):
+    return len(text) if isinstance(text, (str, bytes)) else 0
+
+try:
+    clear_output(wait=False)
+
+    # كتم رسائل WARNING و INFO مؤقتاً أثناء عمل البطاقة مع الإبقاء على CRITICAL
+    logging.disable(logging.ERROR)
+    for _s in _saved_methods:
+        try:
+            _s.write = _silent_write
+        except Exception:
+            pass
+
+    card_handle = display(HTML(build_status_card("...", "...", "جاري الفحص...")), display_id=True)
+    has_started_tasks = False
+    idle_checks = 0
+
+    while True:
+        if 'ctx' in globals() and hasattr(ctx, 'queue_manager'):
+            snap = ctx.queue_manager.snapshot()
+            active_tasks, remaining_tasks = extract_queue_counts(snap)
+            now_str = datetime.now().strftime("%H:%M:%S")
+
+            if (active_tasks + remaining_tasks) > 0:
+                has_started_tasks = True
+                idle_checks = 0
+                card_handle.update(HTML(build_status_card(active_tasks, remaining_tasks, now_str, finished=False)))
+            else:
+                if has_started_tasks:
+                    idle_checks += 1
+                    if idle_checks >= 2:
+                        card_handle.update(HTML(build_status_card(0, 0, now_str, finished=True)))
+                        break
+                card_handle.update(HTML(build_status_card(0, 0, now_str, finished=False)))
+
+        time.sleep(30)
+
+except KeyboardInterrupt:
+    pass
+finally:
+    # استعادة إعدادات التسجيل وجميع دوال المخرجات لحالتها الطبيعية فور توقف الخلية
+    logging.disable(_orig_disable_level)
+    for _s, (_orig_w, _orig_wl, _orig_fl) in _saved_methods.items():
+        for _method_name, _original in (("write", _orig_w), ("writelines", _orig_wl), ("flush", _orig_fl)):
+            try:
+                if _original is not None:
+                    setattr(_s, _method_name, _original)
+            except Exception:
+                pass
+'''
+
 # Friendly, non-technical titles shown in Colab's collapsed form view.
 # These are what non-coders see; the original `teledrive_title` stays in
 # metadata for tracing and never changes logic.
@@ -1008,11 +1290,13 @@ FRIENDLY_TITLES: tuple[str, ...] = (
     "⚙️ الخطوة 2 — تجهيز النظام وقاعدة البيانات | Bootstrap System",
     "🔐 الخطوة 3 — ربط Google Drive و Telegram | Connect Accounts",
     "🚀 الخطوة 4 — تشغيل واجهة TeleDrive | Launch App",
-    "📋 الخطوة 5 — تقرير الجلسة (اختياري) | Session Report (optional)",
-    "✅ الخطوة 6 — فحص النظام (اختياري) | Health Check (optional)",
-    "🧹 الخطوة 7 — تنظيف وإغلاق | Cleanup & Shutdown",
-    "📡 خلية اختيارية 8 — إبقاء Colab نشطًا | Start Keep-Alive",
-    "⏹️ خلية اختيارية 9 — إيقاف إبقاء Colab نشطًا | Stop Keep-Alive",
+    "⚡ خطوة الربط التلقائي — فتح لوحة Vercel | One-click handoff",
+    "📋 الخطوة 6 — تقرير الجلسة (اختياري) | Session Report (optional)",
+    "✅ الخطوة 7 — فحص النظام (اختياري) | Health Check (optional)",
+    "🧹 الخطوة 8 — تنظيف وإغلاق | Cleanup & Shutdown",
+    "📡 خلية اختيارية 9 — إبقاء Colab نشطًا | Start Keep-Alive",
+    "⏹️ خلية اختيارية 10 — إيقاف إبقاء Colab نشطًا | Stop Keep-Alive",
+    "🟢 مراقبة TeleDrive — تعمل تلقائياً طوال فترة التحميل",
 )
 
 def _title_line(friendly_title: str) -> str:
@@ -1035,11 +1319,13 @@ CELLS: tuple[dict[str, str], ...] = (
     {"title": "Bootstrap directories, logging, SQLite migrations and WAL", "code": CELL_2},
     {"title": "Telegram credentials (Colab Secrets or hidden) and native Drive auth", "code": CELL_3},
     {"title": "Inject into the one context and launch the UI (share=False)", "code": CELL_4},
+    {"title": "Optional Vercel one-click handoff tunnel (experimental)", "code": CELL_4B_VERCEL_HANDOFF},
     {"title": "Redacted handoff snapshot", "code": CELL_5},
     {"title": "Run the packaged test suite", "code": CELL_6},
     {"title": "Safe maintenance and clean shutdown", "code": CELL_7},
     {"title": "Optional start of best-effort Colab keep-alive", "code": CELL_8_KEEPALIVE_START},
     {"title": "Optional stop of Colab keep-alive", "code": CELL_9_KEEPALIVE_STOP},
+    {"title": "Automatic TeleDrive download monitor", "code": CELL_10_MONITOR},
 )
 
 REQUIREMENTS_LOCK = PACKAGE_ROOT / "requirements.lock"
@@ -1070,7 +1356,7 @@ def hardcoded_pins_in_cells() -> list[str]:
 
 
 REQUIRED_CELL_COUNT = 7
-OPTIONAL_CELL_COUNT = 2
+OPTIONAL_CELL_COUNT = 4
 TOTAL_CELL_COUNT = REQUIRED_CELL_COUNT + OPTIONAL_CELL_COUNT
 
 
