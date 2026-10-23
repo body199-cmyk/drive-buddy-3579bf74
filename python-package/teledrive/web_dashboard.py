@@ -2314,17 +2314,22 @@ def create_web_app(ctx: Any):
             origin = str(request.headers.get("origin") or "").strip()
             referer = str(request.headers.get("referer") or "").strip()
             same_origin_signal = request.headers.get("sec-fetch-site") == "same-origin"
+            # Colab terminates HTTPS at its proxy and may forward the
+            # request to Uvicorn as HTTP. Compare the browser origin's host,
+            # not the upstream scheme, while still requiring an official proxy
+            # host and an explicit same-origin browser signal.
+            request_hostname = (request.url.hostname or "").lower()
             if origin:
                 parsed_origin = urlsplit(origin)
                 same_origin_signal = same_origin_signal or (
-                    parsed_origin.scheme == request.url.scheme
-                    and parsed_origin.netloc.lower() == request.url.netloc.lower()
+                    parsed_origin.scheme in {"http", "https"}
+                    and (parsed_origin.hostname or "").lower() == request_hostname
                 )
             if referer:
                 parsed_referer = urlsplit(referer)
                 same_origin_signal = same_origin_signal or (
-                    parsed_referer.scheme == request.url.scheme
-                    and parsed_referer.netloc.lower() == request.url.netloc.lower()
+                    parsed_referer.scheme in {"http", "https"}
+                    and (parsed_referer.hostname or "").lower() == request_hostname
                 )
             same_origin_colab_ui = trusted_colab_proxy and same_origin_signal
             if not same_origin_colab_ui:
