@@ -1198,6 +1198,29 @@ def extract_queue_counts(snap):
 
     return active, remaining
 
+def extract_universal_counts(ctx):
+    """Count non-terminal tasks managed separately by UniversalDownloadManager."""
+    active = 0
+    remaining = 0
+    terminal_states = {'completed', 'done', 'failed', 'cancelled', 'canceled', 'error', 'finished'}
+    active_states = {'active', 'running', 'downloading', 'uploading', 'processing', 'in_progress'}
+
+    try:
+        from teledrive.universal_downloader import get_universal_downloader
+        tasks = get_universal_downloader(ctx).list_tasks()
+    except Exception:
+        return 0, 0
+
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        state_name = str(task.get('status') or task.get('state') or '').split('.')[-1].lower()
+        if state_name in active_states:
+            active += 1
+        elif state_name not in terminal_states:
+            remaining += 1
+    return active, remaining
+
 def build_status_card(active_count, remaining_count, updated_at, finished=False):
     status_icon = "✅" if finished else "🟢"
     title_text = "TeleDrive — اكتملت التنزيلات" if finished else "TeleDrive — المراقبة تعمل"
@@ -1210,8 +1233,8 @@ def build_status_card(active_count, remaining_count, updated_at, finished=False)
             </div>
             <div style="font-size: 14px; color: #333; margin-bottom: 10px; text-align: right;">
                 • <b>حالة المراقبة:</b> {state_text}<br>
-                • <b>المهام النشطة:</b> <span style="font-weight: 700; color: #0b57d0;">{active_count}</span><br>
-                • <b>المهام المتبقية:</b> <span style="font-weight: 700; color: #b06000;">{remaining_count}</span><br>
+                • <b>المهام النشطة (Telegram + الشامل):</b> <span style="font-weight: 700; color: #0b57d0;">{active_count}</span><br>
+                • <b>المهام المتبقية (Telegram + الشامل):</b> <span style="font-weight: 700; color: #b06000;">{remaining_count}</span><br>
                 • <b>تحديث تلقائي:</b> كل 30 ثانية
             </div>
             <div style="font-size: 12px; color: #777; border-top: 1px solid #f0f0f0; padding-top: 8px; text-align: right;">
@@ -1273,6 +1296,9 @@ try:
         if 'ctx' in globals() and hasattr(ctx, 'queue_manager'):
             snap = ctx.queue_manager.snapshot()
             active_tasks, remaining_tasks = extract_queue_counts(snap)
+            universal_active, universal_remaining = extract_universal_counts(ctx)
+            active_tasks += universal_active
+            remaining_tasks += universal_remaining
             now_str = datetime.now().strftime("%H:%M:%S")
 
             if (active_tasks + remaining_tasks) > 0:
@@ -1300,8 +1326,7 @@ finally:
                 if _original is not None:
                     setattr(_s, _method_name, _original)
             except Exception:
-                pass
-'''
+                pass'''
 
 # Friendly, non-technical titles shown in Colab's collapsed form view.
 # These are what non-coders see; the original `teledrive_title` stays in
