@@ -270,9 +270,7 @@ function ConnectionSection({
     try {
       const result = await bridge.telegramAuthStep(step, payload);
       setAuthNotice({ kind: result.ok ? "success" : "error", text: result.message });
-      if (step === "credentials" && result.ok && apiHashRef.current) {
-        apiHashRef.current.value = "";
-      }
+      if (step === "credentials" && apiHashRef.current) apiHashRef.current.value = "";
       if (step === "verify_code" && codeRef.current) codeRef.current.value = "";
       if (step === "verify_password" && passwordRef.current) {
         passwordRef.current.value = "";
