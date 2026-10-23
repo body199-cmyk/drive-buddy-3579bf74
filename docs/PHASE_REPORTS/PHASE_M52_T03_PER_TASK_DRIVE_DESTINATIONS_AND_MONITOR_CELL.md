@@ -45,3 +45,10 @@ Allow an active Telegram-to-Drive transfer to continue while a separate Universa
 ## Rollback
 
 Close or abandon PR #136 without merging. Production `main` and the published package are unchanged by this draft PR. No Drive data or account credentials were changed.
+
+
+## Post-merge status update (2026-10-23)
+
+- PR #136 was merged into staging branch `feat/auto-colab-tunnel-handoff` at `11854cbf520cc1b398acf583a111a23f7a802032`, after PR #137 integrated Telegram concurrency controls into its source branch.
+- CI run #39973477802 passed: 884 passed, 1 warning; notebook contract, package archive, and frontend lint/build passed. The exact combined tree also passed run #39973191911.
+- This is not a production/main merge or a release. Live Colab/Drive verification remains pending, including Telegram + Universal Downloader at separate destinations and a staged ramp of concurrency.

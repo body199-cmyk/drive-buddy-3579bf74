@@ -552,3 +552,12 @@ The persisted refresh toggle and 512 KiB fast sequential Telegram path are prese
 - Automated tests added/updated; CI must run before considering merge. No real Telegram/Drive or Colab benchmark has been performed.
 - Risk: 100 is a requested ceiling, not a guarantee Telegram will sustain it. FloodWait, connection capacity, local disk/RAM, and serialized Drive upload remain real constraints. A live test should ramp 8→12→20→... and watch FloodWait, failures, disk and throughput.
 - Do not claim production/live success based on CI alone; no package release is authorized by this note.
+
+
+# M53-T01 final status update — merged to staging (2026-10-23)
+
+- PR #137 merged into feat/per-task-drive-folders-monitor-cell as 1d91a6b822d73137b559b831567e1f88f08ffedd.
+- PR #136 then merged into feat/auto-colab-tunnel-handoff as 11854cbf520cc1b398acf583a111a23f7a802032. This is a staging feature branch, not main.
+- CI runs #39973191911 and #39973477802 both passed: 884 passed, 1 warning; notebook contract, byte-compile, archive build, and frontend lint/build passed. Artifacts were 678239 bytes; run #795 SHA-256 a2a01914015b30d9e17f907ceaa34446dd66600ea1dc1436e414dae0031f55f1; run #797 SHA-256 15120b98d90a06b0c409e31fac59cacc4670b467031b830ef39f8ae72889b401.
+- main remains at 9c7db2955a3d305b88f8b9b83cd1ee13ae4debc0; no release was published. No live Colab/Telegram/Drive test was performed. Do not equate CI with proof of sustainable 100-file concurrency.
+- Next: owner-run Colab ramp test (8, 12, 20, then higher only if stable), simultaneous Telegram→Folder A and Universal Downloader→Folder B, monitor cell, observe FloodWait/disk/RAM/throughput. Only after that consider main/release.
