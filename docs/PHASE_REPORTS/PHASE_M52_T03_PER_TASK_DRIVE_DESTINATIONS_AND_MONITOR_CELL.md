@@ -31,7 +31,7 @@ Allow an active Telegram-to-Drive transfer to continue while a separate Universa
 - Confirmed through repository reads that the notebook JSON parses, the source and exported cell list agree on all 11 code cells, the monitor is the last cell, and both notebook copies are byte-identical.
 - Added tests but did **not** execute pytest locally. GitHub Actions CI run #769 was in progress at the time this report was written.
 - No live Colab runtime was attached. No real Telegram download and Universal Downloader download were run together. No claim is made that the two files have been written to separate Drive folders in a live account.
-- The monitor reads `ctx.queue_manager.snapshot()`, exactly as requested; it reports that queue's tasks and should not be interpreted as an independent monitor for every Universal Downloader task unless the runtime's queue snapshot includes them.
+- The monitor aggregates `ctx.queue_manager.snapshot()` (Telegram queue) with `get_universal_downloader(ctx).list_tasks()` (Universal Downloader) so its active/remaining counts cover both separate managers. It still shows counts rather than per-file progress.
 
 ## Next actions
 
