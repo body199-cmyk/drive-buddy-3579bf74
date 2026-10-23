@@ -1,4 +1,4 @@
-"""Logging configuration with redaction filter."""
+"""Logging configuration with redaction and file-only application diagnostics."""
 from __future__ import annotations
 
 import logging
@@ -13,7 +13,10 @@ class RedactionFilter(logging.Filter):
         try:
             record.msg = redact(str(record.msg))
             if record.args:
-                record.args = tuple(redact(str(a)) if isinstance(a, str) else a for a in record.args)
+                record.args = tuple(
+                    redact(str(a)) if isinstance(a, str) else a
+                    for a in record.args
+                )
         except Exception:
             pass
         return True
@@ -23,16 +26,24 @@ _configured = False
 
 
 def setup(level: int = logging.INFO) -> logging.Logger:
+    """Configure redacted rotating file logs without notebook/console spam.
+
+    TeleDrive and Telethon records are written to LOG_PATH. Their loggers do
+    not propagate to the root logger, which commonly has a notebook stream
+    handler in Colab. This affects presentation only: WARNING/ERROR records
+    remain available in the rotating log file.
+    """
     global _configured
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("teledrive")
     if _configured:
         return logger
+
     logger.setLevel(level)
     logger.handlers.clear()
+    logger.propagate = False
 
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-
     file_handler = logging.handlers.RotatingFileHandler(
         LOG_PATH, maxBytes=2_000_000, backupCount=5, encoding="utf-8"
     )
@@ -40,10 +51,13 @@ def setup(level: int = logging.INFO) -> logging.Logger:
     file_handler.addFilter(RedactionFilter())
     logger.addHandler(file_handler)
 
-    stream = logging.StreamHandler()
-    stream.setFormatter(fmt)
-    stream.addFilter(RedactionFilter())
-    logger.addHandler(stream)
+    # Telethon uses its own logger namespace, so it must be routed explicitly
+    # to the same redacted rotating file rather than the Colab root stream.
+    telethon_logger = logging.getLogger("telethon")
+    telethon_logger.setLevel(logging.WARNING)
+    telethon_logger.propagate = False
+    telethon_logger.handlers.clear()
+    telethon_logger.addHandler(file_handler)
 
     _configured = True
     return logger
@@ -62,11 +76,13 @@ def tail(path: Path = LOG_PATH, lines: int = 200) -> str:
             size = f.tell()
             block = 8192
             data = b""
-            while size > 0 and data.count(b"\n") <= lines:
+            while size > 0 and data.count(b"\\n") <= lines:
                 read = min(block, size)
                 size -= read
                 f.seek(size)
                 data = f.read(read) + data
-            return "\n".join(data.decode("utf-8", errors="replace").splitlines()[-lines:])
+            return "\\n".join(
+                data.decode("utf-8", errors="replace").splitlines()[-lines:]
+            )
     except Exception:
         return ""
