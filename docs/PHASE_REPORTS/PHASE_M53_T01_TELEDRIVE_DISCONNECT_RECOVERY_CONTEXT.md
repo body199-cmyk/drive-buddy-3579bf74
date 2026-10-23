@@ -213,7 +213,7 @@ For the decisive live diagnostic, at the moment the page fails, determine: (a) c
 
 ## 8. Explicitly prohibited shortcuts
 
-- Do not change or merge to `main) without approval.
+- Do not change or merge to `main` without approval.
 - Do not rerun Cells 1–4 as the first response to a browser-only disconnect.
 - Do not call `bootstrap.run()` from a recovery cell.
 - Do not call `restore_and_reconcile()` while existing transfers might be running until its behavior is proven.
