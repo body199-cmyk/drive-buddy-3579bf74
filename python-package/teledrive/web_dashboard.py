@@ -348,6 +348,11 @@ h2{font-size:18px;line-height:1.4;margin:0}
 .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:9px;margin:10px 0 14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:10px;margin:10px 0}
+.auth-form{margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.auth-form h4{margin:0 0 6px;font-size:15px}
+.auth-form label{display:block;font-size:12px;font-weight:750;margin-bottom:5px}
+.auth-form input{width:100%;min-width:0}
+.auth-form .feature-grid{gap:10px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:15px}
 .step-card{margin-top:14px;box-shadow:var(--shadow);scroll-margin-top:118px}
 .step-card .feature-grid{margin-bottom:0}
@@ -547,7 +552,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-state"><span class="state-dot" id="sidebarStateDot" aria-hidden="true"></span><span><strong id="sidebarStateText">جارٍ التحقق…</strong><small>حالة الحسابات</small></span></div>
-      <p>تسجيل Telegram يتم عبر واجهة Gradio الآمنة فقط.</p>
+      <p>يمكن إضافة حساب Telegram من قسم الحسابات في هذه الواجهة.</p>
     </div>
   </aside>
   <main class="main-content">
@@ -632,11 +637,34 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <p class="detail-line">الحالة: <strong id="telegramStatus">—</strong></p>
       <p class="detail-line">الحساب الحالي: <strong id="telegramAccount">—</strong></p>
       <div class="row feature-actions">
-        <a class="link-btn" id="telegramLoginLink" href="__GRADIO_URL__" target="_blank" rel="noopener noreferrer">🔑 تسجيل الدخول / تبديل الحساب بأمان ↗</a>
         <button class="alt" id="btnTelegramStatus" type="button">تحديث الحالة</button>
         <button class="danger" id="btnTelegramLogout" type="button">تسجيل الخروج</button>
+        <a class="link-btn" id="telegramLoginLink" href="__GRADIO_URL__" target="_blank" rel="noopener noreferrer">الواجهة الكلاسيكية (اختياري) ↗</a>
       </div>
-      <p class="note">لأمان الحساب، إدخال API ID وAPI Hash والهاتف ورمز التحقق وكلمة مرور 2FA يتم في حقول Gradio الآمنة فقط، وليس هنا. تسجيل الخروج يمسح الجلسة المحفوظة للحساب الحالي.</p>
+      <div class="auth-form" aria-labelledby="telegramAuthFormTitle">
+        <h4 id="telegramAuthFormTitle">إضافة حساب Telegram من هنا</h4>
+        <p class="note">تُرسل البيانات إلى Runtime المرتبط فقط عبر الاتصال المحمي. لا تُحفظ في المتصفح أو Vercel. بعد نجاح الدخول تُحفظ الجلسة تلقائيًا في خزينة Google Drive.</p>
+        <div class="feature-grid">
+          <div><label for="telegramApiId">API ID</label><input id="telegramApiId" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="مثال: 123456"></div>
+          <div><label for="telegramApiHash">API Hash</label><input id="telegramApiHash" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="API Hash من my.telegram.org"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><button id="btnTelegramCredentials" type="button">١. التحقق من بيانات API</button></div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:220px"><label for="telegramPhone">رقم الهاتف بكود الدولة</label><input id="telegramPhone" type="tel" inputmode="tel" autocomplete="off" dir="ltr" placeholder="+201xxxxxxxxx"></div>
+          <button class="alt" id="btnTelegramSendCode" type="button">٢. إرسال كود الدخول</button>
+          <button class="alt" id="btnTelegramResendCode" type="button">إعادة إرسال الكود</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:180px"><label for="telegramCode">كود Telegram</label><input id="telegramCode" inputmode="numeric" autocomplete="one-time-code" dir="ltr" placeholder="أدخل الكود الذي وصلك"></div>
+          <button id="btnTelegramVerifyCode" type="button">٣. تأكيد الكود</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:180px"><label for="telegram2faPassword">كلمة مرور التحقق بخطوتين (إن طُلبت)</label><input id="telegram2faPassword" type="password" autocomplete="new-password" dir="ltr" placeholder="كلمة مرور 2FA"></div>
+          <button id="btnTelegramVerifyPassword" type="button">٤. تأكيد كلمة المرور</button>
+        </div>
+        <div class="msg" id="telegramAuthMsg" role="status" aria-live="polite"></div>
+      </div>
+      <p class="note">تسجيل الخروج يمسح الجلسة المحفوظة لهذا الحساب. لا تشارك API Hash أو كود الدخول أو كلمة مرور 2FA مع أي شخص.</p>
       <div class="msg" id="telegramMsg"></div>
     </section>
 
@@ -1465,8 +1493,60 @@ async function queueAction(name, btn){
   }finally{ if(btn) btn.disabled=false; }
 }
 
-// Telegram authentication remains in the secure Gradio controls. The modern
-// page can safely inspect status or sign out before switching accounts.
+// Dedicated runtime-authenticated Telegram login. Secrets never enter the
+// generic React bridge or browser storage; request bodies are not logged.
+async function telegramAuthStep(step, values, button){
+  const message=$("telegramAuthMsg");
+  if(button) button.disabled=true;
+  if(message){message.className="msg";message.textContent="جارٍ تنفيذ خطوة تسجيل الدخول…";}
+  try{
+    const response=await postJson("api/telegram/auth",Object.assign({step:step},values||{}));
+    if(message){
+      const ok=response && response.ok===true;
+      message.className="msg "+(ok?"ok":"err");
+      message.textContent=(ok?"✅ ":"⚠️ ")+(response.message||"تعذر إكمال خطوة تسجيل الدخول.");
+    }
+    if(response && response.auth_state) setText("telegramStatus",friendlyStatus(response.auth_state));
+    if(response && response.authorized){
+      $("telegramApiHash").value="";
+      $("telegramCode").value="";
+      $("telegram2faPassword").value="";
+      setMessage($("telegramMsg"),"تم تسجيل الدخول. جرى طلب حفظ الجلسة في خزينة Drive.",true);
+      pollMetrics();
+    }
+    if(step==="credentials" && response && response.ok) $("telegramApiHash").value="";
+    if(step==="verify_code") $("telegramCode").value="";
+    if(step==="verify_password") $("telegram2faPassword").value="";
+    return response;
+  }catch(_error){
+    if(message){message.className="msg err";message.textContent="تعذر الاتصال بـ Runtime. تأكد من تشغيل Colab وإعادة ربط الواجهة ثم حاول مجددًا.";}
+    return null;
+  }finally{if(button) button.disabled=false;}
+}
+$("btnTelegramCredentials").addEventListener("click",function(){
+  const apiId=$("telegramApiId").value.trim();
+  const apiHash=$("telegramApiHash").value.trim();
+  if(!/^[0-9]+$/.test(apiId)||!apiHash){setMessage($("telegramAuthMsg"),"أدخل API ID رقميًا وAPI Hash أولًا.",false);return;}
+  telegramAuthStep("credentials",{api_id:apiId,api_hash:apiHash},this);
+});
+$("btnTelegramSendCode").addEventListener("click",function(){
+  const phone=$("telegramPhone").value.trim();
+  if(phone.charAt(0)!=="+"||phone.slice(1).length<7||phone.slice(1).length>15||!/^[0-9]+$/.test(phone.slice(1))){setMessage($("telegramAuthMsg"),"أدخل رقم الهاتف بالصيغة الدولية، مثل +201xxxxxxxxx.",false);return;}
+  telegramAuthStep("send_code",{phone:phone},this);
+});
+$("btnTelegramResendCode").addEventListener("click",function(){telegramAuthStep("resend_code",{},this);});
+$("btnTelegramVerifyCode").addEventListener("click",function(){
+  const code=$("telegramCode").value.trim();
+  if(!code){setMessage($("telegramAuthMsg"),"أدخل كود Telegram أولًا.",false);return;}
+  telegramAuthStep("verify_code",{code:code},this);
+});
+$("btnTelegramVerifyPassword").addEventListener("click",function(){
+  const password=$("telegram2faPassword").value;
+  if(!password){setMessage($("telegramAuthMsg"),"أدخل كلمة مرور التحقق بخطوتين إذا طُلبت.",false);return;}
+  telegramAuthStep("verify_password",{password:password},this);
+});
+
+// The classic Gradio page remains an optional fallback.
 const telegramLoginLink=$("telegramLoginLink");
 if(document.body.dataset.gradioAvailable!=="true"){
   telegramLoginLink.classList.add("disabled");
@@ -2336,6 +2416,62 @@ def create_web_app(ctx: Any):
     @app.post("/api/action")
     def api_action(payload: dict):
         return JSONResponse(bridge.action(payload), headers=_NO_STORE)
+
+    @app.post("/api/telegram/auth")
+    def api_telegram_auth(payload: dict):
+        """Dedicated authenticated Telegram login path; never route secrets through ReactBridge."""
+        data = payload if isinstance(payload, dict) else {}
+        step = str(data.get("step") or "").strip()
+        # Strict allowlist and bounded inputs. Never log credentials, login codes,
+        # 2FA passwords, or any request payload from this endpoint.
+        try:
+            if step == "credentials":
+                api_id = str(data.get("api_id") or "").strip()
+                api_hash = str(data.get("api_hash") or "").strip()
+                if not api_id.isdigit() or len(api_id) > 20 or not api_hash or len(api_hash) > 256:
+                    return JSONResponse({"ok": False, "message": "أدخل API ID رقميًا وAPI Hash صالحًا."}, status_code=400, headers=_NO_STORE)
+                result = ctx.handlers.h_telegram_set_credentials(api_id, api_hash)
+            elif step == "send_code":
+                phone = str(data.get("phone") or "").strip()
+                if len(phone) > 32:
+                    return JSONResponse({"ok": False, "message": "رقم الهاتف غير صالح."}, status_code=400, headers=_NO_STORE)
+                result = ctx.handlers.h_telegram_send_code(phone)
+            elif step == "resend_code":
+                result = ctx.handlers.h_telegram_resend_code()
+            elif step == "verify_code":
+                code = str(data.get("code") or "").strip()
+                if not code or len(code) > 32:
+                    return JSONResponse({"ok": False, "message": "أدخل كود Telegram الصحيح."}, status_code=400, headers=_NO_STORE)
+                result = ctx.handlers.h_telegram_verify_code(code)
+            elif step == "verify_password":
+                password = str(data.get("password") or "")
+                if not password or len(password) > 512:
+                    return JSONResponse({"ok": False, "message": "أدخل كلمة مرور التحقق بخطوتين."}, status_code=400, headers=_NO_STORE)
+                result = ctx.handlers.h_telegram_verify_password(password)
+            else:
+                return JSONResponse({"ok": False, "message": "خطوة تسجيل الدخول غير معروفة."}, status_code=400, headers=_NO_STORE)
+            state = str(getattr(ctx.telegram_auth, "state", ""))
+            authorized = bool(getattr(ctx.telegram_auth, "authorized", False))
+            message = str(result[0]) if isinstance(result, (tuple, list)) and result else "تم إرسال الطلب."
+            ok = not message.lstrip().startswith(("⚠️", "❌"))
+            return JSONResponse({
+                "ok": ok,
+                "message": message,
+                "auth_state": state,
+                "authorized": authorized,
+                "needs_password": state == "PASSWORD_REQUIRED",
+            }, status_code=200 if ok else 400, headers=_NO_STORE)
+        except Exception as exc:  # noqa: BLE001 — do not echo or log secret-bearing input
+            from .errors import TeleDriveError
+            message = str(exc) if isinstance(exc, TeleDriveError) else "تعذر إكمال تسجيل الدخول. راجع الاتصال وحاول مرة أخرى."
+            state = str(getattr(ctx.telegram_auth, "state", ""))
+            return JSONResponse({
+                "ok": False,
+                "message": message,
+                "auth_state": state,
+                "authorized": bool(getattr(ctx.telegram_auth, "authorized", False)),
+                "needs_password": state == "PASSWORD_REQUIRED",
+            }, status_code=400, headers=_NO_STORE)
 
     @app.post("/api/queue/{name}")
     def api_queue(name: str):

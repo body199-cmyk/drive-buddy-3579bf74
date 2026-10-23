@@ -1,4 +1,11 @@
-import type { BridgeRequest, BridgeResponse, LiveUiState, TeleDriveBridge } from "./bridgeTypes";
+import type {
+  BridgeRequest,
+  BridgeResponse,
+  LiveUiState,
+  TeleDriveBridge,
+  TelegramAuthResult,
+  TelegramAuthStep,
+} from "./bridgeTypes";
 import { newRequestId } from "./bridgeTypes";
 
 /**
@@ -58,7 +65,7 @@ export class RemoteColabBridge implements TeleDriveBridge {
     for (const listener of this.listeners) listener(state);
   }
 
-  private async fetchJson(path: string, init: RequestInit = {}) {
+  private async fetchJson(path: string, init: RequestInit = {}, allowBadRequest = false) {
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${this.token}`);
     if (init.body) headers.set("Content-Type", "application/json");
@@ -74,7 +81,7 @@ export class RemoteColabBridge implements TeleDriveBridge {
         "Pairing rejected. Check the token and make sure it belongs to this running Colab session.",
       );
     }
-    if (!response.ok) {
+    if (!response.ok && !(allowBadRequest && response.status === 400)) {
       throw new Error(`Colab runtime returned HTTP ${response.status}.`);
     }
     return response.json();
@@ -138,6 +145,44 @@ export class RemoteColabBridge implements TeleDriveBridge {
         actionId: request.actionId,
         status: "error",
         errorKey: "bridge.remote_error",
+        message: error instanceof Error ? error.message : "Could not reach the Colab runtime.",
+      };
+    }
+  }
+
+  /**
+   * Dedicated secret-bearing path, protected by the runtime bearer token.
+   * Do not route Telegram credentials through request()/api/action: the
+   * generic React bridge intentionally refuses secret-bearing payloads.
+   */
+  async telegramAuthStep(
+    step: TelegramAuthStep,
+    payload: Record<string, string>,
+  ): Promise<TelegramAuthResult> {
+    if (!this.isLive()) {
+      return { ok: false, message: "Colab runtime is not connected." };
+    }
+    try {
+      const result = (await this.fetchJson(
+        "api/telegram/auth",
+        {
+          method: "POST",
+          body: JSON.stringify({ ...payload, step }),
+        },
+        true,
+      )) as TelegramAuthResult;
+      if (result.ok) {
+        await this.request({
+          requestId: newRequestId(),
+          actionId: "queue.refresh",
+          payload: {},
+          language: this.currentState?.language ?? "ar",
+        });
+      }
+      return result;
+    } catch (error) {
+      return {
+        ok: false,
         message: error instanceof Error ? error.message : "Could not reach the Colab runtime.",
       };
     }

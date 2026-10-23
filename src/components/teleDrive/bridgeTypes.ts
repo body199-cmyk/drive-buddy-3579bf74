@@ -75,8 +75,24 @@ export type BridgeResponse<T = unknown> = {
   state?: LiveUiState;
 };
 
+export type TelegramAuthStep =
+  "credentials" | "send_code" | "resend_code" | "verify_code" | "verify_password";
+
+export type TelegramAuthResult = {
+  ok: boolean;
+  message: string;
+  auth_state?: string;
+  authorized?: boolean;
+  needs_password?: boolean;
+};
+
 export interface TeleDriveBridge {
   request<T>(request: BridgeRequest): Promise<BridgeResponse<T>>;
+  /** Optional dedicated endpoint; auth secrets must never enter BridgeRequest payloads. */
+  telegramAuthStep?(
+    step: TelegramAuthStep,
+    payload: Record<string, string>,
+  ): Promise<TelegramAuthResult>;
   subscribe(listener: (state: LiveUiState) => void): () => void;
   isLive(): boolean;
 }
