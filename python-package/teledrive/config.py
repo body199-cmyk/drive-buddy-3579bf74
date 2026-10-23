@@ -148,15 +148,15 @@ def _bounded_env_int(name: str, default: int, low: int, high: int) -> int:
 FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
 PARALLEL_DOWNLOAD_MIN_BYTES = 2 * 1024 * 1024
 PARALLEL_DOWNLOAD_STREAMS = _bounded_env_int("TELEDRIVE_TG_STREAMS", 12, 1, 16)
-TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 24, 1, 32)
-MAX_CONCURRENT_TG_DOWNLOADS = _bounded_env_int("TELEDRIVE_TG_FILES", 4, 1, 8)
+TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 24, 1, 100)
+MAX_CONCURRENT_TG_DOWNLOADS = _bounded_env_int("TELEDRIVE_TG_FILES", 100, 1, 100)
 # M45-T04: large sliding reorder window (72 chunks = 36 MiB) for 12 independent
 # FastTelethon MTProtoSender TCP connections so fast sockets never barrier-stall.
 PARALLEL_DOWNLOAD_WINDOW_CHUNKS = max(PARALLEL_DOWNLOAD_STREAMS * 6, 64)
 # Completed files allowed to wait for the single Drive uploader. This is the
 # disk backpressure of the download/upload pipeline: downloads pause instead of
 # filling local disk with finished .part files.
-MAX_PENDING_UPLOADS = _bounded_env_int("TELEDRIVE_UPLOAD_BUFFER", 4, 1, 16)
+MAX_PENDING_UPLOADS = _bounded_env_int("TELEDRIVE_UPLOAD_BUFFER", 100, 1, 100)
 
 RETRY_MAX_ATTEMPTS = 5
 RETRY_BASE_SECONDS = 2.0

@@ -1,3 +1,18 @@
+# Active Task Update — M52-T03 per-task Drive folders and final monitor cell (2026-10-23)
+
+## Current status — draft PR, validation pending
+
+- PR [#136](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/136) is open as a draft on `feat/per-task-drive-folders-monitor-cell`, based on `feat/auto-colab-tunnel-handoff`. It is intentionally not merged to production.
+- Universal Downloader now has an independent Drive folder picker. Choosing a folder only affects that downloader task; it does not mutate the shared Telegram/global destination. Folder ID and name are stored on the task and retained for retries.
+- The requested monitor cell is appended as the final cell via the canonical notebook generator; both notebook copies and `colab_cells.json` are synchronized. The existing experimental Vercel cell and existing Cell 4 / cleanup behavior were preserved in the generator.
+- Regression tests were added/updated for per-task folder selection, retry destination preservation, and notebook cell counts.
+- CI run #769 was in progress at the time of this update. No claim is made that pytest or live Colab/Drive transfer succeeded.
+- Next: wait for CI, fix any failure, then run a live test with two small files to two distinct Drive folders while Telegram and Universal Downloader run together. Verify both final Drive paths and run the monitor during active transfers. Do not publish a new package before CI passes and owner-run live validation is recorded.
+
+Detailed report: `docs/PHASE_REPORTS/PHASE_M52_T03_PER_TASK_DRIVE_DESTINATIONS_AND_MONITOR_CELL.md`.
+
+---
+
 # Active Task Update — M52-T02 universal downloader controls (2026-10-21)
 
 ## Current status — merged and published

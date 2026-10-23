@@ -801,10 +801,24 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 
     <div class="destination-summary" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <div>
-        <span>📁 مجلد الحفظ الحالي في Google Drive: </span>
+        <span>📁 مجلد الحفظ لهذه المهمة: </span>
         <strong id="udlSelectedFolderName">نفس المجلد المحدد في قسم «الوجهة»</strong>
       </div>
-      <button class="alt small" type="button" data-section-target="destination" onclick="document.querySelector('[data-section-target=destination]').click()">تغيير مجلد الحفظ ↗</button>
+      <div class="row" style="gap:8px">
+        <button class="alt small" id="btnUdlChooseFolder" type="button">📂 اختيار مجلد مختلف</button>
+        <button class="alt small" id="btnUdlUseDefaultFolder" type="button">↩ استخدام الوجهة العامة</button>
+      </div>
+    </div>
+    <div id="udlFolderPickerPanel" class="destination-summary" hidden style="margin-bottom:12px">
+      <p class="note">اختيار المجلد هنا خاص بمهام التحميل الشامل فقط، ولا يغيّر وجهة Telegram أو الوجهة العامة.</p>
+      <div class="row">
+        <button class="alt small" id="btnUdlFolderUp" type="button" disabled>⬆ المجلد الأعلى</button>
+        <button class="alt small" id="btnUdlFolderRefresh" type="button">🔄 تحديث المجلدات</button>
+        <button class="alt small" id="btnUdlUseCurrentFolder" type="button">استخدام هذا المجلد</button>
+        <span class="note" id="udlFolderBreadcrumb">My Drive</span>
+      </div>
+      <div class="folder-list" id="udlFolderList" aria-live="polite"><div class="note">اربط Google Drive أولًا لعرض المجلدات.</div></div>
+      <div class="msg" id="udlFolderMsg" role="status"></div>
     </div>
 
     <div class="url-tools">
@@ -1836,13 +1850,121 @@ $("qBody").addEventListener("click",function(event){
   const countEl = $("udlCount");
   const folderLabel = $("udlSelectedFolderName");
 
+  let udlExplicitFolder = null;
+  let udlFolderStack = [{id:"root",name:"My Drive"}];
+  let udlFolderRequestSequence = 0;
+  const folderPanel = $("udlFolderPickerPanel");
+  const folderListEl = $("udlFolderList");
+  const folderMsgEl = $("udlFolderMsg");
+  const folderBreadcrumbEl = $("udlFolderBreadcrumb");
+  const btnChooseFolder = $("btnUdlChooseFolder");
+  const btnUseDefaultFolder = $("btnUdlUseDefaultFolder");
+  const btnFolderUp = $("btnUdlFolderUp");
+  const btnFolderRefresh = $("btnUdlFolderRefresh");
+  const btnUseCurrentFolder = $("btnUdlUseCurrentFolder");
+
   function syncFolderLabel(){
     const mainFolder = $("selectedFolderName");
-    if(mainFolder && folderLabel){
-      folderLabel.textContent = mainFolder.textContent || "نفس المجلد المحدد في قسم الوجهة";
-      folderLabel.className = mainFolder.className;
+    if(!folderLabel) return;
+    if(udlExplicitFolder){
+      folderLabel.textContent = (udlExplicitFolder.name || udlExplicitFolder.id) + " — لهذه المهمة فقط";
+      folderLabel.className = "ok";
+    }else{
+      folderLabel.textContent = mainFolder && mainFolder.textContent
+        ? mainFolder.textContent
+        : "لم يتم اختيار مجلد في قسم الوجهة";
+      folderLabel.className = mainFolder ? mainFolder.className : "";
     }
   }
+
+  function renderUdlFolderBreadcrumb(){
+    if(folderBreadcrumbEl){
+      folderBreadcrumbEl.textContent = udlFolderStack.map(function(item){return item.name;}).join(" / ");
+    }
+    if(btnFolderUp) btnFolderUp.disabled = udlFolderStack.length <= 1;
+  }
+
+  function chooseUdlFolder(folder){
+    if(!folder || !folder.id) return;
+    udlExplicitFolder = {id:String(folder.id), name:String(folder.name || folder.id)};
+    syncFolderLabel();
+    if(folderPanel) folderPanel.hidden = true;
+    if(msgEl){msgEl.textContent="تم تحديد مجلد مستقل لهذه المهمة فقط.";msgEl.className="msg ok";}
+  }
+
+  function renderUdlFolders(folders){
+    if(!folderListEl) return;
+    folderListEl.replaceChildren();
+    if(!Array.isArray(folders) || folders.length === 0){
+      const empty=document.createElement("div");
+      empty.className="note";
+      empty.textContent="لا توجد مجلدات في هذا المستوى.";
+      folderListEl.appendChild(empty);
+      return;
+    }
+    folders.forEach(function(folder){
+      if(!folder || !folder.id) return;
+      const row=document.createElement("div"); row.className="folder-row";
+      const name=document.createElement("div"); name.className="folder-name";
+      name.textContent="📁 "+(folder.name || "مجلد بدون اسم");
+      const actions=document.createElement("div"); actions.className="folder-actions";
+      const open=document.createElement("button");
+      open.type="button"; open.className="alt small"; open.textContent="فتح";
+      open.addEventListener("click",function(){
+        udlFolderStack.push({id:String(folder.id),name:String(folder.name || "مجلد")});
+        void refreshUdlFolders();
+      });
+      const choose=document.createElement("button");
+      choose.type="button"; choose.className="small"; choose.textContent="اختيار للحفظ";
+      choose.addEventListener("click",function(){
+        chooseUdlFolder({id:folder.id,name:folder.name});
+      });
+      actions.append(open,choose); row.append(name,actions); folderListEl.appendChild(row);
+    });
+  }
+
+  async function refreshUdlFolders(button){
+    if(typeof driveAvailable !== "undefined" && !driveAvailable){
+      if(folderMsgEl){folderMsgEl.textContent="اربط Google Drive أولًا من قسم الحسابات.";folderMsgEl.className="msg err";}
+      return;
+    }
+    const current=udlFolderStack[udlFolderStack.length-1] || {id:"root",name:"My Drive"};
+    renderUdlFolderBreadcrumb();
+    const request=++udlFolderRequestSequence;
+    const result=await bridgeAction("drive.list_folders",{parentId:current.id || "root"},folderMsgEl,button);
+    if(request!==udlFolderRequestSequence) return;
+    if(result && result.status==="ok"){
+      const folders=(result.data && Array.isArray(result.data.folders))?result.data.folders:[];
+      renderUdlFolders(folders);
+      if(folderMsgEl){folderMsgEl.textContent="تم تحميل "+folders.length+" مجلدًا.";folderMsgEl.className="msg ok";}
+    }else{
+      renderUdlFolders([]);
+    }
+  }
+
+  if(btnChooseFolder){
+    btnChooseFolder.addEventListener("click",function(){
+      if(!folderPanel) return;
+      folderPanel.hidden=!folderPanel.hidden;
+      if(!folderPanel.hidden) void refreshUdlFolders(this);
+    });
+  }
+  if(btnUseDefaultFolder){
+    btnUseDefaultFolder.addEventListener("click",function(){
+      udlExplicitFolder=null;
+      syncFolderLabel();
+      if(folderPanel) folderPanel.hidden=true;
+      if(msgEl){msgEl.textContent="ستستخدم المهمة الوجهة العامة المحددة في قسم الوجهة.";msgEl.className="msg ok";}
+    });
+  }
+  if(btnFolderRefresh) btnFolderRefresh.addEventListener("click",function(){void refreshUdlFolders(this);});
+  if(btnFolderUp) btnFolderUp.addEventListener("click",function(){
+    if(udlFolderStack.length>1){udlFolderStack.pop();void refreshUdlFolders(this);}
+  });
+  if(btnUseCurrentFolder) btnUseCurrentFolder.addEventListener("click",function(){
+    const current=udlFolderStack[udlFolderStack.length-1] || {id:"root",name:"My Drive"};
+    chooseUdlFolder(current);
+  });
 
   function renderUdlTasks(tasks){
     syncFolderLabel();
@@ -1977,7 +2099,10 @@ $("qBody").addEventListener("click",function(event){
         const r = await fetch("api/universal/start", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({url: url, quality: quality})
+          body: JSON.stringify(Object.assign(
+            {url: url, quality: quality},
+            udlExplicitFolder ? {folder_id: udlExplicitFolder.id, folder_name: udlExplicitFolder.name} : {}
+          ))
         });
         const d = await r.json();
         if(d && d.ok){
@@ -2240,10 +2365,15 @@ def create_web_app(ctx: Any):
     def api_universal_start(payload: dict):
         from .universal_downloader import get_universal_downloader
         mgr = get_universal_downloader(ctx)
-        url = str((payload or {}).get("url") or "")
-        quality = str((payload or {}).get("quality") or "best")
-        folder_id = (payload or {}).get("folder_id")
-        return JSONResponse(mgr.start_download(url=url, quality=quality, folder_id=folder_id), headers=_NO_STORE)
+        payload = payload or {}
+        url = str(payload.get("url") or "")
+        quality = str(payload.get("quality") or "best")
+        folder_id = payload.get("folder_id")
+        folder_name = str(payload.get("folder_name") or "").strip()[:200] or None
+        return JSONResponse(
+            mgr.start_download(url=url, quality=quality, folder_id=folder_id, folder_name=folder_name),
+            headers=_NO_STORE,
+        )
 
     @app.post("/api/universal/cancel")
     def api_universal_cancel(payload: dict):

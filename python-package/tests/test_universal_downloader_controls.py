@@ -15,7 +15,7 @@ def _manager_with_task(status: str = "downloading"):
     manager._tasks.append({
         "id": task_id, "status": status, "status_ar": status,
         "pause_supported": True, "url": "https://example.com/file.zip",
-        "quality": "best", "folder_id": "folder-test",
+        "quality": "best", "folder_id": "folder-test", "folder_name": "Folder Test",
     })
     manager._cancel_events[task_id] = event
     resume_gate = Event()
@@ -139,6 +139,7 @@ def test_retry_task_restarts_only_failed_or_cancelled_with_saved_inputs(monkeypa
         "url": "https://example.com/file.zip",
         "quality": "best",
         "folder_id": "folder-test",
+        "folder_name": "Folder Test",
     }]
 
 
@@ -184,3 +185,14 @@ def test_dashboard_exposes_cancel_and_speed_without_unsafe_html_rendering():
     assert "document.createElement" in source
     assert ".innerHTML =" not in source
     assert ".innerHTML=" not in source
+
+
+def test_dashboard_universal_downloader_has_per_task_folder_picker_and_sends_folder_name():
+    dashboard_path = Path(__file__).parents[1] / "teledrive" / "web_dashboard.py"
+    source = dashboard_path.read_text(encoding="utf-8")
+
+    assert 'id="btnUdlChooseFolder"' in source
+    assert 'id="udlFolderPickerPanel"' in source
+    assert 'drive.list_folders' in source
+    assert 'folder_id: udlExplicitFolder.id, folder_name: udlExplicitFolder.name' in source
+    assert 'folder_name = str(payload.get("folder_name") or "").strip()[:200] or None' in source

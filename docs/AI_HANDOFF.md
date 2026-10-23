@@ -1,3 +1,20 @@
+# بطاقة تسليم M52-T03 — وجهة مستقلة لكل مهمة تنزيل + خلية المراقبة الأخيرة (2026-10-23)
+
+| الحقل | القيمة |
+|---|---|
+| الحالة | **PR #136 مفتوح كمسودة؛ CI قيد التشغيل؛ لا دمج أو نشر إنتاجي** |
+| الفرع | `feat/per-task-drive-folders-monitor-cell` المبني على `feat/auto-colab-tunnel-handoff` |
+| PR | [#136 — Add per-task Drive folders and final Colab monitor cell](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/136) |
+| الهدف | السماح باختيار مجلد Drive مستقل لكل مهمة في Universal Downloader دون تغيير وجهة Telegram أو الوجهة العامة، وإضافة خلية مراقبة في آخر النوتبوك. |
+| التنفيذ | أُضيف متصفح مجلدات مستقل في صفحة التحميل الشامل يستعمل `drive.list_folders` للقراءة فقط؛ يرسل `folder_id` و`folder_name` مع المهمة؛ تحفظ إعادة المحاولة الوجهة نفسها. لم يُعدّل اختيار المجلد العام عند اختيار مجلد للتحميل الشامل. |
+| النوتبوك | أُضيفت خلية المراقبة كمصدر قانوني في `python-package/teledrive/notebook_cells.py`، مع تحديث `colab_cells.json` ونسختي `python-package/notebook/TeleDrive.ipynb` و`public/TeleDrive.ipynb`. احتُفظ بخلية Vercel التجريبية الموجودة في الفرع، وأُدخلت في المصدر القانوني حتى لا تُفقد. خلية المراقبة هي آخر خلية، وتجمع الآن أعداد المهام من طابور Telegram ومدير Universal Downloader المنفصلين. |
+| أمان الخلية | في كتلة `finally` تستعيد الخلية `write` و`writelines` و`flush` للمجاري التي غيّرتها. أُحدّثت تعليمات النوتبوك: شغّل خلية المراقبة بعد بدء التحميل، ولا تشغّل خلية التنظيف/الإغلاق قبل انتهاء التحميل لأنها تغلق التطبيق. |
+| الاختبارات | أُضيفت اختبارات عقد لاختيار المجلد المستقل والحفاظ على اسم المجلد عند إعادة المحاولة، وحُدّثت اختبارات تعداد الخلايا الاختيارية. فُحص JSON للنوتبوك، وتطابق المصدر مع الخلايا المصدّرة، وتطابق نسختي النوتبوك. |
+| ما لم يثبت | لا يوجد اختبار حي داخل Colab أو Google Drive حتى الآن، ولم يُثبت فعليًا تحميل Telegram وUniversal Downloader بالتوازي إلى مجلدين مختلفين. لا تدّعِ نجاحًا حيًا حتى يختبر المالك ذلك. |
+| التالي | انتظار CI على PR #136؛ إصلاح أي فشل قبل الدمج. بعد ذلك، اختبار حي بملفين صغيرين ومجلدين مختلفين مع التحقق من الوجهتين، ثم اختبار المراقبة أثناء النقل. لا تُحدّث الإصدار المنشور ضمن هذا التغيير قبل اجتياز البوابات. |
+
+---
+
 # بطاقة تسليم M52-T02 — أدوات التحكم في التنزيل الخارجي (2026-10-21)
 
 | الحقل | القيمة |
@@ -525,3 +542,13 @@ The persisted refresh toggle and 512 KiB fast sequential Telegram path are prese
 ## التراجع
 
 يعكس merge `2d5893d…` ثم يُنشر ZIP/manifest متطابقان مع SHA السابق عبر مسار release fail-closed. لا يحذف التراجع release/tag ولا Vault تلقائيًا.
+
+
+# M53-T01 — Telegram concurrency and adaptive GetFile pool (2026-10-23)
+
+- Branch: fix/telegram-adaptive-request-pool (based on feat/per-task-drive-folders-monitor-cell).
+- Requested behavior: owner-selected concurrency is honored up to 100 files rather than silently clamped at 4/8.
+- Changes: TELEDRIVE_TG_FILES ceiling/default raised to 100; GetFile pool ceiling raised to 100 (default remains 24); Drive upload buffer ceiling/default raised to 100; download permits are released before waiting for an upload-buffer slot; new TelegramRequestPool freezes on FloodWaitError.seconds, halves its live limit and gradually recovers after successful requests. TELEDRIVE_TG_FLOODWAIT_MAX configures the freeze cap (default 3600 s, max 86400 s).
+- Automated tests added/updated; CI must run before considering merge. No real Telegram/Drive or Colab benchmark has been performed.
+- Risk: 100 is a requested ceiling, not a guarantee Telegram will sustain it. FloodWait, connection capacity, local disk/RAM, and serialized Drive upload remain real constraints. A live test should ramp 8→12→20→... and watch FloodWait, failures, disk and throughput.
+- Do not claim production/live success based on CI alone; no package release is authorized by this note.
