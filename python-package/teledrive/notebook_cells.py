@@ -938,7 +938,7 @@ CELL_4B_VERCEL_HANDOFF = '''#@title ⚡ خطوة الربط التلقائي —
 import os, re, time, queue, threading, subprocess, urllib.request, urllib.parse, html, secrets
 from IPython.display import display, HTML
 
-VERCEL_CONNECT_URL = "https://teledrive-git-feat-auto-colab-tunnel-handoff-abdullah-74f3.vercel.app/connect"
+VERCEL_CONNECT_URL = "https://teledrive.vercel.app/connect"
 
 if "web_server" not in globals() or web_server is None:
     print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
