@@ -358,6 +358,35 @@
   gap: 12px;
 }
 
+.td-telegram-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--td-line);
+  border-radius: var(--radius-lg);
+  background: var(--td-surface-2);
+}
+
+.td-auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.td-auth-help {
+  margin: 0;
+  color: var(--td-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 620px) {
+  .td-auth-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .td-otp-panel {
   padding: 14px;
   border: 1px solid oklch(84% 0.05 230);
