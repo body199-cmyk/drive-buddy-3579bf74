@@ -782,19 +782,22 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
     from fastapi.testclient import TestClient
 
     app = create_web_app(SimpleNamespace())
-    with TestClient(app, base_url="https://runtime-123.googleusercontent.com") as client:
-        # A same-origin Referer is sufficient when Fetch Metadata is absent.
+    # Colab terminates TLS at its proxy; the app may see HTTP upstream
+    # even though the browser's official proxy URL and Referer use HTTPS.
+    with TestClient(app, base_url="http://runtime-123.prod.colab.dev") as client:
+        # A same-host HTTPS Referer is sufficient when Fetch Metadata is absent,
+        # even when the upstream request scheme is HTTP.
         response = client.get(
             "/api/health",
-            headers={"Referer": "https://runtime-123.googleusercontent.com/"},
+            headers={"Referer": "https://runtime-123.prod.colab.dev/"},
         )
         assert response.status_code == 200
         assert response.json()["ok"] is True
 
-        # Same-origin Origin is another valid browser signal.
+        # Same-host HTTPS Origin is another valid browser signal.
         origin_response = client.get(
             "/api/health",
-            headers={"Origin": "https://runtime-123.googleusercontent.com"},
+            headers={"Origin": "https://runtime-123.prod.colab.dev"},
         )
         assert origin_response.status_code == 200
 
