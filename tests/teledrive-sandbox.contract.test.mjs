@@ -332,7 +332,10 @@ test("15d — modern connection form uses transient refs and never generic actio
   assert.match(component, /ref=\{passwordRef\}/);
   assert.match(component, /bridge\.telegramAuthStep\(step, payload\)/);
   assert.match(component, /submitTelegramAuth\("verify_password", \{ password \}\)/);
-  assert.doesNotMatch(component, /run\("telegram\.(set_credentials|send_code|verify_code|verify_password)"/);
+  assert.doesNotMatch(
+    component,
+    /run\("telegram\.(set_credentials|send_code|verify_code|verify_password)"/,
+  );
 });
 
 test("15b — remembered analyze link stays backend-backed and offers an explicit clear action", async () => {
