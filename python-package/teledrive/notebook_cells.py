@@ -45,7 +45,9 @@ NOTEBOOK_PATHS = (
 )
 CELLS_JSON = Path(__file__).resolve().parent / "colab_cells.json"
 
-HEADER_MARKDOWN = f"""# {TITLE}
+HEADER_MARKDOWN = f"""<details><summary>📘 دليل التشغيل والإعدادات — اضغط للتوسيع / Expand guide</summary>
+
+# {TITLE}
 
 Run cells 1–5 in order after every **new** Colab VM. Cell 5 attempts the optional Vercel handoff; if it fails, the local UI still runs.
 A dead runtime wipes `/content` — the last cell alone cannot revive the app.
@@ -91,7 +93,9 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 3. لو فشل النفق أو التحويل، استخدم الربط اليدوي أدناه: انسخ `TeleDrive Web Dashboard URL` ورمز `TeleDrive pairing token` من مخرجات الخلية 4.
 4. افتح صفحة `/connect` في Vercel والصق الرابط والرمز في الخانتين.
 
-**تنبيه أمان:** رابط الربط التلقائي يحتوي رمزًا سريًا داخل جزء الرابط (#). لا تشاركه ولا تنشر صورة له. النفق مؤقت ويتوقف إذا انتهت جلسة Colab أو توقفت العملية؛ لا توجد آلية مجانية تضمن بقاء Colab متصلًا دائمًا."""
+**تنبيه أمان:** رابط الربط التلقائي يحتوي رمزًا سريًا داخل جزء الرابط (#). لا تشاركه ولا تنشر صورة له. النفق مؤقت ويتوقف إذا انتهت جلسة Colab أو توقفت العملية؛ لا توجد آلية مجانية تضمن بقاء Colab متصلًا دائمًا.
+
+</details>"""
 
 CELL_1_PACKAGE_UPDATER = '''# ==== Cell 1: verified package update gate + restore + pinned dependencies ====
 # Pre-bootstrap order: the update gate first (BEFORE any `import teledrive`
