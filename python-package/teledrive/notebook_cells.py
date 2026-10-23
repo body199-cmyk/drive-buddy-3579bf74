@@ -887,7 +887,7 @@ if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
         # Returns only after the server is really listening; on failure it
         # raises with the concrete reason (missing module / busy port / ...).
         web_server = launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)
-        print("web dashboard: OK on port", WEB_DASHBOARD_PORT)
+        print("web dashboard: OK on port", int(web_server.config.port))
     except Exception as _web_exc:  # never leave the user with no UI at all
         print("⚠️ web dashboard unavailable:", type(_web_exc).__name__, _web_exc)
         if isinstance(_web_exc, ModuleNotFoundError):
@@ -1000,6 +1000,32 @@ print("keep-alive:", "stopped" if _stop_result["stopped"] else "not active")
 print("If the audio player is still playing, press its Pause button.")
 '''
 
+CELL_R_REATTACH = '''# ==== Optional Cell R: reattach dashboard to the EXISTING live context ====
+# This cell never installs packages, bootstraps a context, restores credentials,
+# reconciles checkpoints, shuts down the runtime, or resumes/restarts transfers.
+# Use it only when the current Python runtime is still alive.
+if "ctx" not in globals():
+    print("No live notebook context found. If Colab restarted the runtime, use the normal startup flow.")
+else:
+    try:
+        from teledrive.app_context import get_context
+        from teledrive.web_dashboard import launch_web_dashboard
+
+        _live_ctx = get_context()
+        if _live_ctx is not ctx:
+            print("Context mismatch; refusing to attach to a different application context.")
+        elif not getattr(getattr(_live_ctx, "aio", None), "is_running", False):
+            print("Application loop is not running; refusing to start or replace the engine from this cell.")
+        else:
+            _reattached_server = launch_web_dashboard(_live_ctx, port=8765)
+            print("dashboard port:", int(_reattached_server.config.port))
+            print("Existing context reused; no downloads or credentials were restarted.")
+    except Exception as _reattach_exc:
+        print("Dashboard reattach failed:", type(_reattach_exc).__name__, _reattach_exc)
+        print("No bootstrap, checkpoint reconciliation, or automatic transfer restart was attempted.")
+'''
+
+
 # Friendly, non-technical titles shown in Colab's collapsed form view.
 # These are what non-coders see; the original `teledrive_title` stays in
 # metadata for tracing and never changes logic.
@@ -1013,6 +1039,7 @@ FRIENDLY_TITLES: tuple[str, ...] = (
     "🧹 الخطوة 7 — تنظيف وإغلاق | Cleanup & Shutdown",
     "📡 خلية اختيارية 8 — إبقاء Colab نشطًا | Start Keep-Alive",
     "⏹️ خلية اختيارية 9 — إيقاف إبقاء Colab نشطًا | Stop Keep-Alive",
+    "🔗 خلية استعادة R — إعادة ربط الواجهة دون إعادة التشغيل | Safe Reattach",
 )
 
 def _title_line(friendly_title: str) -> str:
@@ -1040,6 +1067,7 @@ CELLS: tuple[dict[str, str], ...] = (
     {"title": "Safe maintenance and clean shutdown", "code": CELL_7},
     {"title": "Optional start of best-effort Colab keep-alive", "code": CELL_8_KEEPALIVE_START},
     {"title": "Optional stop of Colab keep-alive", "code": CELL_9_KEEPALIVE_STOP},
+    {"title": "Optional Cell R — reattach dashboard without restarting engine", "code": CELL_R_REATTACH},
 )
 
 REQUIREMENTS_LOCK = PACKAGE_ROOT / "requirements.lock"
@@ -1070,7 +1098,7 @@ def hardcoded_pins_in_cells() -> list[str]:
 
 
 REQUIRED_CELL_COUNT = 7
-OPTIONAL_CELL_COUNT = 2
+OPTIONAL_CELL_COUNT = 3
 TOTAL_CELL_COUNT = REQUIRED_CELL_COUNT + OPTIONAL_CELL_COUNT
 
 
