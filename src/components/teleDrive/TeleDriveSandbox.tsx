@@ -260,10 +260,7 @@ function ConnectionSection({
     if (response?.status === "ok") setFolders(response.data?.folders ?? []);
   };
 
-  const submitTelegramAuth = async (
-    step: TelegramAuthStep,
-    payload: Record<string, string>,
-  ) => {
+  const submitTelegramAuth = async (step: TelegramAuthStep, payload: Record<string, string>) => {
     if (!bridge.telegramAuthStep) return;
     setAuthPending(step);
     setAuthNotice({
