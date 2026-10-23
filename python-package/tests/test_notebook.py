@@ -42,14 +42,15 @@ def test_title_is_v50(notebooks):
         assert "v3.1" not in head, path
 
 
-def test_seven_required_and_two_optional_code_cells(notebooks):
+def test_seven_required_and_three_optional_code_cells(notebooks):
     for path, nb in notebooks.items():
         code = [c for c in nb["cells"] if c["cell_type"] == "code"]
         assert notebook_cells.REQUIRED_CELL_COUNT == 7
-        assert notebook_cells.OPTIONAL_CELL_COUNT == 2
+        assert notebook_cells.OPTIONAL_CELL_COUNT == 3
         assert len(code) == notebook_cells.TOTAL_CELL_COUNT, path
         assert "Optional start of best-effort Colab keep-alive" in code[7]["metadata"]["teledrive_title"]
         assert "Optional stop of Colab keep-alive" in code[8]["metadata"]["teledrive_title"]
+        assert "Optional Cell R" in code[9]["metadata"]["teledrive_title"]
 
 
 def test_no_forbidden_patterns(notebooks):
@@ -106,10 +107,24 @@ def test_colab_cells_export_matches_the_notebook_source():
     assert [c["code"] for c in payload["cells"]] == [c["code"] for c in notebook_cells.CELLS]
 
 
-def test_cell_4_is_non_blocking_so_cells_5_to_7_stay_runnable():
+def test_cell_4_is_non_blocking_and_reports_actual_dashboard_port():
     cell4 = notebook_cells.CELLS[3]["code"]
     assert "blocking=False" in cell4
     assert "non-blocking" in cell4
+    assert 'print("web dashboard: OK on port", int(web_server.config.port))' in cell4
+
+
+def test_recovery_cell_only_reattaches_to_existing_live_context():
+    cell_r = notebook_cells.CELLS[9]["code"]
+    assert "get_context()" in cell_r
+    assert "launch_web_dashboard(_live_ctx, port=8765)" in cell_r
+    assert "ctx.aio" not in cell_r  # no ad-hoc loop creation or replacement
+    for forbidden in (
+        "bootstrap.run()", "restore_and_reconcile()", "restore_from_context(",
+        "set_credentials(", "ctx.shutdown()", "ensure_transfer_manager(",
+    ):
+        assert forbidden not in cell_r
+    assert "notebook context" in cell_r
 
 
 def test_cell_3_uses_drive_managed_vault_before_optional_secret_migration():
