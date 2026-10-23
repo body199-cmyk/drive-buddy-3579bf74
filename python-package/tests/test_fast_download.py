@@ -468,23 +468,24 @@ def _pipeline_item(queue: QueueManager, mid: int, size: int = 1_024) -> MediaIte
     return item
 
 
-def test_worker_count_never_multiplies_telegram_file_downloads():
+def test_worker_count_controls_telegram_file_downloads_up_to_100():
     from teledrive.config import MAX_CONCURRENT_TG_DOWNLOADS
     from .mocks.fake_drive import FakeDrive
 
     async def scenario():
         queue = QueueManager()
-        for mid in range(500, 520):
+        for mid in range(500, 600):
             _pipeline_item(queue, mid)
-        telegram = _CountingTelegram()
+        telegram = _CountingTelegram(delay=0.08)
         manager = TransferManager(telegram, FakeDrive(), "folder", queue=queue)
-        manager.set_workers(20)
+        manager.set_workers(100)
         await manager.run()
         return telegram
 
     telegram = asyncio.run(scenario())
-    assert telegram.peak <= MAX_CONCURRENT_TG_DOWNLOADS
-    assert telegram.peak > 1, "the cap must still allow real parallelism"
+    assert MAX_CONCURRENT_TG_DOWNLOADS == 100
+    assert telegram.peak <= 100
+    assert telegram.peak > 8, "concurrency must not be silently clamped to 4/8"
 
 
 class _GateDrive:

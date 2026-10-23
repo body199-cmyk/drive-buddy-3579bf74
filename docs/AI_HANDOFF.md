@@ -542,3 +542,13 @@ The persisted refresh toggle and 512 KiB fast sequential Telegram path are prese
 ## التراجع
 
 يعكس merge `2d5893d…` ثم يُنشر ZIP/manifest متطابقان مع SHA السابق عبر مسار release fail-closed. لا يحذف التراجع release/tag ولا Vault تلقائيًا.
+
+
+# M53-T01 — Telegram concurrency and adaptive GetFile pool (2026-10-23)
+
+- Branch: fix/telegram-adaptive-request-pool (based on feat/per-task-drive-folders-monitor-cell).
+- Requested behavior: owner-selected concurrency is honored up to 100 files rather than silently clamped at 4/8.
+- Changes: TELEDRIVE_TG_FILES ceiling/default raised to 100; GetFile pool ceiling raised to 100 (default remains 24); Drive upload buffer ceiling/default raised to 100; download permits are released before waiting for an upload-buffer slot; new TelegramRequestPool freezes on FloodWaitError.seconds, halves its live limit and gradually recovers after successful requests. TELEDRIVE_TG_FLOODWAIT_MAX configures the freeze cap (default 3600 s, max 86400 s).
+- Automated tests added/updated; CI must run before considering merge. No real Telegram/Drive or Colab benchmark has been performed.
+- Risk: 100 is a requested ceiling, not a guarantee Telegram will sustain it. FloodWait, connection capacity, local disk/RAM, and serialized Drive upload remain real constraints. A live test should ramp 8→12→20→... and watch FloodWait, failures, disk and throughput.
+- Do not claim production/live success based on CI alone; no package release is authorized by this note.

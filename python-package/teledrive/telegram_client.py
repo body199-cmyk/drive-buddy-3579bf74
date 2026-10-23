@@ -15,6 +15,7 @@ from .config import (
     TG_INFLIGHT_REQUESTS,
 )
 from .logging_config import get_logger
+from .telegram_request_pool import TelegramRequestPool
 
 _log = get_logger("teledrive.telegram")
 
@@ -78,20 +79,15 @@ class TelegramService:
         # count). Before this, only the striped readers respected a bound and
         # every small file opened its own unbounded GetFile stream, which is
         # exactly the "Request was unsuccessful 6 time(s)" flood.
-        self._download_request_slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
+        self._download_request_slots = TelegramRequestPool(TG_INFLIGHT_REQUESTS)
         self._media_clients: list[Any] = []
         self._media_pool_lock: Optional[asyncio.Lock] = None
 
-    def _request_slots(self) -> asyncio.Semaphore:
-        """Lazily create the global GetFile budget.
-
-        Tests build the service with ``object.__new__`` and may not run
-        ``__init__``; a single lazy accessor keeps every download path safe
-        without duplicating semaphore bookkeeping.
-        """
+    def _request_slots(self) -> TelegramRequestPool:
+        """Return the context-wide adaptive GetFile request budget."""
         slots = getattr(self, "_download_request_slots", None)
         if slots is None:
-            slots = asyncio.Semaphore(TG_INFLIGHT_REQUESTS)
+            slots = TelegramRequestPool(TG_INFLIGHT_REQUESTS)
             self._download_request_slots = slots
         return slots
 
