@@ -2275,6 +2275,33 @@ def stop_web_dashboard(ctx: Any) -> bool:
     return True
 
 
+
+def _announce_dashboard_url(actual_port: int, open_iframe: bool = False) -> None:
+    """Print the official URL for an already-listening dashboard port."""
+    from .app import colab_proxy_url, is_colab
+
+    if is_colab():
+        proxy_url = colab_proxy_url(int(actual_port))
+        if proxy_url:
+            # Plain text remains reliable in Colab mobile output.
+            print(f"TeleDrive Web Dashboard URL: {proxy_url}")
+        else:
+            print(
+                f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
+                f"{actual_port} could not be obtained; server listens on "
+                f"{BIND_ADDRESS}:{actual_port}."
+            )
+        if open_iframe:  # pragma: no cover - Colab-only branch
+            try:
+                from google.colab import output  # type: ignore[import-not-found]
+
+                output.serve_kernel_port_as_iframe(int(actual_port), height="760")
+            except Exception:
+                pass
+    else:
+        print(f"TeleDrive Web Dashboard URL: http://localhost:{int(actual_port)}/")
+
+
 def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bool = False):
     """Serve the Modern Web Dashboard in its own isolated server thread.
 
@@ -2295,6 +2322,7 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
             and (existing_thread is None or existing_thread.is_alive())
         ):
             _log.info("web dashboard already running; returning existing handle")
+            _announce_dashboard_url(int(existing.config.port), open_iframe=False)
             return existing
         # Stale/dead handle (e.g. its startup failed earlier): never
         # hand it back as if it were serving.
@@ -2304,7 +2332,7 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
     except ImportError as exc:  # pragma: no cover - lock installs it
         raise RuntimeError(_missing_deps_message()) from exc
 
-    from .app import _ensure_localhost_bypasses_proxy, colab_proxy_url, is_colab
+    from .app import _ensure_localhost_bypasses_proxy
 
     requested_port = int(port)
     actual_port = _select_dashboard_port(requested_port)
@@ -2339,27 +2367,5 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
         raise
     _log.info("web dashboard listening port=%s thread=%s", actual_port, thread.name)
 
-    if is_colab():
-        proxy_url = colab_proxy_url(actual_port)
-        if proxy_url:
-            # Keep notebook output plain-text only. Rendering an IPython HTML
-            # card here relies on Colab's JavaScript output renderer and can
-            # make the entire cell output disappear on mobile browsers when
-            # that renderer fails. Colab auto-links this official proxy URL.
-            print(f"TeleDrive Web Dashboard URL: {proxy_url}")
-        else:  # pragma: no cover - Colab-only branch
-            print(
-                f"TeleDrive Web Dashboard URL: UNAVAILABLE — proxy URL for port "
-                f"{actual_port} could not be obtained; server listens on "
-                f"{BIND_ADDRESS}:{actual_port}."
-            )
-        if open_iframe:  # pragma: no cover - Colab-only branch
-            try:
-                from google.colab import output  # type: ignore[import-not-found]
-
-                output.serve_kernel_port_as_iframe(actual_port, height="760")
-            except Exception:
-                pass
-    else:
-        print(f"TeleDrive Web Dashboard URL: http://localhost:{actual_port}/")
+    _announce_dashboard_url(actual_port, open_iframe=open_iframe)
     return server
