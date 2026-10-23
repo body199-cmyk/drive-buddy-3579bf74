@@ -75,7 +75,9 @@ export type BridgeResponse<T = unknown> = {
   state?: LiveUiState;
 };
 
-export type TelegramAuthStep = "credentials" | "send_code" | "resend_code" | "verify_code" | "verify_password";
+export type TelegramAuthStep =
+  | "credentials" | "send_code" | "resend_code" | "verify_code"
+  | "verify_password";
 
 export type TelegramAuthResult = {
   ok: boolean;
