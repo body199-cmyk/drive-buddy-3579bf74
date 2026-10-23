@@ -5,6 +5,7 @@ import { gunzipSync } from "node:zlib";
 
 import { unavailableBridge } from "../src/components/teleDrive/bridgeTypes.ts";
 import { GradioTeleDriveBridge } from "../src/components/teleDrive/gradioBridge.ts";
+import { RemoteColabBridge } from "../src/components/teleDrive/remoteColabBridge.ts";
 import {
   enqueueBlockReason,
   formatBytes,
@@ -20,6 +21,7 @@ const paths = {
   component: new URL("../src/components/teleDrive/TeleDriveSandbox.tsx", import.meta.url),
   bridgeTypes: new URL("../src/components/teleDrive/bridgeTypes.ts", import.meta.url),
   gradioBridge: new URL("../src/components/teleDrive/gradioBridge.ts", import.meta.url),
+  remoteBridge: new URL("../src/components/teleDrive/remoteColabBridge.ts", import.meta.url),
   css: new URL("../src/components/teleDrive/teleDrive.css", import.meta.url),
   panel: new URL("../python-package/teledrive/react_panel.py", import.meta.url),
   panelAsset: new URL(
@@ -262,6 +264,75 @@ test("15 — browser boundary has no manual network or secret storage transport"
   assert.doesNotMatch(source, /\b(fetch|XMLHttpRequest|WebSocket)\s*\(/);
   assert.doesNotMatch(source, /\b(localStorage|sessionStorage)\s*\./);
   assert.doesNotMatch(source, /\/api\//);
+});
+
+test("15c — remote Telegram credentials use the dedicated paired-runtime endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const token = "t".repeat(48);
+  const apiHash = "secret-hash-never-in-generic-bridge";
+  const jsonResponse = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith("/api/health")) {
+      return jsonResponse({ ok: true, service: "teledrive-web-dashboard" });
+    }
+    if (url.endsWith("/api/telegram/auth")) {
+      return jsonResponse({
+        ok: true,
+        message: "API credentials accepted",
+        auth_state: "READY_FOR_PHONE",
+        authorized: false,
+        needs_password: false,
+      });
+    }
+    if (url.endsWith("/api/action")) {
+      const request = JSON.parse(String(init.body ?? "{}"));
+      return jsonResponse({
+        requestId: request.requestId,
+        actionId: request.actionId,
+        status: "ok",
+        state: emptyState,
+      });
+    }
+    throw new Error("Unexpected URL in test: " + url);
+  };
+
+  const bridge = new RemoteColabBridge("https://test.trycloudflare.com", token);
+  try {
+    await bridge.connect();
+    const result = await bridge.telegramAuthStep("credentials", {
+      api_id: "123456",
+      api_hash: apiHash,
+    });
+    assert.equal(result.ok, true);
+    const authCall = calls.find((call) => call.url.endsWith("/api/telegram/auth"));
+    assert.ok(authCall, "must call the dedicated Telegram endpoint");
+    assert.equal(new Headers(authCall.init.headers).get("Authorization"), "Bearer " + token);
+    assert.equal(JSON.parse(String(authCall.init.body)).api_hash, apiHash);
+    const genericCalls = calls.filter((call) => call.url.endsWith("/api/action"));
+    assert.ok(genericCalls.length >= 1);
+    assert.ok(genericCalls.every((call) => !String(call.init.body).includes(apiHash)));
+  } finally {
+    bridge.disconnect();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("15d — modern connection form uses transient refs and never generic action payloads for secrets", async () => {
+  const component = await readFile(paths.component, "utf8");
+  assert.match(component, /ref=\{apiHashRef\}/);
+  assert.match(component, /ref=\{codeRef\}/);
+  assert.match(component, /ref=\{passwordRef\}/);
+  assert.match(component, /bridge\.telegramAuthStep\(step, payload\)/);
+  assert.match(component, /submitTelegramAuth\("verify_password", \{ password \}\)/);
+  assert.doesNotMatch(component, /run\("telegram\.(set_credentials|send_code|verify_code|verify_password)"/);
 });
 
 test("15b — remembered analyze link stays backend-backed and offers an explicit clear action", async () => {
