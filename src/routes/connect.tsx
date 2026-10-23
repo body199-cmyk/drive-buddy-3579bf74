@@ -70,7 +70,11 @@ function ConnectPage() {
           );
         }
         const exchanged = await response.json();
-        if (exchanged?.ok !== true || typeof exchanged.token !== "string" || exchanged.token.length < 32) {
+        if (
+          exchanged?.ok !== true ||
+          typeof exchanged.token !== "string" ||
+          exchanged.token.length < 32
+        ) {
           throw new Error("استجابة الربط غير صالحة. شغّل خلية الربط في Colab مرة أخرى.");
         }
         setToken(exchanged.token);
