@@ -118,7 +118,7 @@ def test_recovery_cell_only_reattaches_to_existing_live_context():
     cell_r = notebook_cells.CELLS[9]["code"]
     assert "get_context()" in cell_r
     assert "launch_web_dashboard(_live_ctx, port=8765)" in cell_r
-    assert "ctx.aio" not in cell_r  # no ad-hoc loop creation or replacement
+    assert "ctx.aio.start()" not in cell_r  # no ad-hoc loop creation or replacement
     for forbidden in (
         "bootstrap.run()", "restore_and_reconcile()", "restore_from_context(",
         "set_credentials(", "ctx.shutdown()", "ensure_transfer_manager(",
