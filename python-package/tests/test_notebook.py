@@ -199,3 +199,11 @@ def test_colab_cells_json_carries_no_dependency_versions():
     payload = notebook_cells.CELLS_JSON.read_text(encoding="utf-8")
     for name, version in notebook_cells.lock_pins().items():
         assert f"{name}=={version}" not in payload
+
+
+def test_final_monitor_counts_telegram_and_universal_download_tasks():
+    monitor = notebook_cells.CELLS[10]["code"]
+    assert "ctx.queue_manager.snapshot()" in monitor
+    assert "get_universal_downloader(ctx)" in monitor
+    assert "extract_universal_counts(ctx)" in monitor
+    assert "المهام النشطة (Telegram + الشامل)" in monitor
