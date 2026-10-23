@@ -774,3 +774,37 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
         assert stop_web_dashboard(ctx) is True
         assert ctx.web_dashboard is None
         assert stop_web_dashboard(ctx) is False  # idempotent
+
+def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
+    """Mobile/embedded Colab browsers may omit Sec-Fetch-Site on same-origin fetches."""
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app = create_web_app(SimpleNamespace())
+    with TestClient(app, base_url="https://runtime-123.googleusercontent.com") as client:
+        # A same-origin Referer is sufficient when Fetch Metadata is absent.
+        response = client.get(
+            "/api/health",
+            headers={"Referer": "https://runtime-123.googleusercontent.com/"},
+        )
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+
+        # Same-origin Origin is another valid browser signal.
+        origin_response = client.get(
+            "/api/health",
+            headers={"Origin": "https://runtime-123.googleusercontent.com"},
+        )
+        assert origin_response.status_code == 200
+
+        # Merely targeting a trusted Colab host must not allow cross-site calls.
+        cross_site = client.get(
+            "/api/health",
+            headers={"Referer": "https://attacker.example/"},
+        )
+        assert cross_site.status_code == 401
+
+        no_browser_signal = client.get("/api/health")
+        assert no_browser_signal.status_code == 401
+
