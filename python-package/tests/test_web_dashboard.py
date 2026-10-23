@@ -322,7 +322,10 @@ def test_page_dom_references_and_prior_controls_survive_the_redesign():
 
     for element_id in (
         "btnRefreshMetrics", "telegramLoginLink", "btnTelegramStatus",
-        "btnTelegramLogout", "btnDriveConnect", "btnDriveReconnect",
+        "btnTelegramLogout", "telegramApiId", "telegramApiHash", "telegramPhone",
+        "telegramCode", "telegram2faPassword", "btnTelegramCredentials",
+        "btnTelegramSendCode", "btnTelegramResendCode", "btnTelegramVerifyCode",
+        "btnTelegramVerifyPassword", "telegramAuthMsg", "btnDriveConnect", "btnDriveReconnect",
         "btnDriveStatus", "btnDriveQuota", "btnFolderUp",
         "btnFolderRefresh", "btnCreateFolder", "btnAnalyze",
         "btnSelectAll", "btnClearSel", "btnEnqueue", "btnStart",
@@ -445,6 +448,46 @@ def test_http_endpoints(ctx):
     state = client.get("/api/state")
     assert state.status_code == 200
     assert state.json()["actionId"] == "bridge.snapshot"
+
+
+def test_modern_telegram_login_form_and_secret_safe_runtime_endpoint(ctx, monkeypatch):
+    """The modern dashboard offers all auth steps and sends credentials only
+    to the runtime-authenticated endpoint, never through the generic bridge."""
+    page = _client(ctx).get("/").text
+    for element_id in (
+        "telegramApiId", "telegramApiHash", "telegramPhone", "telegramCode",
+        "telegram2faPassword", "btnTelegramCredentials", "btnTelegramSendCode",
+        "btnTelegramResendCode", "btnTelegramVerifyCode", "btnTelegramVerifyPassword",
+        "telegramAuthMsg",
+    ):
+        assert f'id="{element_id}"' in page
+    assert 'postJson("api/telegram/auth"' in page
+    assert 'autocomplete="new-password"' in page
+    assert 'telegramApiHash\").value=""' in page
+    assert "localStorage" not in page
+
+    captured = {}
+    api_hash = "test-api-hash-do-not-return"
+
+    def fake_set_credentials(api_id, supplied_hash):
+        captured["api_id"] = api_id
+        captured["api_hash"] = supplied_hash
+        return ("Disconnected · READY_FOR_PHONE", None, None, None)
+
+    monkeypatch.setattr(ctx.handlers, "h_telegram_set_credentials", fake_set_credentials)
+    client = _client(ctx)
+    response = client.post(
+        "/api/telegram/auth",
+        json={"step": "credentials", "api_id": "123456", "api_hash": api_hash},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["ok"] is True
+    assert captured == {"api_id": "123456", "api_hash": api_hash}
+    assert api_hash not in response.text
+
+    rejected = client.post("/api/telegram/auth", json={"step": "unknown", "api_hash": api_hash})
+    assert rejected.status_code == 400
+    assert api_hash not in rejected.text
 
 
 class _FakeScanDocument:
