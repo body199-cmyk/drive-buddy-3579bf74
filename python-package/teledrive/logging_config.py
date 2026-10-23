@@ -26,12 +26,11 @@ _configured = False
 
 
 def setup(level: int = logging.INFO) -> logging.Logger:
-    """Configure redacted rotating file logs without notebook/console spam.
+    """Write redacted TeleDrive/Telethon diagnostics to a rotating file.
 
-    TeleDrive and Telethon records are written to LOG_PATH. Their loggers do
-    not propagate to the root logger, which commonly has a notebook stream
-    handler in Colab. This affects presentation only: WARNING/ERROR records
-    remain available in the rotating log file.
+    Avoid propagating application logs to the root logger, which commonly
+    has a notebook stream handler in Colab. WARNING/ERROR records remain in
+    the rotating log for troubleshooting.
     """
     global _configured
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -51,12 +50,11 @@ def setup(level: int = logging.INFO) -> logging.Logger:
     file_handler.addFilter(RedactionFilter())
     logger.addHandler(file_handler)
 
-    # Telethon uses its own logger namespace, so it must be routed explicitly
-    # to the same redacted rotating file rather than the Colab root stream.
+    # Telethon has its own logger namespace; route WARNING+ to the same file.
     telethon_logger = logging.getLogger("telethon")
     telethon_logger.setLevel(logging.WARNING)
-    telethon_logger.propagate = False
     telethon_logger.handlers.clear()
+    telethon_logger.propagate = False
     telethon_logger.addHandler(file_handler)
 
     _configured = True
@@ -68,7 +66,8 @@ def get_logger(name: str = "teledrive") -> logging.Logger:
 
 
 def tail(path: Path = LOG_PATH, lines: int = 200) -> str:
-    if not path.exists():
+    """Return the last lines from the log without loading the whole file."""
+    if lines <= 0 or not path.exists():
         return ""
     try:
         with open(path, "rb") as f:
@@ -76,12 +75,12 @@ def tail(path: Path = LOG_PATH, lines: int = 200) -> str:
             size = f.tell()
             block = 8192
             data = b""
-            while size > 0 and data.count(b"\\n") <= lines:
+            while size > 0 and data.count(b"\n") <= lines:
                 read = min(block, size)
                 size -= read
                 f.seek(size)
                 data = f.read(read) + data
-            return "\\n".join(
+            return "\n".join(
                 data.decode("utf-8", errors="replace").splitlines()[-lines:]
             )
     except Exception:
