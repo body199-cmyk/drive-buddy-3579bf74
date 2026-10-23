@@ -76,7 +76,7 @@ export type BridgeResponse<T = unknown> = {
 };
 
 export type TelegramAuthStep =
-  | "credentials" | "send_code" | "resend_code" | "verify_code"
+  "credentials" | "send_code" | "resend_code" | "verify_code"
   | "verify_password";
 
 export type TelegramAuthResult = {
