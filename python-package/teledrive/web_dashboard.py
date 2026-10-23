@@ -2301,36 +2301,66 @@ def create_web_app(ctx: Any):
             # Only the official Colab proxy may use the same-origin UI shortcut.
             # A public trycloudflare.com URL is not trusted just because someone
             # opened the tunnel's own HTML page in their browser.
-            request_host = (request.url.hostname or "").lower()
-            trusted_colab_proxy = (
-                request_host.endswith(".googleusercontent.com")
-                or request_host.endswith(".colab.google")
-                or request_host.endswith(".prod.colab.dev")
-            )
-            # Colab's proxy and embedded/mobile browsers do not consistently
-            # send Sec-Fetch-Site on same-origin fetches. Trust the UI shortcut
-            # only when the request is same-origin by at least one browser signal;
-            # never infer trust from the Colab hostname alone.
+            # Colab terminates TLS and can also rewrite the upstream Host to
+            # localhost/127.0.0.1. Prefer the proxy's forwarded host when it is
+            # present; otherwise derive the browser-facing host from Origin or
+            # Referer, but only accept an official Colab proxy domain.
+            def _hostname(value: str) -> str:
+                value = str(value or "").strip()
+                if not value:
+                    return ""
+                try:
+                    return (urlsplit("//" + value).hostname or "").lower()
+                except ValueError:
+                    return ""
+
+            forwarded_host = str(request.headers.get("x-forwarded-host") or "").split(",", 1)[0].strip()
+            request_hostname = (request.url.hostname or "").lower()
             origin = str(request.headers.get("origin") or "").strip()
             referer = str(request.headers.get("referer") or "").strip()
+            origin_parts = urlsplit(origin) if origin else None
+            referer_parts = urlsplit(referer) if referer else None
+            origin_host = (
+                (origin_parts.hostname or "").lower()
+                if origin_parts and origin_parts.scheme in {"http", "https"} else ""
+            )
+            referer_host = (
+                (referer_parts.hostname or "").lower()
+                if referer_parts and referer_parts.scheme in {"http", "https"} else ""
+            )
+
+            # X-Forwarded-Host is supplied by the proxy deployment; if it is
+            # absent, browser-origin headers are the only way to identify the
+            # public host when Uvicorn sees an internal Host header.
+            public_hostname = _hostname(forwarded_host) or request_hostname
+            if not forwarded_host and not (
+                public_hostname.endswith(".googleusercontent.com")
+                or public_hostname.endswith(".colab.google")
+                or public_hostname.endswith(".prod.colab.dev")
+            ):
+                if origin_host and (
+                    origin_host.endswith(".googleusercontent.com")
+                    or origin_host.endswith(".colab.google")
+                    or origin_host.endswith(".prod.colab.dev")
+                ) and (not referer_host or referer_host == origin_host):
+                    public_hostname = origin_host
+                elif referer_host and (
+                    referer_host.endswith(".googleusercontent.com")
+                    or referer_host.endswith(".colab.google")
+                    or referer_host.endswith(".prod.colab.dev")
+                ) and (not origin_host or origin_host == referer_host):
+                    public_hostname = referer_host
+
+            trusted_colab_proxy = (
+                public_hostname.endswith(".googleusercontent.com")
+                or public_hostname.endswith(".colab.google")
+                or public_hostname.endswith(".prod.colab.dev")
+            )
             same_origin_signal = request.headers.get("sec-fetch-site") == "same-origin"
-            # Colab terminates HTTPS at its proxy and may forward the
-            # request to Uvicorn as HTTP. Compare the browser origin's host,
-            # not the upstream scheme, while still requiring an official proxy
-            # host and an explicit same-origin browser signal.
-            request_hostname = (request.url.hostname or "").lower()
-            if origin:
-                parsed_origin = urlsplit(origin)
-                same_origin_signal = same_origin_signal or (
-                    parsed_origin.scheme in {"http", "https"}
-                    and (parsed_origin.hostname or "").lower() == request_hostname
-                )
-            if referer:
-                parsed_referer = urlsplit(referer)
-                same_origin_signal = same_origin_signal or (
-                    parsed_referer.scheme in {"http", "https"}
-                    and (parsed_referer.hostname or "").lower() == request_hostname
-                )
+            if origin_host:
+                same_origin_signal = same_origin_signal or origin_host == public_hostname
+            if referer_host:
+                same_origin_signal = same_origin_signal or referer_host == public_hostname
             same_origin_colab_ui = trusted_colab_proxy and same_origin_signal
             if not same_origin_colab_ui:
                 authorization = request.headers.get("authorization", "")
