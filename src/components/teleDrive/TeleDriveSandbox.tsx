@@ -29,6 +29,7 @@ import {
   type FolderChoice,
   type LiveUiState,
   type TeleDriveBridge,
+  type TelegramAuthStep,
 } from "./bridgeTypes";
 import {
   enqueueBlockReason,
@@ -233,13 +234,22 @@ function ConnectionSection({
   live,
   pendingActions,
   run,
+  bridge,
 }: {
   state: LiveUiState | null;
   language: BridgeLanguage;
   live: boolean;
   pendingActions: ReadonlySet<string>;
   run: RunAction;
+  bridge: TeleDriveBridge;
 }) {
+  const [authPending, setAuthPending] = useState<TelegramAuthStep | null>(null);
+  const [authNotice, setAuthNotice] = useState<Notice>(null);
+  const apiIdRef = useRef<HTMLInputElement>(null);
+  const apiHashRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [parentId, setParentId] = useState("root");
   const [folderName, setFolderName] = useState("");
   const [folderId, setFolderId] = useState("");
@@ -250,6 +260,31 @@ function ConnectionSection({
     if (response?.status === "ok") setFolders(response.data?.folders ?? []);
   };
 
+  const submitTelegramAuth = async (step: TelegramAuthStep, payload: Record<string, string>) => {
+    if (!bridge.telegramAuthStep) return;
+    setAuthPending(step);
+    setAuthNotice({ kind: "info", text: localize(language, "جارٍ التواصل مع Runtime…", "Contacting the paired runtime…") });
+    try {
+      const result = await bridge.telegramAuthStep(step, payload);
+      setAuthNotice({ kind: result.ok ? "success" : "error", text: result.message });
+      if (step === "credentials" && result.ok && apiHashRef.current) apiHashRef.current.value = "";
+      if (step === "verify_code" && codeRef.current) codeRef.current.value = "";
+      if (step === "verify_password" && passwordRef.current) passwordRef.current.value = "";
+      if (result.authorized) {
+        if (apiHashRef.current) apiHashRef.current.value = "";
+        if (codeRef.current) codeRef.current.value = "";
+        if (passwordRef.current) passwordRef.current.value = "";
+      }
+    } catch (error) {
+      setAuthNotice({
+        kind: "error",
+        text: error instanceof Error ? error.message : localize(language, "فشل تسجيل الدخول.", "Telegram sign-in failed."),
+      });
+    } finally {
+      setAuthPending(null);
+    }
+  };
+
   return (
     <section className="td-page" aria-labelledby="connection-title">
       <SectionTitle
@@ -258,8 +293,12 @@ function ConnectionSection({
         title={pageLabels.connection[language]}
         description={localize(
           language,
-          "الحالة من ApplicationContext الحي. حقول Telegram السرية تبقى في لوحة Gradio الآمنة ولا تدخل React.",
-          "Status comes from the live ApplicationContext. Secret Telegram fields stay in the secure Gradio panel and never enter React.",
+          bridge.telegramAuthStep
+            ? "اربط Telegram من هنا مباشرة. بيانات الدخول تُرسل عبر اتصال Runtime المحمي ولا تمر عبر الجسر العام."
+            : "الحالة من ApplicationContext الحي. سجّل الدخول عبر عناصر Gradio الآمنة.",
+          bridge.telegramAuthStep
+            ? "Connect Telegram here. Login credentials use the authenticated runtime endpoint, not the generic bridge."
+            : "Status comes from the live ApplicationContext. Sign in through the secure Gradio controls.",
         )}
       />
       <div className="td-split">
@@ -273,23 +312,118 @@ function ConnectionSection({
             </div>
           </div>
           <div className="td-stack">
-            <div className="td-bridge-blocked">
-              <ShieldCheck size={16} aria-hidden="true" />
-              {localize(
-                language,
-                "API hash ورقم الهاتف والرمز و2FA تُدخل فقط في عناصر Gradio الآمنة أسفل لوحة React.",
-                "API hash, phone, code, and 2FA are entered only in the secure Gradio controls below React.",
-              )}
-            </div>
-            <button
-              type="button"
-              className="td-button td-button-secondary td-secure-auth-button"
-              aria-controls="td-secure-telegram-auth"
-              onClick={() => openSecureTelegramAuth()}
-            >
-              <ShieldCheck size={16} aria-hidden="true" />
-              {localize(language, "فتح تسجيل Telegram الآمن", "Open secure Telegram sign-in")}
-            </button>
+            {bridge.telegramAuthStep ? (
+              <div className="td-telegram-auth">
+                <p className="td-auth-help">
+                  {localize(
+                    language,
+                    "اكتب بيانات API ثم رقمك الدولي. كود الدخول وكلمة مرور 2FA لا تُرسل إلا إلى Runtime المرتبط، ولا تُضاف إلى طلبات الجسر العامة.",
+                    "Enter API details and your international phone number. Code and 2FA password go only to the paired runtime, never through generic bridge requests.",
+                  )}
+                </p>
+                <div className="td-auth-grid">
+                  <label className="td-label">
+                    API ID
+                    <input ref={apiIdRef} className="td-input" inputMode="numeric" autoComplete="off" dir="ltr" maxLength={20} />
+                  </label>
+                  <label className="td-label">
+                    API Hash
+                    <input ref={apiHashRef} className="td-input" type="password" autoComplete="new-password" dir="ltr" maxLength={256} />
+                  </label>
+                </div>
+                <div className="td-button-row">
+                  <button type="button" className="td-button td-button-primary" disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const apiId = apiIdRef.current?.value.trim() ?? "";
+                      const apiHash = apiHashRef.current?.value ?? "";
+                      if (!/^[0-9]+$/.test(apiId) || !apiHash.trim()) {
+                        setAuthNotice({ kind: "error", text: localize(language, "أدخل API ID رقميًا وAPI Hash.", "Enter a numeric API ID and API Hash.") });
+                        return;
+                      }
+                      void submitTelegramAuth("credentials", { api_id: apiId, api_hash: apiHash });
+                    }}>
+                    {localize(language, "١. التحقق من API", "1. Verify API")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(language, "رقم الهاتف بكود الدولة", "Phone number with country code")}
+                  <input ref={phoneRef} className="td-input" type="tel" inputMode="tel" autoComplete="off" dir="ltr" placeholder="+201xxxxxxxxx" maxLength={32} />
+                </label>
+                <div className="td-button-row">
+                  <button type="button" className="td-button td-button-secondary" disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const phone = phoneRef.current?.value.trim() ?? "";
+                      if (!/^\+[1-9][0-9]{6,14}$/.test(phone)) {
+                        setAuthNotice({ kind: "error", text: localize(language, "أدخل رقم الهاتف بالصيغة الدولية.", "Enter the phone number in international format.") });
+                        return;
+                      }
+                      void submitTelegramAuth("send_code", { phone });
+                    }}>
+                    {localize(language, "٢. إرسال كود الدخول", "2. Send login code")}
+                  </button>
+                  <button type="button" className="td-button td-button-secondary" disabled={!live || authPending !== null}
+                    onClick={() => void submitTelegramAuth("resend_code", {})}>
+                    {localize(language, "إعادة إرسال الكود", "Resend code")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(language, "كود Telegram", "Telegram login code")}
+                  <input ref={codeRef} className="td-input" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={32} />
+                </label>
+                <div className="td-button-row">
+                  <button type="button" className="td-button td-button-primary" disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const code = codeRef.current?.value.trim() ?? "";
+                      if (!code) {
+                        setAuthNotice({ kind: "error", text: localize(language, "أدخل كود Telegram.", "Enter the Telegram code.") });
+                        return;
+                      }
+                      void submitTelegramAuth("verify_code", { code });
+                    }}>
+                    {localize(language, "٣. تأكيد الكود", "3. Verify code")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(language, "كلمة مرور التحقق بخطوتين (إن طُلبت)", "Two-step verification password (if requested)")}
+                  <input ref={passwordRef} className="td-input" type="password" autoComplete="new-password" dir="ltr" maxLength={512} />
+                </label>
+                <div className="td-button-row">
+                  <button type="button" className="td-button td-button-primary" disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const password = passwordRef.current?.value ?? "";
+                      if (!password) {
+                        setAuthNotice({ kind: "error", text: localize(language, "أدخل كلمة مرور 2FA إذا طُلبت.", "Enter the 2FA password if Telegram requested it.") });
+                        return;
+                      }
+                      void submitTelegramAuth("verify_password", { password });
+                    }}>
+                    {localize(language, "٤. تأكيد كلمة المرور", "4. Verify password")}
+                  </button>
+                </div>
+                {authPending ? <p className="td-auth-help">{localize(language, "جارٍ تنفيذ الخطوة…", "Working on login step…")}</p> : null}
+                <NoticeBar notice={authNotice} />
+              </div>
+            ) : (
+              <>
+                <div className="td-bridge-blocked">
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  {localize(
+                    language,
+                    "API hash ورقم الهاتف والرمز و2FA تُدخل فقط في عناصر Gradio الآمنة.",
+                    "API hash, phone, code, and 2FA are entered only in the secure Gradio controls.",
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="td-button td-button-secondary td-secure-auth-button"
+                  aria-controls="td-secure-telegram-auth"
+                  onClick={() => openSecureTelegramAuth()}
+                >
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  {localize(language, "فتح تسجيل Telegram الآمن", "Open secure Telegram sign-in")}
+                </button>
+              </>
+            )}
             <div className="td-button-row">
               <ActionButton
                 actionId="telegram.status"
@@ -1615,6 +1749,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         live={live}
         pendingActions={pendingActions}
         run={run}
+        bridge={bridge}
       />
     ),
     analyze: (
