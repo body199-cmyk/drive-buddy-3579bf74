@@ -1,3 +1,12 @@
+## 2026-10-23 — TeleDrive disconnect recovery context (M53-T01)
+
+- Added `docs/PHASE_REPORTS/PHASE_M53_T01_TELEDRIVE_DISCONNECT_RECOVERY_CONTEXT.md`, a durable record of the three owner-supplied reports, source-verified dashboard/notebook behavior, open hypotheses, safety constraints, staged implementation plan and required tests.
+- Confirmed from source that the dashboard's primary contract is AJAX polling; the optional WebSocket is not the first repair target. Documented the current health endpoint limitations, reuse-path URL behavior and requested-vs-actual port reporting issue.
+- Appended the matching handoff card to `docs/AI_HANDOFF.md` without removing earlier history. No application code, notebook behavior, Drive data, Telegram sessions or release assets were changed. No tests were run in this documentation-only task.
+- Follow-up implementation is intentionally separate and must use a feature branch/PR with owner approval before merge; live Colab diagnosis remains pending.
+
+---
+
 ## 2026-10-21 — Universal web-download controls parity (M52-T02)
 
 - Merged [PR #124](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124) as `08363cdffa4653f95db39e88e0e124022dc86afe`: per-task and bulk pause/resume/stop/cancel/retry-failed controls for the Universal URL Downloader, wired to real `UniversalDownloadManager` methods and FastAPI endpoints rather than UI-only state.
