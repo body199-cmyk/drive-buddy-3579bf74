@@ -21,7 +21,10 @@ const paths = {
   component: new URL("../src/components/teleDrive/TeleDriveSandbox.tsx", import.meta.url),
   bridgeTypes: new URL("../src/components/teleDrive/bridgeTypes.ts", import.meta.url),
   gradioBridge: new URL("../src/components/teleDrive/gradioBridge.ts", import.meta.url),
-  remoteBridge: new URL("../src/components/teleDrive/remoteColabBridge.ts", import.meta.url),
+  remoteBridge: new URL(
+    "../src/components/teleDrive/remoteColabBridge.ts",
+    import.meta.url,
+  ),
   css: new URL("../src/components/teleDrive/teleDrive.css", import.meta.url),
   panel: new URL("../python-package/teledrive/react_panel.py", import.meta.url),
   panelAsset: new URL(
