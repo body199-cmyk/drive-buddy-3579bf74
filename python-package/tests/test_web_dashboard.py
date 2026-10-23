@@ -583,7 +583,7 @@ def test_busy_port_automatically_falls_back_and_application_loop_survives(ctx):
         blocker.close()
 
 
-def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
+def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx, capsys):
     pytest.importorskip("uvicorn")
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -591,8 +591,10 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
     server = launch_web_dashboard(ctx, port=port)
     try:
         assert ctx.web_dashboard is server
-        # A second launch must never create a second HTTP server.
+        capsys.readouterr()  # discard the URL printed by the first launch
+        # A second launch must reuse the same server and re-announce its URL.
         assert launch_web_dashboard(ctx, port=port) is server
+        assert f"TeleDrive Web Dashboard URL: http://localhost:{port}/" in capsys.readouterr().out
         deadline = time.time() + 15
         last_error: Exception | None = None
         while time.time() < deadline:
