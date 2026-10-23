@@ -53,6 +53,8 @@ from __future__ import annotations
 
 import html
 import hashlib
+import hmac
+import secrets
 from pathlib import Path
 
 import json
@@ -799,10 +801,24 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
 
     <div class="destination-summary" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <div>
-        <span>📁 مجلد الحفظ الحالي في Google Drive: </span>
+        <span>📁 مجلد الحفظ لهذه المهمة: </span>
         <strong id="udlSelectedFolderName">نفس المجلد المحدد في قسم «الوجهة»</strong>
       </div>
-      <button class="alt small" type="button" data-section-target="destination" onclick="document.querySelector('[data-section-target=destination]').click()">تغيير مجلد الحفظ ↗</button>
+      <div class="row" style="gap:8px">
+        <button class="alt small" id="btnUdlChooseFolder" type="button">📂 اختيار مجلد مختلف</button>
+        <button class="alt small" id="btnUdlUseDefaultFolder" type="button">↩ استخدام الوجهة العامة</button>
+      </div>
+    </div>
+    <div id="udlFolderPickerPanel" class="destination-summary" hidden style="margin-bottom:12px">
+      <p class="note">اختيار المجلد هنا خاص بمهام التحميل الشامل فقط، ولا يغيّر وجهة Telegram أو الوجهة العامة.</p>
+      <div class="row">
+        <button class="alt small" id="btnUdlFolderUp" type="button" disabled>⬆ المجلد الأعلى</button>
+        <button class="alt small" id="btnUdlFolderRefresh" type="button">🔄 تحديث المجلدات</button>
+        <button class="alt small" id="btnUdlUseCurrentFolder" type="button">استخدام هذا المجلد</button>
+        <span class="note" id="udlFolderBreadcrumb">My Drive</span>
+      </div>
+      <div class="folder-list" id="udlFolderList" aria-live="polite"><div class="note">اربط Google Drive أولًا لعرض المجلدات.</div></div>
+      <div class="msg" id="udlFolderMsg" role="status"></div>
     </div>
 
     <div class="url-tools">
@@ -1834,13 +1850,121 @@ $("qBody").addEventListener("click",function(event){
   const countEl = $("udlCount");
   const folderLabel = $("udlSelectedFolderName");
 
+  let udlExplicitFolder = null;
+  let udlFolderStack = [{id:"root",name:"My Drive"}];
+  let udlFolderRequestSequence = 0;
+  const folderPanel = $("udlFolderPickerPanel");
+  const folderListEl = $("udlFolderList");
+  const folderMsgEl = $("udlFolderMsg");
+  const folderBreadcrumbEl = $("udlFolderBreadcrumb");
+  const btnChooseFolder = $("btnUdlChooseFolder");
+  const btnUseDefaultFolder = $("btnUdlUseDefaultFolder");
+  const btnFolderUp = $("btnUdlFolderUp");
+  const btnFolderRefresh = $("btnUdlFolderRefresh");
+  const btnUseCurrentFolder = $("btnUdlUseCurrentFolder");
+
   function syncFolderLabel(){
     const mainFolder = $("selectedFolderName");
-    if(mainFolder && folderLabel){
-      folderLabel.textContent = mainFolder.textContent || "نفس المجلد المحدد في قسم الوجهة";
-      folderLabel.className = mainFolder.className;
+    if(!folderLabel) return;
+    if(udlExplicitFolder){
+      folderLabel.textContent = (udlExplicitFolder.name || udlExplicitFolder.id) + " — لهذه المهمة فقط";
+      folderLabel.className = "ok";
+    }else{
+      folderLabel.textContent = mainFolder && mainFolder.textContent
+        ? mainFolder.textContent
+        : "لم يتم اختيار مجلد في قسم الوجهة";
+      folderLabel.className = mainFolder ? mainFolder.className : "";
     }
   }
+
+  function renderUdlFolderBreadcrumb(){
+    if(folderBreadcrumbEl){
+      folderBreadcrumbEl.textContent = udlFolderStack.map(function(item){return item.name;}).join(" / ");
+    }
+    if(btnFolderUp) btnFolderUp.disabled = udlFolderStack.length <= 1;
+  }
+
+  function chooseUdlFolder(folder){
+    if(!folder || !folder.id) return;
+    udlExplicitFolder = {id:String(folder.id), name:String(folder.name || folder.id)};
+    syncFolderLabel();
+    if(folderPanel) folderPanel.hidden = true;
+    if(msgEl){msgEl.textContent="تم تحديد مجلد مستقل لهذه المهمة فقط.";msgEl.className="msg ok";}
+  }
+
+  function renderUdlFolders(folders){
+    if(!folderListEl) return;
+    folderListEl.replaceChildren();
+    if(!Array.isArray(folders) || folders.length === 0){
+      const empty=document.createElement("div");
+      empty.className="note";
+      empty.textContent="لا توجد مجلدات في هذا المستوى.";
+      folderListEl.appendChild(empty);
+      return;
+    }
+    folders.forEach(function(folder){
+      if(!folder || !folder.id) return;
+      const row=document.createElement("div"); row.className="folder-row";
+      const name=document.createElement("div"); name.className="folder-name";
+      name.textContent="📁 "+(folder.name || "مجلد بدون اسم");
+      const actions=document.createElement("div"); actions.className="folder-actions";
+      const open=document.createElement("button");
+      open.type="button"; open.className="alt small"; open.textContent="فتح";
+      open.addEventListener("click",function(){
+        udlFolderStack.push({id:String(folder.id),name:String(folder.name || "مجلد")});
+        void refreshUdlFolders();
+      });
+      const choose=document.createElement("button");
+      choose.type="button"; choose.className="small"; choose.textContent="اختيار للحفظ";
+      choose.addEventListener("click",function(){
+        chooseUdlFolder({id:folder.id,name:folder.name});
+      });
+      actions.append(open,choose); row.append(name,actions); folderListEl.appendChild(row);
+    });
+  }
+
+  async function refreshUdlFolders(button){
+    if(typeof driveAvailable !== "undefined" && !driveAvailable){
+      if(folderMsgEl){folderMsgEl.textContent="اربط Google Drive أولًا من قسم الحسابات.";folderMsgEl.className="msg err";}
+      return;
+    }
+    const current=udlFolderStack[udlFolderStack.length-1] || {id:"root",name:"My Drive"};
+    renderUdlFolderBreadcrumb();
+    const request=++udlFolderRequestSequence;
+    const result=await bridgeAction("drive.list_folders",{parentId:current.id || "root"},folderMsgEl,button);
+    if(request!==udlFolderRequestSequence) return;
+    if(result && result.status==="ok"){
+      const folders=(result.data && Array.isArray(result.data.folders))?result.data.folders:[];
+      renderUdlFolders(folders);
+      if(folderMsgEl){folderMsgEl.textContent="تم تحميل "+folders.length+" مجلدًا.";folderMsgEl.className="msg ok";}
+    }else{
+      renderUdlFolders([]);
+    }
+  }
+
+  if(btnChooseFolder){
+    btnChooseFolder.addEventListener("click",function(){
+      if(!folderPanel) return;
+      folderPanel.hidden=!folderPanel.hidden;
+      if(!folderPanel.hidden) void refreshUdlFolders(this);
+    });
+  }
+  if(btnUseDefaultFolder){
+    btnUseDefaultFolder.addEventListener("click",function(){
+      udlExplicitFolder=null;
+      syncFolderLabel();
+      if(folderPanel) folderPanel.hidden=true;
+      if(msgEl){msgEl.textContent="ستستخدم المهمة الوجهة العامة المحددة في قسم الوجهة.";msgEl.className="msg ok";}
+    });
+  }
+  if(btnFolderRefresh) btnFolderRefresh.addEventListener("click",function(){void refreshUdlFolders(this);});
+  if(btnFolderUp) btnFolderUp.addEventListener("click",function(){
+    if(udlFolderStack.length>1){udlFolderStack.pop();void refreshUdlFolders(this);}
+  });
+  if(btnUseCurrentFolder) btnUseCurrentFolder.addEventListener("click",function(){
+    const current=udlFolderStack[udlFolderStack.length-1] || {id:"root",name:"My Drive"};
+    chooseUdlFolder(current);
+  });
 
   function renderUdlTasks(tasks){
     syncFolderLabel();
@@ -1975,7 +2099,10 @@ $("qBody").addEventListener("click",function(event){
         const r = await fetch("api/universal/start", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({url: url, quality: quality})
+          body: JSON.stringify(Object.assign(
+            {url: url, quality: quality},
+            udlExplicitFolder ? {folder_id: udlExplicitFolder.id, folder_name: udlExplicitFolder.name} : {}
+          ))
         });
         const d = await r.json();
         if(d && d.ok){
@@ -2051,10 +2178,77 @@ def create_web_app(ctx: Any):
     except ImportError as exc:  # pragma: no cover - lock installs it
         raise RuntimeError(_missing_deps_message()) from exc
 
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    from fastapi.middleware.cors import CORSMiddleware
+
     bridge = TeleDriveWebBridge(ctx)
     app = FastAPI(title="TeleDrive v5.0 Turbo Web Dashboard", version=__version__)
     app.state.bridge = bridge
     app.state.ctx = ctx
+    # One random capability per Colab runtime. It is never stored on Vercel;
+    # the user explicitly copies it from their own runtime output to pair a tab.
+    runtime_token = str(getattr(ctx, "remote_control_token", "") or "")
+    token_expires_at = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+    if not runtime_token or token_expires_at <= time.time():
+        runtime_token = secrets.token_urlsafe(32)
+        token_expires_at = time.time() + (8 * 60 * 60)
+        setattr(ctx, "remote_control_token", runtime_token)
+        setattr(ctx, "remote_control_token_expires_at", token_expires_at)
+    app.state.remote_control_token = runtime_token
+    app.state.remote_control_token_expires_at = token_expires_at
+
+    # Browser CORS is only a convenience gate; the random bearer token is the
+    # actual authorization. Never use wildcard origins or allow credentials.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https://(teledrive\.vercel\.app|teledrive-abdullah-74f3\.vercel\.app|teledrive-git-main-abdullah-74f3\.vercel\.app|teledrive-gamma\.vercel\.app|teledrive-[a-z0-9-]+-abdullah-74f3\.vercel\.app)",
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        allow_credentials=True,
+        max_age=600,
+    )
+
+    @app.middleware("http")
+    async def require_runtime_capability(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api/") and request.method != "OPTIONS":
+            # The one-time handoff exchange validates its short-lived capability
+            # inside the endpoint; all other public-tunnel API calls need bearer auth.
+            if path == "/api/pairing/exchange":
+                return await call_next(request)
+
+            # Only the official Colab proxy may use the same-origin UI shortcut.
+            # A public trycloudflare.com URL is not trusted just because someone
+            # opened the tunnel's own HTML page in their browser.
+            request_host = (request.url.hostname or "").lower()
+            trusted_colab_proxy = (
+                request_host.endswith(".googleusercontent.com")
+                or request_host.endswith(".colab.google")
+                or request_host.endswith(".prod.colab.dev")
+            )
+            same_origin_colab_ui = (
+                trusted_colab_proxy
+                and request.headers.get("sec-fetch-site") == "same-origin"
+            )
+            if not same_origin_colab_ui:
+                authorization = request.headers.get("authorization", "")
+                supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+                active_token = str(getattr(ctx, "remote_control_token", "") or "")
+                active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+                if time.time() >= active_expiry:
+                    return JSONResponse(
+                        {"ok": False, "status": "unauthorized", "message": "Runtime pairing token expired; restart the Colab runtime to pair again"},
+                        status_code=401,
+                        headers=_NO_STORE,
+                    )
+                if not supplied or not hmac.compare_digest(supplied, active_token):
+                    return JSONResponse(
+                        {"ok": False, "status": "unauthorized", "message": "Invalid or missing runtime pairing token"},
+                        status_code=401,
+                        headers=_NO_STORE,
+                    )
+        return await call_next(request)
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -2073,6 +2267,55 @@ def create_web_app(ctx: Any):
         page = page.replace("__GRADIO_URL__", gradio_url)
         page = page.replace("__GRADIO_AVAILABLE__", "true" if gradio_available else "false")
         return HTMLResponse(page)
+
+    @app.post("/api/pairing/exchange")
+    def api_exchange_handoff(payload: dict):
+        # Exchange a random, short-lived, single-use token created by the current
+        # Colab runtime. The long-lived runtime capability is not placed in the
+        # notebook's handoff URL/output.
+        handoff_token = str((payload or {}).get("handoff_token") or "")
+        handoffs = getattr(ctx, "remote_handoff_tokens", {})
+        expiry = float(handoffs.pop(handoff_token, 0) or 0) if handoff_token else 0
+        setattr(ctx, "remote_handoff_tokens", handoffs)
+        if not handoff_token or expiry <= time.time():
+            return JSONResponse(
+                {"ok": False, "message": "Handoff link expired or already used. Run the Colab handoff cell again."},
+                status_code=401,
+                headers=_NO_STORE,
+            )
+        active_token = str(getattr(ctx, "remote_control_token", "") or "")
+        active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+        if not active_token or active_expiry <= time.time():
+            return JSONResponse(
+                {"ok": False, "message": "Runtime pairing token expired. Restart the Colab runtime."},
+                status_code=401,
+                headers=_NO_STORE,
+            )
+        return JSONResponse(
+            {"ok": True, "token": active_token, "expires_at": active_expiry},
+            headers=_NO_STORE,
+        )
+
+    @app.post("/api/pairing/revoke")
+    def api_revoke_pairing():
+        # The current bearer token authenticates this request in middleware.
+        # Rotate the runtime capability immediately; all other paired tabs
+        # using the old token will fail their next request.
+        replacement = secrets.token_urlsafe(32)
+        replacement_expiry = time.time() + (8 * 60 * 60)
+        setattr(ctx, "remote_control_token", replacement)
+        setattr(ctx, "remote_control_token_expires_at", replacement_expiry)
+        app.state.remote_control_token = replacement
+        app.state.remote_control_token_expires_at = replacement_expiry
+        print(
+            "TeleDrive pairing token rotated (private; expires in 8 hours; "
+            "copy from this Colab output only if you want to pair again):",
+            replacement,
+        )
+        return JSONResponse(
+            {"ok": True, "message": "Pairing revoked. A replacement token was printed in Colab output."},
+            headers=_NO_STORE,
+        )
 
     @app.get("/api/health")
     def api_health():
@@ -2122,10 +2365,15 @@ def create_web_app(ctx: Any):
     def api_universal_start(payload: dict):
         from .universal_downloader import get_universal_downloader
         mgr = get_universal_downloader(ctx)
-        url = str((payload or {}).get("url") or "")
-        quality = str((payload or {}).get("quality") or "best")
-        folder_id = (payload or {}).get("folder_id")
-        return JSONResponse(mgr.start_download(url=url, quality=quality, folder_id=folder_id), headers=_NO_STORE)
+        payload = payload or {}
+        url = str(payload.get("url") or "")
+        quality = str(payload.get("quality") or "best")
+        folder_id = payload.get("folder_id")
+        folder_name = str(payload.get("folder_name") or "").strip()[:200] or None
+        return JSONResponse(
+            mgr.start_download(url=url, quality=quality, folder_id=folder_id, folder_name=folder_name),
+            headers=_NO_STORE,
+        )
 
     @app.post("/api/universal/cancel")
     def api_universal_cancel(payload: dict):
@@ -2173,6 +2421,16 @@ def create_web_app(ctx: Any):
     async def ws_endpoint(ws: WebSocket):
         import asyncio
 
+        authorization = ws.headers.get("authorization", "")
+        supplied = authorization[7:] if authorization.lower().startswith("bearer ") else ""
+        active_token = str(getattr(ctx, "remote_control_token", "") or "")
+        active_expiry = float(getattr(ctx, "remote_control_token_expires_at", 0) or 0)
+        if time.time() >= active_expiry:
+            await ws.close(code=4401, reason="Runtime pairing token expired")
+            return
+        if not supplied or not hmac.compare_digest(supplied, active_token):
+            await ws.close(code=4401, reason="Runtime pairing token required")
+            return
         await ws.accept()
         try:
             while True:
@@ -2339,6 +2597,10 @@ def launch_web_dashboard(ctx: Any, port: int = DEFAULT_WEB_PORT, open_iframe: bo
         raise
     _log.info("web dashboard listening port=%s thread=%s", actual_port, thread.name)
 
+    # Print a per-runtime pairing secret only in the user's own Colab output.
+    # Anyone with this token and the runtime URL can control that runtime:
+    # do not share it, and disconnect/restart the runtime to rotate it.
+    print("TeleDrive pairing token (private; expires in 8 hours; paste into your own portal tab):", getattr(ctx, "remote_control_token", ""))
     if is_colab():
         proxy_url = colab_proxy_url(actual_port)
         if proxy_url:

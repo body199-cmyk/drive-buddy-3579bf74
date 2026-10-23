@@ -42,14 +42,16 @@ def test_title_is_v50(notebooks):
         assert "v3.1" not in head, path
 
 
-def test_seven_required_and_two_optional_code_cells(notebooks):
+def test_seven_required_and_four_optional_code_cells(notebooks):
     for path, nb in notebooks.items():
         code = [c for c in nb["cells"] if c["cell_type"] == "code"]
         assert notebook_cells.REQUIRED_CELL_COUNT == 7
-        assert notebook_cells.OPTIONAL_CELL_COUNT == 2
+        assert notebook_cells.OPTIONAL_CELL_COUNT == 4
         assert len(code) == notebook_cells.TOTAL_CELL_COUNT, path
-        assert "Optional start of best-effort Colab keep-alive" in code[7]["metadata"]["teledrive_title"]
-        assert "Optional stop of Colab keep-alive" in code[8]["metadata"]["teledrive_title"]
+        assert "Optional start of best-effort Colab keep-alive" in code[8]["metadata"]["teledrive_title"]
+        assert "Optional stop of Colab keep-alive" in code[9]["metadata"]["teledrive_title"]
+        assert "Automatic TeleDrive download monitor" in code[10]["metadata"]["teledrive_title"]
+        assert "Optional Vercel one-click handoff tunnel (experimental)" in code[4]["metadata"]["teledrive_title"]
 
 
 def test_no_forbidden_patterns(notebooks):
@@ -172,8 +174,8 @@ def test_cell_4_restores_vault_and_leaves_keepalive_optional():
 
 
 def test_optional_keepalive_cell_has_start_audio_and_stop_control():
-    start_cell = notebook_cells.CELLS[7]["code"]
-    stop_cell = notebook_cells.CELLS[8]["code"]
+    start_cell = notebook_cells.CELLS[8]["code"]
+    stop_cell = notebook_cells.CELLS[9]["code"]
     assert "session_vault.start_keepalive()" in start_cell
     assert "wave.open(_silent_audio_buffer" in start_cell
     assert "data:audio/wav;base64,{_silent_audio_base64}" in start_cell
@@ -197,3 +199,11 @@ def test_colab_cells_json_carries_no_dependency_versions():
     payload = notebook_cells.CELLS_JSON.read_text(encoding="utf-8")
     for name, version in notebook_cells.lock_pins().items():
         assert f"{name}=={version}" not in payload
+
+
+def test_final_monitor_counts_telegram_and_universal_download_tasks():
+    monitor = notebook_cells.CELLS[10]["code"]
+    assert "ctx.queue_manager.snapshot()" in monitor
+    assert "get_universal_downloader(ctx)" in monitor
+    assert "extract_universal_counts(ctx)" in monitor
+    assert "المهام النشطة (Telegram + الشامل)" in monitor

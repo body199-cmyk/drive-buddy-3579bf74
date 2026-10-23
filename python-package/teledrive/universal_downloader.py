@@ -238,7 +238,8 @@ class UniversalDownloadManager:
             url = str(task.get("url") or "")
             quality = str(task.get("quality") or "best")
             folder_id = str(task.get("folder_id") or "")
-        return self.start_download(url=url, quality=quality, folder_id=folder_id)
+            folder_name = str(task.get("folder_name") or "")
+        return self.start_download(url=url, quality=quality, folder_id=folder_id, folder_name=folder_name)
 
     def bulk_action(self, action: str) -> dict[str, Any]:
         """Apply real per-task actions to all eligible universal-download tasks."""
@@ -317,6 +318,7 @@ class UniversalDownloadManager:
         url: str,
         quality: str = "best",
         folder_id: str | None = None,
+        folder_name: str | None = None,
     ) -> dict[str, Any]:
         clean_url = (url or "").strip()
         if not clean_url or not (clean_url.startswith("http://") or clean_url.startswith("https://")):
@@ -344,7 +346,11 @@ class UniversalDownloadManager:
             target_folder_id = selected.id
             target_folder_name = selected.name or selected.id
         else:
-            target_folder_name = self.ctx.drive_folders.current_folder_name() or target_folder_id
+            target_folder_name = (
+                str(folder_name or "").strip()[:200]
+                or self.ctx.drive_folders.current_folder_name()
+                or target_folder_id
+            )
 
         task_id = f"udl-{uuid4().hex[:8]}"
         task = {

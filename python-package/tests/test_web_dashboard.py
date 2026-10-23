@@ -14,6 +14,7 @@ leave ``ctx.web_dashboard`` empty, and leave ``ctx.aio`` fully alive.
 from __future__ import annotations
 
 import json
+import secrets
 import socket
 import time
 import urllib.request
@@ -47,7 +48,119 @@ def _client(ctx):
     pytest.importorskip("httpx")  # TestClient transport (via gradio deps)
     from fastapi.testclient import TestClient
 
-    return TestClient(create_web_app(ctx))
+    app = create_web_app(ctx)
+    client = TestClient(app)
+    client.headers.update({"Authorization": f"Bearer {ctx.remote_control_token}"})
+    return client
+
+
+def test_runtime_api_requires_per_runtime_bearer_token_and_allows_portal_preflight(ctx):
+    client = _client(ctx)
+    try:
+        denied = client.get("/api/health", headers={"Authorization": "Bearer wrong-token"})
+        assert denied.status_code == 401
+        assert denied.json()["status"] == "unauthorized"
+
+        allowed = client.get("/api/health")
+        assert allowed.status_code == 200
+        assert allowed.json()["service"] == "teledrive-web-dashboard"
+
+        same_origin = client.get("/api/health", headers={"Sec-Fetch-Site": "same-origin"})
+        assert same_origin.status_code == 200
+
+        preflight = client.options(
+            "/api/action",
+            headers={
+                "Origin": "https://teledrive-preview-123-abdullah-74f3.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert preflight.status_code == 200
+        assert (
+            preflight.headers.get("access-control-allow-origin")
+            == "https://teledrive-preview-123-abdullah-74f3.vercel.app"
+        )
+        assert preflight.headers.get("access-control-allow-credentials") == "true"
+
+        production_preflight = client.options(
+            "/api/action",
+            headers={
+                "Origin": "https://teledrive-abdullah-74f3.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert production_preflight.status_code == 200
+        assert (
+            production_preflight.headers.get("access-control-allow-origin")
+            == "https://teledrive-abdullah-74f3.vercel.app"
+        )
+
+        previous_token = ctx.remote_control_token
+        revoked = client.post("/api/pairing/revoke", json={})
+        assert revoked.status_code == 200
+        assert revoked.json()["ok"] is True
+        assert ctx.remote_control_token != previous_token
+        rejected_after_revoke = client.get(
+            "/api/health",
+            headers={"Authorization": f"Bearer {previous_token}"},
+        )
+        assert rejected_after_revoke.status_code == 401
+    finally:
+        client.close()
+
+
+def test_public_tunnel_requires_bearer_and_handoff_exchange_is_single_use(ctx):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app = create_web_app(ctx)
+    handoff = secrets.token_urlsafe(32)
+    ctx.remote_handoff_tokens = {handoff: time.time() + 60}
+
+    with TestClient(app, base_url="https://test-tunnel.trycloudflare.com") as client:
+        # Opening the tunnel's own HTML page must not grant API access.
+        same_origin_without_token = client.get(
+            "/api/health",
+            headers={"Sec-Fetch-Site": "same-origin"},
+        )
+        assert same_origin_without_token.status_code == 401
+
+        exchanged = client.post(
+            "/api/pairing/exchange",
+            json={"handoff_token": handoff},
+        )
+        assert exchanged.status_code == 200
+        assert exchanged.json()["ok"] is True
+        assert exchanged.json()["token"] == ctx.remote_control_token
+
+        replay = client.post(
+            "/api/pairing/exchange",
+            json={"handoff_token": handoff},
+        )
+        assert replay.status_code == 401
+
+
+def test_pairing_token_from_runtime_a_cannot_authorize_runtime_b():
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    app_a = create_web_app(SimpleNamespace())
+    app_b = create_web_app(SimpleNamespace())
+    token_a = app_a.state.remote_control_token
+    token_b = app_b.state.remote_control_token
+    assert token_a != token_b
+
+    with TestClient(app_b) as client_b:
+        response = client_b.get(
+            "/api/health",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+    assert response.status_code == 401
+    assert response.json()["status"] == "unauthorized"
 
 
 def test_module_imports_without_web_framework_at_top_level():
@@ -318,6 +431,8 @@ def test_http_endpoints(ctx):
     page = client.get("/")
     assert page.status_code == 200
     assert "TeleDrive v5.0 Turbo" in page.text
+    # The remote pairing capability must never be embedded in served HTML.
+    assert ctx.remote_control_token not in page.text
 
     health = client.get("/api/health")
     assert health.status_code == 200 and health.json()["ok"] is True
@@ -597,8 +712,12 @@ def test_launch_serves_from_isolated_thread_and_is_idempotent(ctx):
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
+                health_request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/health",
+                    headers={"Authorization": f"Bearer {ctx.remote_control_token}"},
+                )
                 with urllib.request.urlopen(  # noqa: S310 - loopback test server
-                    f"http://127.0.0.1:{port}/api/health", timeout=2
+                    health_request, timeout=2
                 ) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                 assert payload["ok"] is True

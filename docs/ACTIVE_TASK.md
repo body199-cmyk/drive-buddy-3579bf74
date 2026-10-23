@@ -1,3 +1,22 @@
+# Active Task Update — M53-T01 Telegram concurrency + M52-T03 Drive folders/monitor (2026-10-23)
+
+## Current status — merged to staging feature branch; CI passed; live Colab verification pending
+
+- **PR #137 merged** into `feat/per-task-drive-folders-monitor-cell`; merge commit `1d91a6b822d73137b559b831567e1f88f08ffedd`.
+- **PR #136 merged** into `feat/auto-colab-tunnel-handoff`; staging commit `11854cbf520cc1b398acf583a111a23f7a802032`.
+- CI [#39973191911](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39973191911) passed on the exact combined tree: **884 passed, 1 warning**, notebook checks, byte-compile, package archive and frontend lint/build. CI [#39973477802](https://github.com/body199-cmyk/drive-buddy-3579bf74/actions/runs/39973477802) also passed: **884 passed, 1 warning**, package archive and frontend lint/build.
+- Telegram file concurrency now honors the configured value up to 100 instead of a hidden 4/8 cap; GetFile requests use an adaptive shared pool with FloodWait freeze/backoff; Drive-buffer waits do not occupy a download permit.
+- Universal Downloader supports a per-task Drive folder, separate from Telegram's global destination. The monitor cell remains the final notebook cell and counts both managers.
+- **main was not changed and no package was published.** No live Colab/Telegram/Drive test was performed. Do not treat CI as proof Telegram will sustain 100 concurrent files.
+- Next: in Colab, start with 8 files and ramp 12→20→... while watching FloodWait, failures, disk/RAM, throughput, and Drive destinations. Verify Telegram to Folder A and Universal Downloader to Folder B concurrently, and run the monitor cell. Consider production/main only after live validation.
+
+Reports: `docs/PHASE_REPORTS/PHASE_M52_T03_PER_TASK_DRIVE_DESTINATIONS_AND_MONITOR_CELL.md`; M53-T01 details in `docs/AI_HANDOFF.md`.
+
+---
+
+
+---
+
 # Active Task Update — M52-T02 universal downloader controls (2026-10-21)
 
 ## Current status — merged and published

@@ -1,3 +1,14 @@
+## 2026-10-23 — وجهة Drive مستقلة لكل مهمة + خلية مراقبة Colab (M52-T03)
+
+- PR [#136](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/136) أُنشئ كمسودة على فرع معزول؛ لم يُدمج ولم يُنشر إصدار جديد.
+- صفحة Universal Downloader تحصل على مجلدات Drive عبر إجراء القراءة `drive.list_folders` وتتيح اختيار مجلد لهذه المهمة فقط. يُرسل `folder_id` و`folder_name` إلى المدير، وتحتفظ إعادة المحاولة بالمجلد والاسم نفسيهما؛ لا يتغير اختيار وجهة Telegram العامة.
+- أُضيفت اختبارات لعقد اختيار المجلد وإعادة المحاولة، وحُدّث المصدر القانوني للنوتبوك مع الاحتفاظ بخلية Vercel التجريبية الموجودة في الفرع. خلية مراقبة TeleDrive الآن آخر خلية في المصدر القانوني ونسختي النوتبوك و`colab_cells.json`.
+- أصلحت كتلة تنظيف خلية المراقبة لاستعادة `write` و`writelines` و`flush`. أُضيف تنبيه إلى تعليمات النوتبوك بعدم تشغيل خلية الإغلاق قبل انتهاء النقل.
+- تحقق محلي من خلال فحص أدوات GitHub: JSON صحيح، 11 خلية كود في المصدر المصدّر، المراقبة هي الأخيرة، لا اختلاف بين مصدري الخلايا ونسخة النوتبوك في فحص العقد، والنسختان متطابقتان. هذا **ليس** تشغيلًا لـpytest ولا اختبارًا حيًا.
+- **المتبقي:** CI على PR #136 قيد التشغيل؛ لم يُثبت تنزيلان متوازيان حقيقيان إلى مجلدين مختلفين في Colab/Drive.
+
+---
+
 ## 2026-10-21 — Universal web-download controls parity (M52-T02)
 
 - Merged [PR #124](https://github.com/body199-cmyk/drive-buddy-3579bf74/pull/124) as `08363cdffa4653f95db39e88e0e124022dc86afe`: per-task and bulk pause/resume/stop/cancel/retry-failed controls for the Universal URL Downloader, wired to real `UniversalDownloadManager` methods and FastAPI endpoints rather than UI-only state.
@@ -1166,3 +1177,10 @@ Restart runtime ← إعادة تشغيل Cell 1 فقط (بوابة التحدي
 ## v1.0.0 — 2026-07-29
 
 - Initial per Constitution v2.0 — Telethon user + Drive OAuth Desktop (تم استبداله لاحقًا بـ native Colab auth).
+
+
+## 2026-10-23 — M53-T01 / M52-T03 integration status
+
+- PR #137 (Telegram concurrency up to 100 + adaptive FloodWait request pool) merged to the staging feature branch; PR #136 (per-task Drive destinations + final Colab monitor cell) then merged to `feat/auto-colab-tunnel-handoff` as `11854cbf520cc1b398acf583a111a23f7a802032`.
+- CI runs #39973191911 and #39973477802 passed: 884 tests passed, 1 warning; package archive and frontend checks passed.
+- No change to `main`, no package publication, and no live Colab/Telegram/Drive test. Production promotion remains blocked on a live staged concurrency test and two-folder parallel-transfer check.

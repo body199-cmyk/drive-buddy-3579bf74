@@ -103,11 +103,10 @@ class TransferManager:
         return self._sema
 
     def _tg_semaphore(self) -> asyncio.Semaphore:
-        """Whole-file download permits on the single MTProto connection.
+        """Whole-file permits honoring requested concurrency up to 100.
 
-        ``worker_count`` may be 100, but Telegram must never see 100 simultaneous
-        file streams: the socket suffers head-of-line blocking and starts
-        answering "Request was unsuccessful 6 time(s)".
+        GetFile requests use a separate adaptive pool which applies FloodWait
+        backpressure; do not silently clamp the user's setting to 4 or 8.
         """
         sema = self._tg_sema
         if sema is None:
@@ -403,7 +402,8 @@ class TransferManager:
                 return
             if not await self._download_stage(item):
                 return
-            await buffer_slot.acquire()
+        # Do not hold a Telegram download permit while waiting for Drive's buffer.
+        await buffer_slot.acquire()
         try:
             await self._upload_stage(item)
         finally:
