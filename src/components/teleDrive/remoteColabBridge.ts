@@ -1,4 +1,11 @@
-import type { BridgeRequest, BridgeResponse, LiveUiState, TeleDriveBridge, TelegramAuthResult, TelegramAuthStep } from "./bridgeTypes";
+import type {
+  BridgeRequest,
+  BridgeResponse,
+  LiveUiState,
+  TeleDriveBridge,
+  TelegramAuthResult,
+  TelegramAuthStep,
+} from "./bridgeTypes";
 import { newRequestId } from "./bridgeTypes";
 
 /**
