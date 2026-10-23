@@ -13,7 +13,7 @@ and refreshes ``teledrive/colab_cells.json`` so the in-app "copy the cells"
 export can never drift from the shipped notebook.
 
 Constitution rules encoded here:
-  * exactly seven required cells plus two optional keep-alive start/stop cells;
+  * exactly seven required cells, two optional keep-alive cells, and one optional safe dashboard-reattach cell;
   * native Colab Drive auth only (no client_secret.json, no pasted OAuth code,
     no persisted drive_token.json);
   * ``share=False`` — no public tunnel by default;
