@@ -34,20 +34,45 @@ def _ensure_writable_db_paths() -> None:
 
 
 def _connect() -> sqlite3.Connection:
+    """Return a fully initialized connection; never cache a partial one.
+
+    SQLite can fail while applying a PRAGMA (notably journal_mode=WAL) when
+    the database, its directory, or the runtime mount has become readonly.
+    Keep the new connection local until every initialization step succeeds so
+    later calls cannot accidentally reuse a half-configured connection.
+    """
     global _conn
     if _conn is None:
         _ensure_writable_db_paths()
-        _conn = sqlite3.connect(
-            str(DB_PATH),
-            timeout=30.0,
-            check_same_thread=False,
-            isolation_level=None,
-        )
-        _conn.row_factory = sqlite3.Row
-        _conn.execute("PRAGMA busy_timeout=30000")
-        _conn.execute("PRAGMA journal_mode=WAL")
-        _conn.execute("PRAGMA synchronous=NORMAL")
-        _conn.execute("PRAGMA foreign_keys=ON")
+        conn: sqlite3.Connection | None = None
+        try:
+            conn = sqlite3.connect(
+                str(DB_PATH),
+                timeout=30.0,
+                check_same_thread=False,
+                isolation_level=None,
+            )
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA busy_timeout=30000")
+            mode_row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+            mode = str(mode_row[0]).lower() if mode_row else ""
+            if mode != "wal":
+                raise sqlite3.OperationalError(
+                    f"SQLite WAL initialization failed (reported mode: {mode or 'unknown'})"
+                )
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+        except Exception:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            # Explicitly leave the singleton empty so the next attempt must
+            # create and initialize a fresh connection.
+            _conn = None
+            raise
+        _conn = conn
     return _conn
 
 
