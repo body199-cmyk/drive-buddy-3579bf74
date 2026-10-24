@@ -898,3 +898,66 @@ def test_direct_mtproto_sender_pool_pipelines_requests_and_disconnects_cleanly(t
     assert target.read_bytes() == payload
     assert all(s.calls > 0 for s in fake_senders), "every MTProtoSender must be used"
     assert all(s.disconnected for s in fake_senders), "all senders must disconnect cleanly"
+
+
+# ---------------------------------------------------------------------------
+# SQLite connection initialization must not cache a half-configured handle.
+# ---------------------------------------------------------------------------
+
+
+def test_database_connect_uses_real_writable_temp_db_and_reopens(tmp_path, monkeypatch):
+    """A real on-disk SQLite DB must write successfully after a clean reconnect."""
+    from teledrive import database as database_module
+
+    path = tmp_path / "runtime" / "teledrive.db"
+    monkeypatch.setattr(database_module, "DB_PATH", path)
+    monkeypatch.setattr(database_module, "assert_local_path", lambda *_a, **_k: None)
+    database_module.close()
+
+    try:
+        with database_module.cursor() as cur:
+            cur.execute("CREATE TABLE IF NOT EXISTS recovery_probe (value TEXT NOT NULL)")
+            cur.execute("DELETE FROM recovery_probe")
+            cur.execute("INSERT INTO recovery_probe(value) VALUES (?)", ("first",))
+        database_module.close()
+        with database_module.cursor() as cur:
+            row = cur.execute("SELECT value FROM recovery_probe").fetchone()
+        assert row[0] == "first"
+        assert database_module.journal_mode() == "wal"
+    finally:
+        database_module.close()
+
+
+def test_database_connect_does_not_cache_connection_when_pragma_fails(tmp_path, monkeypatch):
+    """A failing WAL PRAGMA closes the new handle and leaves _conn unset."""
+    import sqlite3
+    from teledrive import database as database_module
+
+    class _FailingConnection:
+        row_factory = None
+        closed = False
+
+        def execute(self, sql):
+            if "journal_mode=WAL" in sql:
+                raise sqlite3.OperationalError("attempt to write a readonly database")
+            return self
+
+        def fetchone(self):
+            return ("wal",)
+
+        def close(self):
+            self.closed = True
+
+    fake = _FailingConnection()
+    monkeypatch.setattr(database_module, "DB_PATH", tmp_path / "readonly.db")
+    monkeypatch.setattr(database_module, "assert_local_path", lambda *_a, **_k: None)
+    monkeypatch.setattr(database_module.sqlite3, "connect", lambda *_a, **_k: fake)
+    database_module.close()
+
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            database_module._connect()
+        assert fake.closed is True
+        assert database_module._conn is None
+    finally:
+        database_module.close()
