@@ -1,9 +1,20 @@
+## 2026-10-24 — YouTube challenge detection and playlist naming
+
+- Root cause: the retry matcher expected a straight apostrophe in you're, while YouTube can return the curly form you’re; normalize apostrophes and case before matching so the existing alternate-player retry runs.
+- A YouTube video URL is kept to one video even if it also has a list parameter. Explicit playlist URLs remain eligible for full playlist downloads.
+- yt-dlp output names include the playlist position when available and the video ID, preventing repeated playlist titles from overwriting each other. Other yt-dlp sites continue through the shared downloader path.
+- Added regression coverage for both apostrophe forms, video-plus-list URLs, explicit playlist URLs, and the generic yt-dlp path.
+- yt-dlp supports many sites, but extractor/site changes and login, region, IP, or other protection requirements can still block downloads; no bypass or universal success is promised. A YouTube retry still cannot guarantee access when Colab is blocked or an authenticated session is required. Optional Netscape cookies remain local to the user's runtime and must never be committed or logged.
+- No live YouTube/Colab download has been performed for this change.
+
+---
+
 ## 2026-10-24 — توازي متكيّف ووقت إجمالي للطابور
 
 - بقي الحد الافتراضي 12 قارئًا للملف الكبير المنفرد؛ يخفض المحرك عدد القراء لكل ملف وفق عدد ملفات الدفعة وميزانية طلبات Telegram المشتركة (72)، فتنتشر الطلبات على ملفات أكثر دون التضحية بتقسيم الملف المنفرد.
 - أضيف تقدير الوقت المتبقي الإجمالي إلى شريط طابور النقل، باستخدام قياسات السرعة والتقدم الحقيقية الموجودة في الخلفية؛ يظهر توضيح حتى تبدأ قياسات النقل.
 - تحقق حي سابق في Colab بعد ضبط الدفعة: 68 عنصرًا قيد التنزيل و61 أظهرت تقدمًا رقميًا، دون FloodWait في السجل المرصود. هذه الملاحظة تثبت تقدم الدفعة، لا تضمن سرعة ثابتة لكل حساب أو شبكة.
-- التغيير في PR #146 يحتاج مراجعة ودمجًا ثم نشر الحزمة؛ يحتاج Runtime إلى إعادة تشغيل لتطبيقه. الجلسة الحالية لا تتغير تلقائيًا.
+- دُمج PR #146 إلى main بالـcommit `11890721ae531e2616d331a8502c370593c9718b`. لم تُنشر حزمة جديدة؛ يحتاج Runtime إلى تحديث الحزمة وإعادة التشغيل لتطبيقه. الجلسة الحالية لا تتغير تلقائيًا.
 
 ---
 ## 2026-10-23 — وجهة Drive مستقلة لكل مهمة + خلية مراقبة Colab (M52-T03)

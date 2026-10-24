@@ -14,6 +14,7 @@ import shutil
 import threading
 import time
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -23,6 +24,44 @@ from .logging_config import get_logger
 from .redaction import redact
 
 _log = get_logger("teledrive.universal_downloader")
+
+
+def _youtube_url_flags(url: str) -> tuple[bool, bool, bool]:
+    """Return whether a URL is YouTube, an explicit playlist, and a video URL.
+
+    A YouTube watch URL may contain both v and list. In that case it represents
+    one requested video and yt-dlp must not expand the playlist. Explicit
+    playlist links and list-only URLs remain full playlists.
+    """
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False, False, False
+
+    host = (parsed.hostname or "").lower().rstrip(".")
+    is_youtube = (
+        host == "youtu.be"
+        or host.endswith(".youtu.be")
+        or host == "youtube-nocookie.com"
+        or host.endswith(".youtube-nocookie.com")
+        or host == "youtube.com"
+        or host.endswith(".youtube.com")
+    )
+    if not is_youtube:
+        return False, False, False
+
+    path = parsed.path.lower().rstrip("/") or "/"
+    query = parse_qs(parsed.query)
+    has_video_id = bool((query.get("v") or [""])[0])
+    short_link = (host == "youtu.be" or host.endswith(".youtu.be")) and path != "/"
+    video_path = (
+        (path == "/watch" and has_video_id)
+        or short_link
+        or path.startswith(("/shorts/", "/embed/", "/live/"))
+    )
+    has_list_id = bool((query.get("list") or [""])[0])
+    explicit_playlist = has_list_id and (path == "/playlist" or not video_path)
+    return True, explicit_playlist, video_path and not explicit_playlist
 
 
 def _youtube_multiaudio_format(quality: str) -> str:
@@ -667,7 +706,7 @@ class UniversalDownloadManager:
             "audio_m4a": "bestaudio[ext=m4a]/bestaudio/best",
         }
         selected_fmt = fmt_map.get(quality, fmt_map["best"])
-        is_youtube = "youtube.com" in lower_url or "youtu.be" in lower_url
+        is_youtube, is_playlist_url, is_video_url = _youtube_url_flags(url)
         youtube_multi_audio = is_youtube and not quality.startswith("audio")
         if youtube_multi_audio:
             selected_fmt = _youtube_multiaudio_format(quality)
@@ -698,9 +737,11 @@ class UniversalDownloadManager:
 
         ydl_opts: dict[str, Any] = {
             "format": selected_fmt,
-            "outtmpl": str(work_dir / "%(title).120s.%(ext)s"),
+            # Include playlist position when available and always include the
+            # extractor ID so repeated titles cannot overwrite one another.
+            "outtmpl": str(work_dir / "%(playlist_index&{} - |)s%(id)s-%(title).120s.%(ext)s"),
             "progress_hooks": [_yt_hook],
-            "noplaylist": False,
+            "noplaylist": is_video_url and not is_playlist_url,
             "quiet": True,
             "no_warnings": True,
             "merge_output_format": (
@@ -771,9 +812,10 @@ class UniversalDownloadManager:
                 break
             except yt_dlp.utils.DownloadError as exc:
                 message = str(exc)
+                normalized_message = message.translate(str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})).casefold()
                 is_bot_challenge = (
-                    ("Sign in to confirm you're not a bot" in message)
-                    or ("LOGIN_REQUIRED" in message)
+                    ("sign in to confirm you're not a bot" in normalized_message)
+                    or ("login_required" in normalized_message)
                 ) and is_youtube
                 if not is_bot_challenge:
                     raise

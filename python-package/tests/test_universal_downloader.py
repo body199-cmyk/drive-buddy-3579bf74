@@ -56,7 +56,14 @@ def test_ensure_packages_reports_failed_install(monkeypatch):
         UniversalDownloadManager(ctx=None)._ensure_packages()
 
 
-def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "challenge_text",
+    [
+        "Sign in to confirm you're not a bot",
+        "Sign in to confirm you’re not a bot",
+    ],
+)
+def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_path, challenge_text):
     import yt_dlp
 
     attempts = []
@@ -74,7 +81,7 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
         def download(self, urls):
             if len(attempts) == 1:
                 raise yt_dlp.utils.DownloadError(
-                    "Sign in to confirm you're not a bot"
+                    challenge_text
                 )
             (download_dir / "sample.mkv").write_bytes(b"video")
 
@@ -122,3 +129,46 @@ def test_youtube_multiaudio_selector_uses_original_audio_fallback():
     assert "bestvideo+ba[language^=ar]+ba[language^=en]" in selector
     assert "bestvideo+bestaudio" in selector
     assert selector.endswith("best")
+
+
+@pytest.mark.parametrize(
+    ("url", "expected_noplaylist"),
+    [
+        ("https://www.youtube.com/watch?v=video-id&list=PL123", True),
+        ("https://www.youtube.com/playlist?list=PL123", False),
+        ("https://vimeo.com/123456", False),
+    ],
+)
+def test_ytdlp_keeps_video_links_single_and_playlist_links_expanded(
+    monkeypatch, tmp_path, url, expected_noplaylist
+):
+    import yt_dlp
+
+    options_seen = []
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            options_seen.append(dict(options))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            (download_dir / "sample.mp4").write_bytes(b"video")
+
+    download_dir = tmp_path / "download"
+    download_dir.mkdir()
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
+
+    manager._download_to_dir("test-task", url, "best", download_dir)
+
+    assert len(options_seen) == 1
+    assert options_seen[0]["noplaylist"] is expected_noplaylist
+    assert "%(playlist_index&{} - |)s" in options_seen[0]["outtmpl"]
+    assert "%(id)s" in options_seen[0]["outtmpl"]
