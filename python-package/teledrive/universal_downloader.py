@@ -741,6 +741,25 @@ class UniversalDownloadManager:
             )
             if cookie_file is not None:
                 ydl_opts["cookiefile"] = str(cookie_file)
+        elif "facebook.com" in lower_url or "fb.watch" in lower_url:
+            # Facebook often requires an authenticated browser session for
+            # private, age-gated, or rate-limited media. Accept a user-supplied
+            # Netscape cookie export without storing it in the repository.
+            # Keep this scoped to Facebook URLs rather than attaching cookies
+            # to every arbitrary URL handled by yt-dlp.
+            cookie_candidates = [
+                os.environ.get("YTDLP_COOKIES_FILE", ""),
+                "/content/facebook_cookies.txt",
+                "/content/cookies.txt",
+                str(Path(TEMP_DIR) / "facebook_cookies.txt"),
+            ]
+            cookie_file = next(
+                (Path(p).expanduser() for p in cookie_candidates
+                 if p and Path(p).expanduser().is_file()),
+                None,
+            )
+            if cookie_file is not None:
+                ydl_opts["cookiefile"] = str(cookie_file)
 
         if quality == "audio_mp3":
             ydl_opts["postprocessors"] = [
