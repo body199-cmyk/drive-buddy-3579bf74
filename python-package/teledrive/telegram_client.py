@@ -82,6 +82,11 @@ class TelegramService:
         self._download_request_slots = TelegramRequestPool(TG_INFLIGHT_REQUESTS)
         self._media_clients: list[Any] = []
         self._media_pool_lock: Optional[asyncio.Lock] = None
+        self._batch_file_count = 1
+
+    def set_batch_file_count(self, count: int) -> None:
+        """Set the current queue batch size for fair striped reader allocation."""
+        self._batch_file_count = max(1, int(count or 1))
 
     def _request_slots(self) -> TelegramRequestPool:
         """Return the context-wide adaptive GetFile request budget."""
@@ -438,8 +443,14 @@ class TelegramService:
         start_at = max(0, int(start_at))
         started_at = time.monotonic()
         remaining = max(0, total - start_at)
+        # Two GetFile calls are pipelined per direct sender lane. Share the
+        # global request budget across the known batch while retaining all
+        # configured lanes for one or a few concurrent files.
+        batch_files = max(1, int(getattr(self, "_batch_file_count", 1) or 1))
+        fair_stream_cap = max(1, TG_INFLIGHT_REQUESTS // (2 * batch_files))
         streams = min(
             PARALLEL_DOWNLOAD_STREAMS,
+            fair_stream_cap,
             (remaining + request_size - 1) // request_size,
         )
         if streams < 2:
