@@ -783,15 +783,15 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
 
     app = create_web_app(SimpleNamespace())
     # Standard case: proxy hostname is preserved while TLS terminates upstream.
-    with TestClient(app, base_url="http://runtime-123.prod.colab.dev") as client:
+    with TestClient(app, base_url="http://runtime-123.europe-west4.prod.r.colab.dev") as client:
         response = client.get(
             "/api/health",
-            headers={"Referer": "https://runtime-123.prod.colab.dev/"},
+            headers={"Referer": "https://runtime-123.europe-west4.prod.r.colab.dev/"},
         )
         assert response.status_code == 200
         origin_response = client.get(
             "/api/health",
-            headers={"Origin": "https://runtime-123.prod.colab.dev"},
+            headers={"Origin": "https://runtime-123.europe-west4.prod.r.colab.dev"},
         )
         assert origin_response.status_code == 200
         cross_site = client.get(
@@ -809,8 +809,8 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
         forwarded = client.get(
             "/api/health",
             headers={
-                "X-Forwarded-Host": "runtime-123.prod.colab.dev",
-                "Origin": "https://runtime-123.prod.colab.dev",
+                "X-Forwarded-Host": "runtime-123.europe-west4.prod.r.colab.dev",
+                "Origin": "https://runtime-123.europe-west4.prod.r.colab.dev",
             },
         )
         assert forwarded.status_code == 200
@@ -818,8 +818,8 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
         browser_origin_only = client.get(
             "/api/health",
             headers={
-                "Origin": "https://runtime-123.prod.colab.dev",
-                "Referer": "https://runtime-123.prod.colab.dev/",
+                "Origin": "https://runtime-123.europe-west4.prod.r.colab.dev",
+                "Referer": "https://runtime-123.europe-west4.prod.r.colab.dev/",
             },
         )
         assert browser_origin_only.status_code == 200
@@ -827,7 +827,7 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
         cross_site = client.get(
             "/api/health",
             headers={
-                "X-Forwarded-Host": "runtime-123.prod.colab.dev",
+                "X-Forwarded-Host": "runtime-123.europe-west4.prod.r.colab.dev",
                 "Origin": "https://attacker.example",
                 "Referer": "https://attacker.example/",
             },
