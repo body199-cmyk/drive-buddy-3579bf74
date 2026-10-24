@@ -1,3 +1,14 @@
+## 2026-10-24 — YouTube challenge detection and playlist naming
+
+- Root cause: the retry matcher expected a straight apostrophe in you're, while YouTube can return the curly form you’re; normalize apostrophes and case before matching so the existing alternate-player retry runs.
+- A YouTube video URL is kept to one video even if it also has a list parameter. Explicit playlist URLs remain eligible for full playlist downloads.
+- yt-dlp output names include the playlist position when available and the video ID, preventing repeated playlist titles from overwriting each other. Other yt-dlp sites continue through the shared downloader path.
+- Added regression coverage for both apostrophe forms, video-plus-list URLs, explicit playlist URLs, and the generic yt-dlp path.
+- A retry still cannot guarantee access when YouTube blocks the Colab IP or requires an authenticated session. Optional Netscape cookies remain local to the user's runtime and must never be committed or logged.
+- No live YouTube/Colab download has been performed for this change.
+
+---
+
 ## 2026-10-24 — توازي متكيّف ووقت إجمالي للطابور
 
 - بقي الحد الافتراضي 12 قارئًا للملف الكبير المنفرد؛ يخفض المحرك عدد القراء لكل ملف وفق عدد ملفات الدفعة وميزانية طلبات Telegram المشتركة (72)، فتنتشر الطلبات على ملفات أكثر دون التضحية بتقسيم الملف المنفرد.
