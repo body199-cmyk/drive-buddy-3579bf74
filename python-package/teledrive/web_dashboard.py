@@ -331,11 +331,11 @@ h2{font-size:18px;line-height:1.4;margin:0}
 .overview-heading{display:flex;align-items:center;gap:12px;margin:4px 1px 11px}
 .overview-heading .step-badge{width:40px;height:40px}
 .overview-heading p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
-.workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0}
-.workflow-step{display:flex;gap:9px;align-items:center;min-width:0;width:100%;min-height:62px;color:var(--text);text-align:right;
+.workflow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:12px 0}
+.workflow-step{display:flex;gap:10px;align-items:center;min-width:0;width:100%;min-height:68px;color:var(--text);text-align:right;
   border:1px solid var(--border);border-radius:14px;padding:9px 10px;background:var(--card);box-shadow:none;font-family:inherit}
 .workflow-step:hover{border-color:var(--blue);background:var(--selected)}
-.workflow-step.is-active{outline:2px solid var(--blue);outline-offset:1px}
+.workflow-step.is-active{outline:2px solid var(--blue);outline-offset:2px;background:var(--selected);box-shadow:0 5px 16px var(--glow)}
 .workflow-step strong{display:block;font-size:13px;line-height:1.35}
 .workflow-step small{display:block;color:var(--muted);font-size:11.5px;line-height:1.45;margin-top:1px}
 .step-number{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
@@ -343,9 +343,15 @@ h2{font-size:18px;line-height:1.4;margin:0}
 .workflow-step.is-current{border-color:var(--blue)}
 .workflow-step.is-current .step-number{background:var(--blue);border-color:var(--blue);color:#fff}
 .workflow-step.is-done .step-number{background:var(--green);border-color:var(--green);color:#fff}
-.next-step{border:1px solid var(--border);border-radius:14px;padding:10px 13px;background:var(--selected);font-size:13.5px;margin:8px 0 12px}
+.next-step{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border:1px solid var(--border);border-inline-start:4px solid var(--blue);border-radius:14px;padding:12px 14px;background:var(--selected);font-size:13.5px;margin:10px 0 14px}
 .next-step strong{color:var(--blue)}
-.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:9px;margin:10px 0 14px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 9px}
+.stat-primary{min-height:100px;display:flex;flex-direction:column;justify-content:space-between;padding:14px}
+.stat-primary h3{margin:0;color:var(--muted);font-size:12px}
+.stat-primary .big{font-size:23px}
+.stats-secondary{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.stat-detail{display:flex;align-items:center;gap:7px;min-height:36px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--muted);font-size:12px}
+.stat-detail strong{color:var(--text);font-size:12.5px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:10px;margin:10px 0}
 .auth-form{margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
@@ -453,7 +459,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
   .drawer-header p{margin:2px 0 0;color:var(--muted);font-size:12px}
   .drawer-nav{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .workflow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .workflow{grid-template-columns:1fr;gap:6px;margin:10px 0}
   .stats-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}
 }
 /* Universal downloader: keep the core workflow compact on desktop and thumb-friendly on phones. */
@@ -515,7 +521,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .section-head{flex-wrap:wrap}.section-status{margin-inline-start:45px}
 }
 @media(max-width:480px){
-  .workflow{grid-template-columns:1fr 1fr}
+  .workflow{grid-template-columns:1fr}
   .overview-heading p{font-size:11.5px}
   .drawer-panel{padding-inline:12px}
   .mobile-drawer{align-items:flex-end;padding:0}
@@ -523,7 +529,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
   .drawer-handle{display:block;width:40px;height:4px;border-radius:99px;margin:0 auto 14px;background:var(--bar-bg)}
   .drawer-nav{grid-template-columns:repeat(2,minmax(0,1fr))}
   .mobile-tab{font-size:9px}
-  .workflow-step{min-height:58px;padding:8px}.step-number{width:27px;height:27px}
+  .workflow-step{min-height:52px;padding:7px 10px}.step-number{width:28px;height:28px}
   .theme-switch button{padding:6px 7px}.theme-switch .theme-name{display:none}
   .stats-grid{gap:7px}.big{font-size:19px}
 }
@@ -572,7 +578,6 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <button class="mobile-tab is-active" type="button" data-section-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span>الرئيسية</span></button>
     <button class="mobile-tab" type="button" data-section-target="destination"><span class="nav-icon" aria-hidden="true">▣</span><span>الوجهة</span></button>
     <button class="mobile-tab" type="button" data-section-target="analyze"><span class="nav-icon" aria-hidden="true">⌕</span><span>تحليل</span></button>
-    <button class="mobile-tab" type="button" data-section-target="universal"><span class="nav-icon" aria-hidden="true">🌐</span><span>تحميل شامل</span></button>
     <button class="mobile-tab" type="button" data-section-target="results"><span class="nav-icon" aria-hidden="true">☷</span><span>النتائج</span></button>
     <button class="mobile-tab" type="button" data-section-target="transfer"><span class="nav-icon" aria-hidden="true">⇄</span><span>الطابور</span></button>
     <button class="mobile-tab" id="btnMobileMore" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobileMoreDrawer"><span class="nav-icon" aria-hidden="true">⋯</span><span>المزيد</span></button>
@@ -617,15 +622,17 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
       <button class="workflow-step" type="button" id="stepLinkTransfer" data-section-target="transfer"><span class="step-number">5</span><span><strong>النقل والمتابعة</strong><small id="stepTransferHint">الطابور والتقدم</small></span></button>
     </nav>
     <div class="next-step" id="nextStep" role="status"><strong>الخطوة التالية:</strong> <span id="nextStepText">جارٍ قراءة الحالة الحية…</span></div>
-  <div class="stats-grid" aria-label="نظرة سريعة على الحالة">
-    <div class="card stat-card"><h3>حالة المحرك</h3><div class="big" id="mState">—</div></div>
-    <div class="card stat-card"><h3>السرعة اللحظية</h3><div class="big"><span id="mSpeed">0</span> <small>MB/s</small></div></div>
-    <div class="card stat-card"><h3>اكتمل</h3><div class="big" id="mDone">0</div></div>
-    <div class="card stat-card"><h3>فشل / تم تخطيه</h3><div class="big"><span id="mFail">0</span> / <span id="mSkip">0</span></div></div>
-    <div class="card stat-card"><h3>في الانتظار</h3><div class="big" id="mPending">0</div></div>
-    <div class="card stat-card"><h3>مساحة حرة</h3><div class="big"><span id="mDisk">—</span></div></div>
-    <div class="card stat-card"><h3>Telegram</h3><div class="big" id="mTg" style="font-size:16px">—</div></div>
-    <div class="card stat-card"><h3>Google Drive</h3><div class="big" id="mDrive" style="font-size:16px">—</div></div>
+  <div class="stats-grid" aria-label="ملخص الحالة">
+    <div class="card stat-card stat-primary"><h3>حالة النقل</h3><div class="big" id="mState">—</div></div>
+    <div class="card stat-card stat-primary"><h3>في الطابور</h3><div class="big" id="mPending">0</div></div>
+    <div class="card stat-card stat-primary"><h3>السرعة الآن</h3><div class="big"><span id="mSpeed">0</span> <small>MB/s</small></div></div>
+    <div class="card stat-card stat-primary"><h3>مساحة حرة</h3><div class="big"><span id="mDisk">—</span></div></div>
+  </div>
+  <div class="stats-secondary" aria-label="تفاصيل إضافية">
+    <div class="stat-detail">اكتمل <strong id="mDone">0</strong></div>
+    <div class="stat-detail">فشل / تم تخطيه <strong><span id="mFail">0</span> / <span id="mSkip">0</span></strong></div>
+    <div class="stat-detail">Telegram <strong id="mTg">—</strong></div>
+    <div class="stat-detail">Google Drive <strong id="mDrive">—</strong></div>
   </div>
   </section>
 
@@ -1325,6 +1332,7 @@ function updateWorkflow(state,data){
   const queue=state.queue||[];
   const running=!!data.is_running;
   const allAccountsReady=telegramOk&&driveOk;
+  const activeStep=!allAccountsReady?1:(!folderOk?2:(!candidates.length?3:((!running&&!queue.length)?4:5)));
   setText("connectionsStatus",allAccountsReady?"متصل بالحسابين":(telegramOk||driveOk?"متبقٍّ حساب واحد":"غير متصل"));
   setText("sidebarStateText",allAccountsReady?"الحسابان متصلان":(telegramOk||driveOk?"حساب واحد يحتاج ربطًا":"الحسابات غير متصلة"));
   const sidebarDot=$("sidebarStateDot");
@@ -1339,15 +1347,15 @@ function updateWorkflow(state,data){
   setText("destinationStatus",folderOk?("المجلد: "+(folder.name||"محدد")):"لم يتم الاختيار");
   setText("analyzeStatus",candidates.length?("تم العثور على "+candidates.length+" ملف"):"بانتظار تحليل");
   setText("transferStatus",running?"النقل جارٍ الآن":(queue.length?queue.length+" عنصر في الطابور":"الطابور فارغ"));
-  setWorkflowStep("stepLinkConnect","stepConnectHint",telegramOk&&driveOk?"done":"current",
-    telegramOk&&driveOk?"Telegram وDrive جاهزان":(!telegramOk?"سجّل Telegram أولًا":"اربط Google Drive"));
-  setWorkflowStep("stepLinkDestination","stepDestinationHint",folderOk?"done":(driveOk?"current":"todo"),
+  setWorkflowStep("stepLinkConnect","stepConnectHint",allAccountsReady?"done":(activeStep===1?"current":"todo"),
+    allAccountsReady?"Telegram وDrive جاهزان":(!telegramOk?"سجّل Telegram أولًا":"اربط Google Drive"));
+  setWorkflowStep("stepLinkDestination","stepDestinationHint",folderOk?"done":(activeStep===2?"current":"todo"),
     folderOk?(folder.name||"تم اختيار المجلد"):"اختر وجهة الحفظ");
-  setWorkflowStep("stepLinkAnalyze","stepAnalyzeHint",candidates.length?"done":(telegramOk?"current":"todo"),
+  setWorkflowStep("stepLinkAnalyze","stepAnalyzeHint",candidates.length?"done":(activeStep===3?"current":"todo"),
     candidates.length?candidates.length+" نتيجة جاهزة":"الصق رابط قناة أو رسالة");
-  setWorkflowStep("stepLinkResults","stepResultsHint",selected.length?"done":(candidates.length?"current":"todo"),
+  setWorkflowStep("stepLinkResults","stepResultsHint",selected.length&&(running||queue.length)?"done":(activeStep===4?"current":"todo"),
     selected.length?selected.length+" ملف محدد":"راجع واختر المطلوب");
-  setWorkflowStep("stepLinkTransfer","stepTransferHint",running?"current":(queue.length?"current":"todo"),
+  setWorkflowStep("stepLinkTransfer","stepTransferHint",activeStep===5?"current":"todo",
     running?"النقل جارٍ الآن":(queue.length?"جاهز للبدء أو المتابعة":"الطابور والتقدم"));
   let next="جاهز لتحليل رابط جديد أو متابعة الطابور.";
   if(!telegramOk) next="سجّل دخول Telegram من زر تسجيل الدخول الآمن في الخطوة 1.";
