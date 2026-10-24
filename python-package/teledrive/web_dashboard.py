@@ -2337,17 +2337,20 @@ def create_web_app(ctx: Any):
                 public_hostname.endswith(".googleusercontent.com")
                 or public_hostname.endswith(".colab.google")
                 or public_hostname.endswith(".prod.colab.dev")
+                or public_hostname.endswith(".prod.r.colab.dev")
             ):
                 if origin_host and (
                     origin_host.endswith(".googleusercontent.com")
                     or origin_host.endswith(".colab.google")
                     or origin_host.endswith(".prod.colab.dev")
+                    or origin_host.endswith(".prod.r.colab.dev")
                 ) and (not referer_host or referer_host == origin_host):
                     public_hostname = origin_host
                 elif referer_host and (
                     referer_host.endswith(".googleusercontent.com")
                     or referer_host.endswith(".colab.google")
                     or referer_host.endswith(".prod.colab.dev")
+                    or referer_host.endswith(".prod.r.colab.dev")
                 ) and (not origin_host or origin_host == referer_host):
                     public_hostname = referer_host
 
@@ -2355,6 +2358,7 @@ def create_web_app(ctx: Any):
                 public_hostname.endswith(".googleusercontent.com")
                 or public_hostname.endswith(".colab.google")
                 or public_hostname.endswith(".prod.colab.dev")
+                or public_hostname.endswith(".prod.r.colab.dev")
             )
             same_origin_signal = request.headers.get("sec-fetch-site") == "same-origin"
             if origin_host:
