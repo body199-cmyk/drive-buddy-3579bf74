@@ -147,8 +147,10 @@ def _bounded_env_int(name: str, default: int, low: int, high: int) -> int:
 # only worthwhile for larger files where request latency dominates.
 FAST_DOWNLOAD_MIN_BYTES = 1024 * 1024
 PARALLEL_DOWNLOAD_MIN_BYTES = 2 * 1024 * 1024
+# Preserve up to 12 striped readers for one large file. TelegramService reduces
+# this per file for large batches so the shared request budget stays fairly spread.
 PARALLEL_DOWNLOAD_STREAMS = _bounded_env_int("TELEDRIVE_TG_STREAMS", 12, 1, 16)
-TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 24, 1, 100)
+TG_INFLIGHT_REQUESTS = _bounded_env_int("TELEDRIVE_TG_INFLIGHT", 72, 1, 100)
 MAX_CONCURRENT_TG_DOWNLOADS = _bounded_env_int("TELEDRIVE_TG_FILES", 100, 1, 100)
 # M45-T04: large sliding reorder window (72 chunks = 36 MiB) for 12 independent
 # FastTelethon MTProtoSender TCP connections so fast sockets never barrier-stall.

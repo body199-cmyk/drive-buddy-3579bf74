@@ -810,6 +810,7 @@ th,td{text-align:right;padding:8px;border-bottom:1px solid var(--border);vertica
     <div id="queue">
       <div class="queue-toolbar">
         <h3 style="margin:0">📦 طابور النقل الحي (<span id="qCount">0</span>)</h3>
+        <span id="queueEtaSummary" class="note" role="status">الوقت المتبقي الإجمالي: <strong id="queueEta">—</strong></span>
         <span style="flex:1"></span>
         <button class="alt small" id="btnClearCompleted" type="button">مسح المكتمل</button>
         <button class="alt small" id="btnClearIncomplete" type="button">مسح غير المكتمل</button>
@@ -1074,6 +1075,16 @@ function humanBytes(n){
   return v.toFixed(v>=100?0:1)+" "+u[i];
 }
 function setText(id, value){ const el=$(id); if(el) el.textContent = (value==null ? "—" : String(value)); }
+function humanDuration(seconds){
+  const value=Number(seconds);
+  if(!Number.isFinite(value)||value<0) return "يظهر بعد بدء النقل";
+  let left=Math.ceil(value);
+  const hours=Math.floor(left/3600); left%=3600;
+  const minutes=Math.floor(left/60); const secs=left%60;
+  if(hours) return hours+" س "+minutes+" د";
+  if(minutes) return minutes+" د "+secs+" ث";
+  return secs+" ث";
+}
 const THEMES=["light","dim","dark"];
 const THEME_LABELS={light:"الفاتح",dim:"الخافت بأسلوب X",dark:"الداكن الكامل"};
 function normalizeTheme(theme){ return THEMES.includes(theme)?theme:"light"; }
@@ -1379,6 +1390,7 @@ function applyData(data){
   setText("mFail", p.failed_files || 0);
   setText("mSkip", p.skipped_files || 0);
   setText("mPending", data.pending || 0);
+  setText("queueEta", humanDuration(p.eta_seconds));
   setText("mDisk", humanBytes(data.free_disk_bytes));
   const st=data.state||{};
   const telegram=st.telegram||{};

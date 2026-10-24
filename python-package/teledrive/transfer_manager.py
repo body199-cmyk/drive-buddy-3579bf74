@@ -324,6 +324,9 @@ class TransferManager:
                 total_items += len(batch)
                 total_bytes += sum(int(i.size_bytes or 0) for i in batch)
                 PROGRESS.register_totals(total_items, total_bytes)
+                set_batch_size = getattr(self.telegram, "set_batch_file_count", None)
+                if callable(set_batch_size):
+                    set_batch_size(total_items)
                 tasks.extend(asyncio.create_task(self._process(i)) for i in batch)
 
             active = [t for t in tasks if not t.done()]
