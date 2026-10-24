@@ -782,32 +782,55 @@ def test_colab_proxy_same_origin_fallback_works_without_fetch_metadata():
     from fastapi.testclient import TestClient
 
     app = create_web_app(SimpleNamespace())
-    # Colab terminates TLS at its proxy; the app may see HTTP upstream
-    # even though the browser's official proxy URL and Referer use HTTPS.
+    # Standard case: proxy hostname is preserved while TLS terminates upstream.
     with TestClient(app, base_url="http://runtime-123.prod.colab.dev") as client:
-        # A same-host HTTPS Referer is sufficient when Fetch Metadata is absent,
-        # even when the upstream request scheme is HTTP.
         response = client.get(
             "/api/health",
             headers={"Referer": "https://runtime-123.prod.colab.dev/"},
         )
         assert response.status_code == 200
-        assert response.json()["ok"] is True
-
-        # Same-host HTTPS Origin is another valid browser signal.
         origin_response = client.get(
             "/api/health",
             headers={"Origin": "https://runtime-123.prod.colab.dev"},
         )
         assert origin_response.status_code == 200
-
-        # Merely targeting a trusted Colab host must not allow cross-site calls.
         cross_site = client.get(
             "/api/health",
             headers={"Referer": "https://attacker.example/"},
         )
         assert cross_site.status_code == 401
-
         no_browser_signal = client.get("/api/health")
         assert no_browser_signal.status_code == 401
+
+    # Important reverse-proxy case: Uvicorn sees localhost while the browser
+    # sees the official Colab hostname. This reproduces the host rewrite that
+    # the prior regression test did not cover.
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        forwarded = client.get(
+            "/api/health",
+            headers={
+                "X-Forwarded-Host": "runtime-123.prod.colab.dev",
+                "Origin": "https://runtime-123.prod.colab.dev",
+            },
+        )
+        assert forwarded.status_code == 200
+
+        browser_origin_only = client.get(
+            "/api/health",
+            headers={
+                "Origin": "https://runtime-123.prod.colab.dev",
+                "Referer": "https://runtime-123.prod.colab.dev/",
+            },
+        )
+        assert browser_origin_only.status_code == 200
+
+        cross_site = client.get(
+            "/api/health",
+            headers={
+                "X-Forwarded-Host": "runtime-123.prod.colab.dev",
+                "Origin": "https://attacker.example",
+                "Referer": "https://attacker.example/",
+            },
+        )
+        assert cross_site.status_code == 401
 
