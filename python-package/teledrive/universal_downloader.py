@@ -26,6 +26,27 @@ from .redaction import redact
 _log = get_logger("teledrive.universal_downloader")
 
 
+def _classify_youtube_failure(message: str) -> str:
+    """Classify common YouTube failures without exposing cookies or URLs.
+
+    This is diagnostic only: another retry inside the same Colab runtime does
+    not change the runtime's public IP address.
+    """
+    normalized = (message or "").translate(
+        str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
+    ).casefold()
+    if (
+        "sign in to confirm you're not a bot" in normalized
+        or "login_required" in normalized
+        or "http error 429" in normalized
+        or "too many requests" in normalized
+    ):
+        return "environment_or_ip_block"
+    if "use --cookies-from-browser" in normalized or "use --cookies" in normalized:
+        return "session_required"
+    return "other"
+
+
 def _youtube_url_flags(url: str) -> tuple[bool, bool, bool]:
     """Return whether a URL is YouTube, an explicit playlist, and a video URL.
 
@@ -812,11 +833,8 @@ class UniversalDownloadManager:
                 break
             except yt_dlp.utils.DownloadError as exc:
                 message = str(exc)
-                normalized_message = message.translate(str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})).casefold()
-                is_bot_challenge = (
-                    ("sign in to confirm you're not a bot" in normalized_message)
-                    or ("login_required" in normalized_message)
-                ) and is_youtube
+                failure_kind = _classify_youtube_failure(message) if is_youtube else "other"
+                is_bot_challenge = failure_kind == "environment_or_ip_block"
                 if not is_bot_challenge:
                     raise
                 last_bot_error = exc
@@ -835,9 +853,18 @@ class UniversalDownloadManager:
                     "وارفعها بنفسك إلى جلسة Colab باسم /content/youtube_cookies.txt. "
                     "لا ترسل الملف لأي شخص ولا ترفعه إلى GitHub لأنه يحتوي بيانات جلسة حسابك."
                 )
+                self._update(
+                    task_id,
+                    status_ar=(
+                        "❌ يوتيوب رفض بيئة Colab (IP/تحقق روبوت)؛ "
+                        "إعادة المحاولة داخل نفس Runtime لن تغيّر العنوان."
+                    ),
+                )
                 raise RuntimeError(
-                    "يوتيوب رفض طلب التحميل حتى بعد تجربة إعدادات yt-dlp الافتراضية وملف تعريف بديل. "
-                    "قد يكون السبب حظر عنوان IP الخاص بـ Colab أو اشتراط جلسة موثّقة."
+                    "يوتيوب رفض بيئة التنزيل بعد محاولتين. هذا غالبًا حظر أو عدم ثقة في IP الخاص بـ Colab، "
+                    "وليس عطلًا في الرابط. إعادة المحاولة داخل نفس Runtime لا تغيّر IP. "
+                    "الحل المجاني المحتمل هو إعادة تشغيل Runtime للحصول على بيئة أخرى، أو استخدام مزود مجاني آخر "
+                    "مُعدّ مسبقًا؛ لا يوجد تبديل تلقائي بين البيئات من داخل Colab."
                     + cookie_hint
                 ) from exc
         if self._is_cancelled(task_id):
