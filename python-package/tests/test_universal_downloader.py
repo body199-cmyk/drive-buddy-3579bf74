@@ -7,6 +7,7 @@ import pytest
 
 from teledrive.universal_downloader import (
     UniversalDownloadManager,
+    _classify_youtube_failure,
     _youtube_multiaudio_format,
 )
 
@@ -54,6 +55,25 @@ def test_ensure_packages_reports_failed_install(monkeypatch):
 
     with pytest.raises(RuntimeError, match="network unavailable"):
         UniversalDownloadManager(ctx=None)._ensure_packages()
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Sign in to confirm you're not a bot",
+        "Sign in to confirm you’re not a bot",
+        "ERROR: HTTP Error 429: Too Many Requests",
+        "LOGIN_REQUIRED",
+    ],
+)
+def test_youtube_environment_failures_are_classified_as_ip_or_bot_blocks(message):
+    assert _classify_youtube_failure(message) == "environment_or_ip_block"
+
+
+def test_youtube_cookie_prompt_is_classified_as_session_requirement():
+    assert _classify_youtube_failure(
+        "Use --cookies-from-browser or --cookies for the authentication"
+    ) == "session_required"
 
 
 @pytest.mark.parametrize(
