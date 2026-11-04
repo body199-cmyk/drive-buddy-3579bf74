@@ -88,6 +88,8 @@ export type TelegramAuthResult = {
 
 export interface TeleDriveBridge {
   request<T>(request: BridgeRequest): Promise<BridgeResponse<T>>;
+  /** Existing Universal Downloader REST endpoints on the owner-operated runtime. */
+  universalRequest?(path: string, payload?: Record<string, unknown>): Promise<{ok: boolean; message?: string; tasks?: Array<any>}>;
   /** Optional dedicated endpoint; auth secrets must never enter BridgeRequest payloads. */
   telegramAuthStep?(
     step: TelegramAuthStep,
