@@ -737,7 +737,81 @@ print(\"runtime root (local, not Drive):\", os.environ.setdefault(
 '''
 
 # Assembled Cell 1: verified update gate + fallback restore. One source, no drift.
-CELL_1 = CELL_1_PACKAGE_UPDATER + CELL_1_RESTORE
+CELL_1_LATEST_MAIN = r'''
+# ---- Mandatory latest-main source synchronization (fail closed) ----
+# This runs after the verified release installs dependencies, BEFORE any teledrive import.
+import io as _td_io, json as _td_jsonlib, shutil as _td_shutil
+import tempfile as _td_tempfile, urllib.request as _td_urllib
+import pathlib as _td_pathlib, zipfile as _td_zipfile, os as _td_os, sys as _td_sys
+import compileall as _td_compileall
+
+if any(m == "teledrive" or m.startswith("teledrive.") for m in _td_sys.modules):
+    raise RuntimeError("Restart runtime: TeleDrive modules already loaded")
+
+def _td_get(url):
+    request = _td_urllib.Request(url, headers={
+        "User-Agent": "TeleDrive-latest-source", "Cache-Control": "no-cache",
+        "Accept": "application/vnd.github+json",
+    })
+    return _td_urllib.urlopen(request, timeout=90)
+
+_api = "https://api.github.com/repos/body199-cmyk/drive-buddy-3579bf74"
+with _td_get(_api + "/commits/main") as _resp:
+    _sha = _td_jsonlib.load(_resp)["sha"]
+if len(_sha) != 40 or any(c not in "0123456789abcdef" for c in _sha):
+    raise RuntimeError("Invalid main commit SHA")
+with _td_get(_api + "/actions/runs?head_sha=" + _sha + "&per_page=50") as _resp:
+    _runs = _td_jsonlib.load(_resp)["workflow_runs"]
+_ci = [run for run in _runs if run.get("name") == "CI"
+       and run.get("head_sha") == _sha and run.get("event") == "push"]
+if not any(run.get("status") == "completed" and run.get("conclusion") == "success"
+           for run in _ci):
+    raise RuntimeError("Latest main CI not successful yet. Retry later; no old-code fallback.")
+with _td_get("https://github.com/body199-cmyk/drive-buddy-3579bf74/archive/" + _sha + ".zip") as _resp:
+    _data = _resp.read(64 * 1024 * 1024 + 1)
+if len(_data) > 64 * 1024 * 1024:
+    raise RuntimeError("Source archive too large")
+_dest = _td_pathlib.Path("/content/teledrive-v4.5/teledrive")
+if not _dest.is_dir():
+    raise RuntimeError("Release package missing")
+with _td_tempfile.TemporaryDirectory(prefix="teledrive_main_") as _temp:
+    _src = _td_pathlib.Path(_temp) / "teledrive"
+    _src.mkdir()
+    with _td_zipfile.ZipFile(_td_io.BytesIO(_data)) as _archive:
+        _prefix = "drive-buddy-3579bf74-" + _sha + "/python-package/teledrive/"
+        _found = False
+        for _entry in _archive.infolist():
+            if not _entry.filename.startswith(_prefix) or _entry.is_dir():
+                continue
+            _relative = _td_pathlib.PurePosixPath(_entry.filename[len(_prefix):])
+            if ".." in _relative.parts or _relative.is_absolute() or not _relative.parts:
+                raise RuntimeError("Unsafe source path")
+            if ((_entry.external_attr >> 16) & 0o170000) == 0o120000:
+                raise RuntimeError("Symlink in source archive")
+            _out = _src.joinpath(*_relative.parts)
+            _out.parent.mkdir(parents=True, exist_ok=True)
+            with _archive.open(_entry) as _inp, _out.open("wb") as _file:
+                _td_shutil.copyfileobj(_inp, _file)
+            _found = True
+    if not _found or not (_src / "__init__.py").is_file() or not (_src / "universal_downloader.py").is_file():
+        raise RuntimeError("Incomplete latest-main package")
+    if not _td_compileall.compile_dir(str(_src), quiet=1, force=True):
+        raise RuntimeError("Latest main source does not compile")
+    _backup = _dest.with_name("teledrive_pre_main_backup")
+    if _backup.exists():
+        _pkg_remove_tree(_backup)
+    _td_os.replace(_dest, _backup)
+    try:
+        _td_shutil.copytree(_src, _dest)
+    except BaseException:
+        if _dest.exists():
+            _pkg_remove_tree(_dest)
+        _td_os.replace(_backup, _dest)
+        raise
+    _pkg_remove_tree(_backup)
+print("Latest CI-verified main source installed:", _sha)
+'''
+CELL_1 = CELL_1_PACKAGE_UPDATER + CELL_1_RESTORE + CELL_1_LATEST_MAIN
 
 CELL_2 = '''# ==== Cell 2: bootstrap local directories, logging, SQLite migrations, WAL ====
 import os
