@@ -200,15 +200,16 @@ def test_youtube_multiaudio_selector_uses_original_audio_fallback():
 
 
 @pytest.mark.parametrize(
-    ("url", "expected_noplaylist"),
+    ("url", "expected_noplaylist", "expected_playlist"),
     [
-        ("https://www.youtube.com/watch?v=video-id&list=PL123", True),
-        ("https://www.youtube.com/playlist?list=PL123", False),
-        ("https://vimeo.com/123456", False),
+        ("https://www.youtube.com/watch?v=video-id&list=PL123", True, False),
+        ("https://www.youtube.com/playlist?list=PL123", False, True),
+        ("https://www.youtube.com/playlist?list=UU123", False, True),
+        ("https://vimeo.com/123456", False, False),
     ],
 )
 def test_ytdlp_keeps_video_links_single_and_playlist_links_expanded(
-    monkeypatch, tmp_path, url, expected_noplaylist
+    monkeypatch, tmp_path, url, expected_noplaylist, expected_playlist
 ):
     import yt_dlp
 
@@ -238,8 +239,69 @@ def test_ytdlp_keeps_video_links_single_and_playlist_links_expanded(
 
     assert len(options_seen) == 1
     assert options_seen[0]["noplaylist"] is expected_noplaylist
+    assert options_seen[0].get("ignoreerrors", False) is expected_playlist
     assert "%(playlist_index&{} - |)s" in options_seen[0]["outtmpl"]
     assert "%(id)s" in options_seen[0]["outtmpl"]
+
+
+def test_youtube_playlist_downloads_all_items_in_order_and_reports_position(
+    monkeypatch, tmp_path
+):
+    import yt_dlp
+
+    updates = []
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            self.options = options
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            assert urls == ["https://www.youtube.com/playlist?list=PL123"]
+            hook = self.options["progress_hooks"][0]
+            hook({
+                "status": "downloading",
+                "downloaded_bytes": 100,
+                "total_bytes": 1000,
+                "speed": 100,
+                "info_dict": {
+                    "title": "Second video",
+                    "playlist_index": 2,
+                    "playlist_count": 2,
+                },
+            })
+            # Simulate yt-dlp completing entries in a way that filesystem
+            # enumeration does not guarantee to preserve playlist order.
+            (tmp_path / "download" / "02 - second-video.mp4").write_bytes(b"second")
+            (tmp_path / "download" / "01 - first-video.mp4").write_bytes(b"first")
+
+    download_dir = tmp_path / "download"
+    download_dir.mkdir()
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_wait_if_paused", lambda task_id: None)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: updates.append(kwargs))
+
+    files = manager._download_to_dir(
+        "playlist-task",
+        "https://www.youtube.com/playlist?list=PL123",
+        "best",
+        download_dir,
+    )
+
+    assert [path.name for path in files] == [
+        "01 - first-video.mp4",
+        "02 - second-video.mp4",
+    ]
+    assert len(files) == 2
+    assert updates[0]["status_ar"] == "📃 القائمة: الفيديو 2/2..."
+    assert updates[0]["title"].startswith("(2/2) Second video")
 
 
 def test_youtube_progress_updates_are_throttled_but_finish_is_immediate(monkeypatch, tmp_path):
