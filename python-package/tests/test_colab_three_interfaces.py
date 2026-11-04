@@ -6,6 +6,7 @@ engine. Never drop the original Gradio/Web modes or expose tokens in Cell 4.
 from __future__ import annotations
 
 import ast
+import json
 
 from teledrive import notebook_cells
 
@@ -50,6 +51,9 @@ def test_notebook_artifacts_generated_from_canonical_source():
     # All copies and in-app copy-cells export must describe the same menu.
     assert notebook_cells.check_all() == []
     for path in notebook_cells.NOTEBOOK_PATHS:
-        assert '"TeleDrive_Next"' in path.read_text(encoding="utf-8")
-        assert '"Run_All_Three"' in path.read_text(encoding="utf-8")
-    assert '"TeleDrive_Next"' in notebook_cells.CELLS_JSON.read_text(encoding="utf-8")
+        document = json.loads(path.read_text(encoding="utf-8"))
+        cell_four = "".join(document["cells"][4]["source"])
+        assert '"TeleDrive_Next"' in cell_four
+        assert '"Run_All_Three"' in cell_four
+    exported = json.loads(notebook_cells.CELLS_JSON.read_text(encoding="utf-8"))
+    assert '"TeleDrive_Next"' in exported["cells"][3]["code"]
