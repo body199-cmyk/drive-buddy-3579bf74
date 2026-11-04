@@ -139,13 +139,14 @@ function Index() {
             بخمس هويات بصرية من غير تعديل محرك التحميل أو حذف الخيارات القديمة.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
+            <a href="https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb" target="_blank" rel="noreferrer"
+              className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary">
+              Gradio الكلاسيكية
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">تعمل من دفتر Colab المعتاد</span>
+            </a>
             <a href="/connect" className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary">
               React القديمة
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">رابط الربط المعتاد</span>
-            </a>
-            <a href="/teledrive-sandbox" className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary">
-              لوحة React القديمة
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">معاينة بدون جلسة</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">مسار الربط القديم دون تغيير</span>
             </a>
             <a href="/teledrive-next" className="rounded-xl border-2 border-emerald-500 bg-card p-4 text-sm font-semibold hover:bg-emerald-500/5">
               TeleDrive Next
