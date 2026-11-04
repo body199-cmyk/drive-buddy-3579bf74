@@ -132,28 +132,49 @@ function Index() {
         <section className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold">واجهات TeleDrive — اختار الأنسب</h2>
-            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">الخيار الثالث تجريبي</span>
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              الخيار الثالث تجريبي
+            </span>
           </div>
           <p className="mb-4 text-sm leading-7 text-muted-foreground">
-            الواجهة القديمة على React وواجهة Gradio موجودين كما هما. TeleDrive Next واجهة مستقلة للتجربة،
-            بخمس هويات بصرية من غير تعديل محرك التحميل أو حذف الخيارات القديمة.
+            الواجهة القديمة على React وواجهة Gradio موجودين كما هما. TeleDrive Next واجهة مستقلة
+            للتجربة، بخمس هويات بصرية من غير تعديل محرك التحميل أو حذف الخيارات القديمة.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <a href="https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb" target="_blank" rel="noreferrer"
-              className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary">
+            <a
+              href="https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary"
+            >
               Gradio الكلاسيكية
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">تعمل من دفتر Colab المعتاد</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                تعمل من دفتر Colab المعتاد
+              </span>
             </a>
-            <a href="/connect" className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary">
+            <a
+              href="/connect"
+              className="rounded-xl border border-border bg-card p-4 text-sm font-semibold hover:border-primary"
+            >
               React القديمة
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">مسار الربط القديم دون تغيير</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                مسار الربط القديم دون تغيير
+              </span>
             </a>
-            <a href="/teledrive-next" className="rounded-xl border-2 border-emerald-500 bg-card p-4 text-sm font-semibold hover:bg-emerald-500/5">
+            <a
+              href="/teledrive-next"
+              className="rounded-xl border-2 border-emerald-500 bg-card p-4 text-sm font-semibold hover:bg-emerald-500/5"
+            >
               TeleDrive Next
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">تجربة الشكل والثيمات الخمسة</span>
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                تجربة الشكل والثيمات الخمسة
+              </span>
             </a>
           </div>
-          <a href="/connect-next" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-primary px-5 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+          <a
+            href="/connect-next"
+            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-primary px-5 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          >
             ربط Colab بالواجهة الثالثة
           </a>
           <p className="mt-3 text-xs leading-6 text-muted-foreground">
