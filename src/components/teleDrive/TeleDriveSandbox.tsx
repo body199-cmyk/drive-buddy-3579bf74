@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
+  Download,
+  Send,
+  ListChecks,
   Check,
   Cloud,
   FileArchive,
@@ -21,6 +24,7 @@ import {
   UploadCloud,
   UserRound,
 } from "lucide-react";
+import UniversalSection from "./UniversalSection";
 import {
   newRequestId,
   unavailableBridge,
@@ -45,7 +49,6 @@ import {
   selectedVisibleCandidates,
   validateAnalyzeInput,
   type MediaType,
-  type Page,
   type ScanMode,
 } from "./viewModel";
 
@@ -175,12 +178,12 @@ function ActionButton({
   );
 }
 
-const navItems: Array<{ id: Page; icon: ReactNode }> = [
-  { id: "connection", icon: <UserRound size={15} aria-hidden="true" /> },
-  { id: "analyze", icon: <Search size={15} aria-hidden="true" /> },
-  { id: "queue", icon: <UploadCloud size={15} aria-hidden="true" /> },
-  { id: "logs", icon: <Terminal size={15} aria-hidden="true" /> },
-  { id: "settings", icon: <Settings size={15} aria-hidden="true" /> },
+type WorkspacePage = "universal" | "telegram" | "tasks" | "settings";
+const navItems: Array<{ id: WorkspacePage; icon: ReactNode; ar: string; en: string }> = [
+  { id: "universal", icon: <Download size={19} aria-hidden="true" />, ar: "التحميل الشامل", en: "Universal" },
+  { id: "telegram", icon: <Send size={19} aria-hidden="true" />, ar: "تيليجرام", en: "Telegram" },
+  { id: "tasks", icon: <ListChecks size={19} aria-hidden="true" />, ar: "المهام", en: "Tasks" },
+  { id: "settings", icon: <Settings size={19} aria-hidden="true" />, ar: "الإعدادات", en: "Settings" },
 ];
 
 function TopBar({
@@ -683,7 +686,7 @@ function AnalyzeSection({
   live: boolean;
   pendingActions: ReadonlySet<string>;
   run: RunAction;
-  onNavigate(page: Page): void;
+  onNavigate(page: "queue"): void;
   onValidationError(message: string): void;
 }) {
   const savedSourceLink = state?.analyze?.sourceLink ?? "";
@@ -1675,7 +1678,7 @@ export type TeleDriveSandboxProps = { bridge?: TeleDriveBridge };
 export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDriveSandboxProps) {
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const [page, setPage] = useState<Page>("connection");
+  const [page, setPage] = useState<WorkspacePage>("universal");
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
   const latestRequest = useRef(new Map<string, string>());
@@ -1845,46 +1848,41 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     }
   };
 
-  const pages: Record<Page, ReactNode> = {
-    connection: (
-      <ConnectionSection
-        state={liveState}
-        language={language}
-        live={live}
-        pendingActions={pendingActions}
-        run={run}
-        bridge={bridge}
-      />
+  const listFoldersForUniversal = async (parentId: string): Promise<FolderChoice[]> => {
+    const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
+    return response?.status === "ok" ? response.data?.folders ?? [] : [];
+  };
+
+  const pages: Record<WorkspacePage, ReactNode> = {
+    universal: (
+      <UniversalSection state={liveState} bridge={bridge} onSettings={() => setPage("settings")}
+        onTasks={() => setPage("tasks")} onFolderList={listFoldersForUniversal} />
     ),
-    analyze: (
+    telegram: (
       <AnalyzeSection
-        state={liveState}
-        language={language}
-        live={live}
-        pendingActions={pendingActions}
-        run={run}
-        onNavigate={setPage}
+        state={liveState} language={language} live={live}
+        pendingActions={pendingActions} run={run}
+        onNavigate={() => setPage("tasks")}
         onValidationError={(text) => setNotice({ kind: "error", text })}
       />
     ),
-    queue: (
-      <QueueSection
-        state={liveState}
-        language={language}
-        live={live}
-        pendingActions={pendingActions}
-        run={run}
-      />
+    tasks: (
+      <QueueSection state={liveState} language={language} live={live}
+        pendingActions={pendingActions} run={run} />
     ),
-    logs: <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />,
     settings: (
-      <SettingsSection
-        state={liveState}
-        language={language}
-        live={live}
-        pendingActions={pendingActions}
-        run={run}
-      />
+      <div className="td-settings-workspace">
+        <SettingsSection state={liveState} language={language} live={live} pendingActions={pendingActions} run={run} />
+        <details className="td-settings-group" open>
+          <summary><UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive</summary>
+          <ConnectionSection state={liveState} language={language} live={live}
+            pendingActions={pendingActions} run={run} bridge={bridge} />
+        </details>
+        <details className="td-settings-group">
+          <summary><Terminal size={18}/> السجلات والتشخيص</summary>
+          <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />
+        </details>
+      </div>
     ),
   };
 
@@ -1909,7 +1907,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
             onClick={() => setPage(item.id)}
           >
             {item.icon}
-            {pageLabels[item.id][language]}
+            {language === "ar" ? item.ar : item.en}
           </button>
         ))}
       </nav>
@@ -1942,7 +1940,11 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
           </div>
         )}
         <NoticeBar notice={notice} />
-        {pages[page]}
+        {navItems.map(({ id }) => (
+          <div key={id} className="td-workspace-pane" hidden={page !== id}>
+            {pages[id]}
+          </div>
+        ))}
       </main>
     </div>
   );
