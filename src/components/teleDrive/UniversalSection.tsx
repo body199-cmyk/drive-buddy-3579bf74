@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, CloudDownload, Folder, Pause, Play, RefreshCw, RotateCcw, Square, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, CloudDownload, Folder, Pause, Play, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import type { FolderChoice, LiveUiState, TeleDriveBridge } from "./bridgeTypes";
 import { formatBytes } from "./viewModel";
 
@@ -17,7 +17,6 @@ type UniversalTask = {
   error?: string;
 };
 type UniversalResult = { ok: boolean; message?: string; tasks?: UniversalTask[] };
-type UniversalRequest = NonNullable<TeleDriveBridge["universalRequest"]>;
 type Props = {
   state: LiveUiState | null;
   bridge: TeleDriveBridge;
@@ -36,12 +35,16 @@ const qualityOptions = [
 ] as const;
 
 function taskActions(task: UniversalTask): Array<["pause" | "resume" | "cancel" | "retry", string]> {
-  if (task.status === "paused") return [["resume", "استئناف"], ["cancel", "إلغاء"]];
-  if (task.status === "queued" || task.status === "downloading") {
-    return [...(task.pause_supported ? ([["pause", "إيقاف مؤقت"]] as Array<["pause", string]>) : []), ["cancel", "إلغاء"]];
+  const actions: Array<["pause" | "resume" | "cancel" | "retry", string]> = [];
+  if (task.status === "paused") {
+    actions.push(["resume", "استئناف"], ["cancel", "إلغاء"]);
+  } else if (task.status === "queued" || task.status === "downloading") {
+    if (task.pause_supported) actions.push(["pause", "إيقاف مؤقت"]);
+    actions.push(["cancel", "إلغاء"]);
+  } else if (["failed", "cancelled", "canceled"].includes(task.status)) {
+    actions.push(["retry", "إعادة المحاولة"]);
   }
-  if (["failed", "cancelled", "canceled"].includes(task.status)) return [["retry", "إعادة المحاولة"]];
-  return [];
+  return actions;
 }
 
 export function UniversalTaskCard({ task, onAction, busy }: {
@@ -82,7 +85,7 @@ export function UniversalTaskCard({ task, onAction, busy }: {
 }
 
 export default function UniversalSection({ state, bridge, onSettings, onTasks, onFolderList }: Props) {
-  const api = bridge.universalRequest;
+  const api = useMemo(() => bridge.universalRequest?.bind(bridge), [bridge]);
   const [url, setUrl] = useState("");
   const [quality, setQuality] = useState("best");
   const [advanced, setAdvanced] = useState(false);
@@ -189,7 +192,7 @@ export default function UniversalSection({ state, bridge, onSettings, onTasks, o
 
 /** Complete Universal Downloader queue. Uses only the existing runtime actions. */
 export function UniversalTasksPanel({ bridge }: { bridge: TeleDriveBridge }) {
-  const api = bridge.universalRequest;
+  const api = useMemo(() => bridge.universalRequest?.bind(bridge), [bridge]);
   const [tasks, setTasks] = useState<UniversalTask[]>([]);
   const [filter, setFilter] = useState<"all" | "active" | "done" | "failed">("all");
   const [busy, setBusy] = useState(false);
