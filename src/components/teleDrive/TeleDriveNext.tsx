@@ -212,11 +212,11 @@ function TopBar({
     <header className="td-topbar">
       <div className="td-brand">
         <span className="td-mark">TD</span>
-        <strong>TeleDrive</strong>
+        <strong>TeleDrive <span className="td-next-brand">NEXT</span></strong>
       </div>
       <div className={`td-prototype ${live ? "td-status-live" : "td-status-demo"}`}>
         <Terminal size={13} aria-hidden="true" />
-        {live ? "Gradio · Live bridge" : "Backend bridge unavailable"}
+        {live ? "Colab · Live runtime" : "Backend bridge unavailable"}
       </div>
       <div className="td-chips">
         <StateChip
@@ -2058,6 +2058,23 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
       </button>
       <TopBar state={liveState} language={language} live={live} />
+      <div className="td-theme-shortcut">
+        <label htmlFor="td-next-quick-theme">
+          <span>{localize(language, "الشكل", "Theme")}</span>
+          <select
+            id="td-next-quick-theme"
+            value={appearance}
+            onChange={(event) => chooseAppearance(event.target.value as typeof appearance)}
+          >
+            <option value="system">{localize(language, "تلقائي", "Auto")}</option>
+            <option value="lime">Neon Lime</option>
+            <option value="violet">Violet Pulse</option>
+            <option value="clean">Clean Light</option>
+            <option value="ocean">Ocean Glass</option>
+            <option value="dim">Twitter Dim</option>
+          </select>
+        </label>
+      </div>
       <nav
         className="td-nav"
         aria-label={localize(language, "أقسام TeleDrive", "TeleDrive sections")}
