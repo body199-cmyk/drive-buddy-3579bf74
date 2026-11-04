@@ -11,4 +11,5 @@ tenacity>=8.2.3
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
 yt-dlp
+bgutil-ytdlp-pot-provider==2.0.2
 gdown
