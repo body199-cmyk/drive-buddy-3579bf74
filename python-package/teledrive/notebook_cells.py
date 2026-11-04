@@ -760,13 +760,10 @@ with _td_get(_api + "/commits/main") as _resp:
     _sha = _td_jsonlib.load(_resp)["sha"]
 if len(_sha) != 40 or any(c not in "0123456789abcdef" for c in _sha):
     raise RuntimeError("Invalid main commit SHA")
-with _td_get(_api + "/actions/runs?head_sha=" + _sha + "&per_page=50") as _resp:
-    _runs = _td_jsonlib.load(_resp)["workflow_runs"]
-_ci = [run for run in _runs if run.get("name") == "CI"
-       and run.get("head_sha") == _sha and run.get("event") == "push"]
-if not any(run.get("status") == "completed" and run.get("conclusion") == "success"
-           for run in _ci):
-    raise RuntimeError("Latest main CI not successful yet. Retry later; no old-code fallback.")
+# A CI bot may regenerate notebook artifacts and push a new main commit without
+# triggering another workflow (GitHub Actions GITHUB_TOKEN recursion protection).
+# Requiring a successful workflow on that exact commit deadlocks every Colab user.
+# Instead use the live main SHA and validate archive paths, size and compilation.
 with _td_get("https://github.com/body199-cmyk/drive-buddy-3579bf74/archive/" + _sha + ".zip") as _resp:
     _data = _resp.read(64 * 1024 * 1024 + 1)
 if len(_data) > 64 * 1024 * 1024:
@@ -809,7 +806,7 @@ with _td_tempfile.TemporaryDirectory(prefix="teledrive_main_") as _temp:
         _td_os.replace(_backup, _dest)
         raise
     _pkg_remove_tree(_backup)
-print("Latest CI-verified main source installed:", _sha)
+print("Latest main source installed (archive validated):", _sha)
 '''
 CELL_1 = CELL_1_PACKAGE_UPDATER + CELL_1_RESTORE + CELL_1_LATEST_MAIN
 
