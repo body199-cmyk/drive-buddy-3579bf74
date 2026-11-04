@@ -1755,10 +1755,10 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<WorkspacePage>("universal");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">("system");
+  const [appearance, setAppearance] = useState<"system" | "lime" | "violet" | "clean" | "ocean" | "dim">("system");
   useEffect(() => {
     const saved = window.localStorage.getItem("teledrive-appearance");
-    if (saved === "light" || saved === "dim" || saved === "dark") setAppearance(saved);
+    if (saved === "lime" || saved === "violet" || saved === "clean" || saved === "ocean" || saved === "dim") setAppearance(saved);
   }, []);
   const [prefersDark, setPrefersDark] = useState(false);
   useEffect(() => {
@@ -1769,8 +1769,8 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
-  const effectiveTheme = appearance === "system" ? (prefersDark ? "dim" : "light") : appearance;
-  const chooseAppearance = (value: "system" | "light" | "dim" | "dark") => {
+  const effectiveTheme = appearance === "system" ? (prefersDark ? "dim" : "clean") : appearance;
+  const chooseAppearance = (value: "system" | "lime" | "violet" | "clean" | "ocean" | "dim") => {
     setAppearance(value);
     if (typeof window !== "undefined") window.localStorage.setItem("teledrive-appearance", value);
   };
@@ -1985,27 +1985,30 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     settings: (
       <div className="td-settings-workspace">
         <section className="td-panel td-appearance-panel" aria-label="إعدادات المظهر">
-          <h2>مظهر TeleDrive</h2>
+          <h2>اختر هوية TeleDrive</h2>
           <p className="td-inline-note">
-            اختار الوضع المناسب، أو اتبع إعدادات الهاتف تلقائيًا. اختيارك محفوظ على الجهاز.
+            خمس هويات بصرية كاملة مستوحاة من المراجع المختارة؛ تغيير فوري مع حفظ التفضيل على هذا الجهاز.
           </p>
           <div className="td-appearance-options" role="group" aria-label="وضع الألوان">
             {(
               [
                 ["system", "تلقائي"],
-                ["light", "فاتح"],
+                ["lime", "Neon Lime"],
+                ["violet", "Violet Pulse"],
+                ["clean", "Clean Light"],
+                ["ocean", "Ocean Glass"],
                 ["dim", "Twitter Dim"],
-                ["dark", "داكن"],
               ] as const
             ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                className={appearance === value ? "td-filter is-selected" : "td-filter"}
+                className={appearance === value ? "td-filter td-theme-choice is-selected" : "td-filter td-theme-choice"}
                 aria-pressed={appearance === value}
                 onClick={() => chooseAppearance(value)}
               >
-                {label}
+                <span className={`td-theme-preview td-theme-preview-${value}`} aria-hidden="true"><span/><span/><span/></span>
+                <span>{label}</span>
               </button>
             ))}
           </div>
