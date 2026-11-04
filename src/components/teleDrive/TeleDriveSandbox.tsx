@@ -180,10 +180,20 @@ function ActionButton({
 
 type WorkspacePage = "universal" | "telegram" | "tasks" | "settings";
 const navItems: Array<{ id: WorkspacePage; icon: ReactNode; ar: string; en: string }> = [
-  { id: "universal", icon: <Download size={19} aria-hidden="true" />, ar: "التحميل الشامل", en: "Universal" },
+  {
+    id: "universal",
+    icon: <Download size={19} aria-hidden="true" />,
+    ar: "التحميل الشامل",
+    en: "Universal",
+  },
   { id: "telegram", icon: <Send size={19} aria-hidden="true" />, ar: "تيليجرام", en: "Telegram" },
   { id: "tasks", icon: <ListChecks size={19} aria-hidden="true" />, ar: "المهام", en: "Tasks" },
-  { id: "settings", icon: <Settings size={19} aria-hidden="true" />, ar: "الإعدادات", en: "Settings" },
+  {
+    id: "settings",
+    icon: <Settings size={19} aria-hidden="true" />,
+    ar: "الإعدادات",
+    en: "Settings",
+  },
 ];
 
 function TopBar({
@@ -1353,8 +1363,15 @@ function QueueSection({
                               live={live}
                               className="td-link-button td-item-stop"
                               onClick={() => {
-                                if (window.confirm(localize(language,
-                                  "إيقاف هذه المهمة نهائيًا؟", "Permanently stop this item?"))) {
+                                if (
+                                  window.confirm(
+                                    localize(
+                                      language,
+                                      "إيقاف هذه المهمة نهائيًا؟",
+                                      "Permanently stop this item?",
+                                    ),
+                                  )
+                                ) {
                                   void run("queue.stop_item", { itemId: row.id });
                                 }
                               }}
@@ -1893,18 +1910,26 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
 
   const listFoldersForUniversal = async (parentId: string): Promise<FolderChoice[]> => {
     const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
-    return response?.status === "ok" ? response.data?.folders ?? [] : [];
+    return response?.status === "ok" ? (response.data?.folders ?? []) : [];
   };
 
   const pages: Record<WorkspacePage, ReactNode> = {
     universal: (
-      <UniversalSection state={liveState} bridge={bridge} onSettings={() => setPage("settings")}
-        onTasks={() => setPage("tasks")} onFolderList={listFoldersForUniversal} />
+      <UniversalSection
+        state={liveState}
+        bridge={bridge}
+        onSettings={() => setPage("settings")}
+        onTasks={() => setPage("tasks")}
+        onFolderList={listFoldersForUniversal}
+      />
     ),
     telegram: (
       <AnalyzeSection
-        state={liveState} language={language} live={live}
-        pendingActions={pendingActions} run={run}
+        state={liveState}
+        language={language}
+        live={live}
+        pendingActions={pendingActions}
+        run={run}
         onNavigate={() => setPage("tasks")}
         onSettings={() => setPage("settings")}
         onValidationError={(text) => setNotice({ kind: "error", text })}
@@ -1913,29 +1938,67 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     tasks: (
       <div className="td-tasks-workspace">
         <UniversalTasksPanel bridge={bridge} />
-        <QueueSection state={liveState} language={language} live={live}
-          pendingActions={pendingActions} run={run} />
+        <QueueSection
+          state={liveState}
+          language={language}
+          live={live}
+          pendingActions={pendingActions}
+          run={run}
+        />
       </div>
     ),
     settings: (
       <div className="td-settings-workspace">
         <section className="td-panel td-appearance-panel" aria-label="إعدادات المظهر">
           <h2>مظهر TeleDrive</h2>
-          <p className="td-inline-note">اختار الوضع المناسب، أو اتبع إعدادات الهاتف تلقائيًا. اختيارك محفوظ على الجهاز.</p>
+          <p className="td-inline-note">
+            اختار الوضع المناسب، أو اتبع إعدادات الهاتف تلقائيًا. اختيارك محفوظ على الجهاز.
+          </p>
           <div className="td-appearance-options" role="group" aria-label="وضع الألوان">
-            {([["system","تلقائي"],["light","فاتح"],["dim","Twitter Dim"],["dark","داكن"]] as const).map(([value,label]) =>
-              <button key={value} type="button" className={appearance === value ? "td-filter is-selected" : "td-filter"}
-                aria-pressed={appearance===value} onClick={() => chooseAppearance(value)}>{label}</button>)}
+            {(
+              [
+                ["system", "تلقائي"],
+                ["light", "فاتح"],
+                ["dim", "Twitter Dim"],
+                ["dark", "داكن"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={appearance === value ? "td-filter is-selected" : "td-filter"}
+                aria-pressed={appearance === value}
+                onClick={() => chooseAppearance(value)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </section>
-        <SettingsSection state={liveState} language={language} live={live} pendingActions={pendingActions} run={run} />
+        <SettingsSection
+          state={liveState}
+          language={language}
+          live={live}
+          pendingActions={pendingActions}
+          run={run}
+        />
         <details className="td-settings-group" open>
-          <summary><UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive</summary>
-          <ConnectionSection state={liveState} language={language} live={live}
-            pendingActions={pendingActions} run={run} bridge={bridge} />
+          <summary>
+            <UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive
+          </summary>
+          <ConnectionSection
+            state={liveState}
+            language={language}
+            live={live}
+            pendingActions={pendingActions}
+            run={run}
+            bridge={bridge}
+          />
         </details>
         <details className="td-settings-group">
-          <summary><Terminal size={18}/> السجلات والتشخيص</summary>
+          <summary>
+            <Terminal size={18} /> السجلات والتشخيص
+          </summary>
           <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />
         </details>
       </div>
