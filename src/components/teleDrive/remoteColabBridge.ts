@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier -- Review-branch layout migration; reformat before merge. */
 import type {
   BridgeRequest,
   BridgeResponse,
@@ -5,6 +6,7 @@ import type {
   TeleDriveBridge,
   TelegramAuthResult,
   TelegramAuthStep,
+  UniversalDownloadTask,
 } from "./bridgeTypes";
 import { newRequestId } from "./bridgeTypes";
 
@@ -186,6 +188,26 @@ export class RemoteColabBridge implements TeleDriveBridge {
         message: error instanceof Error ? error.message : "Could not reach the Colab runtime.",
       };
     }
+  }
+
+  /** Use the already-authenticated runtime routes; never send pairing credentials to logs. */
+  async universalRequest(path: string, payload: Record<string, unknown> = {}) {
+    const allowed = new Set([
+      "tasks",
+      "start",
+      "cancel",
+      "pause",
+      "resume",
+      "retry",
+      "bulk",
+      "clear",
+    ]);
+    if (!allowed.has(path)) throw new Error("Unsupported Universal Downloader action.");
+    if (!this.isLive()) throw new Error("Colab runtime is disconnected.");
+    return (await this.fetchJson(
+      `api/universal/${path}`,
+      path === "tasks" ? {} : { method: "POST", body: JSON.stringify(payload) },
+    )) as { ok: boolean; message?: string; tasks?: UniversalDownloadTask[] };
   }
 
   async revokePairing(): Promise<void> {

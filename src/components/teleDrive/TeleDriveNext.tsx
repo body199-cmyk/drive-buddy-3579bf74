@@ -1,0 +1,2140 @@
+/* eslint-disable prettier/prettier -- Review-branch layout migration; reformat before merge. */
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  AlertCircle,
+  Download,
+  Send,
+  ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Check,
+  Cloud,
+  FileArchive,
+  FileText,
+  Folder,
+  Gauge,
+  Info,
+  LogOut,
+  Pause,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Settings,
+  ShieldCheck,
+  Square,
+  Terminal,
+  UploadCloud,
+  UserRound,
+} from "lucide-react";
+import UniversalSection, { UniversalTasksPanel } from "./UniversalSection";
+import {
+  newRequestId,
+  unavailableBridge,
+  type BridgeLanguage,
+  type BridgeResponse,
+  type FolderChoice,
+  type LiveUiState,
+  type TeleDriveBridge,
+  type TelegramAuthStep,
+} from "./bridgeTypes";
+import {
+  enqueueBlockReason,
+  formatBytes,
+  groupQueueSessions,
+  hasActiveTransfer,
+  localize,
+  mediaChoices,
+  pageLabels,
+  queueMetrics,
+  scanModes,
+  selectableCandidates,
+  selectedVisibleCandidates,
+  validateAnalyzeInput,
+  type MediaType,
+  type ScanMode,
+} from "./viewModel";
+
+/** Quiet auto-refresh heartbeat: how often the live snapshot is polled while a transfer is moving. */
+const AUTO_REFRESH_INTERVAL_MS = 1000;
+
+/**
+ * Quiet window after a control-action round-trip completes before the
+ * heartbeat polls again — gives Python time to persist the action's effect so
+ * the next snapshot cannot be older than what the user just did.
+ */
+const HEARTBEAT_SETTLE_MS = 300;
+
+type Notice = { kind: "info" | "success" | "warning" | "error"; text: string } | null;
+type RunAction = <T = unknown>(
+  actionId: string,
+  payload?: Record<string, unknown>,
+) => Promise<BridgeResponse<T> | null>;
+
+function queueStartNotice(language: BridgeLanguage, state: LiveUiState | null): string {
+  const metrics = queueMetrics(state?.queue ?? []);
+  if (metrics.queued + metrics.running < 1) {
+    return localize(
+      language,
+      `لا توجد عناصر معلقة للنقل. النتيجة الحالية: مكتمل ${metrics.uploaded}، تم تخطيه ${metrics.skipped}، فشل ${metrics.failed}.`,
+      `There are no pending items to transfer. Current result: ${metrics.uploaded} uploaded, ${metrics.skipped} skipped, ${metrics.failed} failed.`,
+    );
+  }
+  return localize(
+    language,
+    `بدأ النقل. يتحدّث شريط التقدم تلقائيًا: مكتمل ${metrics.uploaded}، تم تخطيه ${metrics.skipped}، فشل ${metrics.failed}.`,
+    `Transfer started. The progress bar updates automatically: ${metrics.uploaded} uploaded, ${metrics.skipped} skipped, ${metrics.failed} failed.`,
+  );
+}
+
+function NoticeBar({ notice }: { notice: Notice }) {
+  if (!notice) return null;
+  const Icon = notice.kind === "success" ? Check : notice.kind === "error" ? AlertCircle : Info;
+  return (
+    <div className={`td-notice td-notice-${notice.kind}`} role="status" aria-live="polite">
+      <Icon size={16} aria-hidden="true" />
+      <span>{notice.text}</span>
+    </div>
+  );
+}
+
+function SectionTitle({
+  eyebrow,
+  title,
+  description,
+  titleId,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  titleId: string;
+}) {
+  return (
+    <header className="td-section-title">
+      <span className="td-eyebrow">{eyebrow}</span>
+      <h1 id={titleId}>{title}</h1>
+      <p>{description}</p>
+    </header>
+  );
+}
+
+function StateChip({ label, status, icon }: { label: string; status: string; icon: ReactNode }) {
+  const normalized = (status ?? "").toLowerCase();
+  const connected = ["authorized", "connected", "running"].includes(normalized);
+  return (
+    <span className={`td-chip ${connected ? "is-connected td-status-live" : ""}`}>
+      <span className="td-chip-dot" aria-hidden="true" />
+      {icon}
+      {label}: {status || "—"}
+    </span>
+  );
+}
+
+function openSecureTelegramAuth(documentRef: Pick<Document, "getElementById"> = document): boolean {
+  const panel = documentRef.getElementById("td-secure-telegram-auth");
+  if (!panel) return false;
+
+  const details = panel.querySelector<HTMLDetailsElement>("details");
+  if (details && !details.open) {
+    details.querySelector<HTMLElement>("summary")?.click();
+  } else {
+    panel
+      .querySelector<HTMLElement>('button.label-wrap, [aria-expanded="false"], summary')
+      ?.click();
+  }
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  return true;
+}
+
+function ActionButton({
+  actionId,
+  pendingActions,
+  live,
+  className = "td-button td-button-secondary",
+  disabled = false,
+  onClick,
+  children,
+}: {
+  actionId: string;
+  /** In-flight action ids: only the button that owns a pending action blocks itself. */
+  pendingActions: ReadonlySet<string>;
+  live: boolean;
+  className?: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const pending = pendingActions.has(actionId);
+  const blocked = !live || disabled || pending;
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={blocked}
+      data-action-id={actionId}
+      title={!live ? "Backend bridge unavailable" : undefined}
+      onClick={onClick}
+    >
+      {pending ? <RefreshCw className="td-spin" size={15} aria-hidden="true" /> : null}
+      {children}
+    </button>
+  );
+}
+
+type WorkspacePage = "universal" | "telegram" | "tasks" | "settings";
+const navItems: Array<{ id: WorkspacePage; icon: ReactNode; ar: string; en: string }> = [
+  {
+    id: "universal",
+    icon: <Download size={19} aria-hidden="true" />,
+    ar: "التحميل الشامل",
+    en: "Universal",
+  },
+  { id: "telegram", icon: <Send size={19} aria-hidden="true" />, ar: "تيليجرام", en: "Telegram" },
+  { id: "tasks", icon: <ListChecks size={19} aria-hidden="true" />, ar: "المهام", en: "Tasks" },
+  {
+    id: "settings",
+    icon: <Settings size={19} aria-hidden="true" />,
+    ar: "الإعدادات",
+    en: "Settings",
+  },
+];
+
+function TopBar({
+  state,
+  language,
+  live,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+}) {
+  return (
+    <header className="td-topbar">
+      <div className="td-brand">
+        <span className="td-mark">TD</span>
+        <strong>TeleDrive <span className="td-next-brand">NEXT</span></strong>
+      </div>
+      <div className={`td-prototype ${live ? "td-status-live" : "td-status-demo"}`}>
+        <Terminal size={13} aria-hidden="true" />
+        {live ? "Colab · Live runtime" : "Backend bridge unavailable"}
+      </div>
+      <div className="td-chips">
+        <StateChip
+          label={localize(language, "تيليجرام", "Telegram")}
+          status={state?.telegram?.status ?? "—"}
+          icon={<UserRound size={13} aria-hidden="true" />}
+        />
+        <StateChip
+          label={localize(language, "درايف", "Drive")}
+          status={state?.drive?.status ?? "—"}
+          icon={<Cloud size={13} aria-hidden="true" />}
+        />
+        <span className={`td-chip ${state?.folder?.id ? "is-connected" : ""}`}>
+          <span className="td-chip-dot" aria-hidden="true" />
+          <Folder size={13} aria-hidden="true" />
+          {localize(language, "المجلد", "Folder")}: {state?.folder?.name ?? "—"}
+        </span>
+        <StateChip
+          label={localize(language, "المحرك", "Engine")}
+          status={state?.engine ?? "—"}
+          icon={<Gauge size={13} aria-hidden="true" />}
+        />
+      </div>
+    </header>
+  );
+}
+
+function ConnectionSection({
+  state,
+  language,
+  live,
+  pendingActions,
+  run,
+  bridge,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  pendingActions: ReadonlySet<string>;
+  run: RunAction;
+  bridge: TeleDriveBridge;
+}) {
+  const [authPending, setAuthPending] = useState<TelegramAuthStep | null>(null);
+  const [authNotice, setAuthNotice] = useState<Notice>(null);
+  const apiIdRef = useRef<HTMLInputElement>(null);
+  const apiHashRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const [parentId, setParentId] = useState("root");
+  const [folderName, setFolderName] = useState("");
+  const [folderId, setFolderId] = useState("");
+  const [folders, setFolders] = useState<FolderChoice[]>([]);
+
+  const listFolders = async () => {
+    const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
+    if (response?.status === "ok") setFolders(response.data?.folders ?? []);
+  };
+
+  const submitTelegramAuth = async (step: TelegramAuthStep, payload: Record<string, string>) => {
+    if (!bridge.telegramAuthStep) return;
+    setAuthPending(step);
+    setAuthNotice({
+      kind: "info",
+      text: localize(language, "جارٍ التواصل مع Runtime…", "Contacting the paired runtime…"),
+    });
+    try {
+      const result = await bridge.telegramAuthStep(step, payload);
+      setAuthNotice({ kind: result.ok ? "success" : "error", text: result.message });
+      if (step === "credentials" && apiHashRef.current) apiHashRef.current.value = "";
+      if (step === "verify_code" && codeRef.current) codeRef.current.value = "";
+      if (step === "verify_password" && passwordRef.current) {
+        passwordRef.current.value = "";
+      }
+      if (result.authorized) {
+        if (apiHashRef.current) apiHashRef.current.value = "";
+        if (codeRef.current) codeRef.current.value = "";
+        if (passwordRef.current) passwordRef.current.value = "";
+      }
+    } catch (error) {
+      setAuthNotice({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : localize(language, "فشل تسجيل الدخول.", "Telegram sign-in failed."),
+      });
+    } finally {
+      setAuthPending(null);
+    }
+  };
+
+  return (
+    <section className="td-page" aria-labelledby="connection-title">
+      <SectionTitle
+        titleId="connection-title"
+        eyebrow="CONNECTION CENTER"
+        title={pageLabels.connection[language]}
+        description={localize(
+          language,
+          bridge.telegramAuthStep
+            ? "اربط Telegram من هنا مباشرة. بيانات الدخول تُرسل عبر اتصال Runtime المحمي ولا تمر عبر الجسر العام."
+            : "الحالة من ApplicationContext الحي. سجّل الدخول عبر عناصر Gradio الآمنة.",
+          bridge.telegramAuthStep
+            ? "Connect Telegram here. Login credentials use the authenticated runtime endpoint, not the generic bridge."
+            : "Status comes from the live ApplicationContext. Sign in through the secure Gradio controls.",
+        )}
+      />
+      <div className="td-split">
+        <article className="td-panel">
+          <div className="td-conn-head">
+            <UserRound size={18} aria-hidden="true" />
+            <div>
+              <h2>Telegram</h2>
+              <p>{state?.telegram?.status ?? "—"}</p>
+              {state?.telegram?.accountLabel ? <small>{state.telegram.accountLabel}</small> : null}
+            </div>
+          </div>
+          <div className="td-stack">
+            {bridge.telegramAuthStep ? (
+              <div className="td-telegram-auth">
+                <p className="td-auth-help">
+                  {localize(
+                    language,
+                    "اكتب بيانات API ثم رقمك الدولي. كود الدخول وكلمة مرور 2FA لا تُرسل إلا إلى Runtime المرتبط، ولا تُضاف إلى طلبات الجسر العامة.",
+                    "Enter API details and your international phone number. Code and 2FA password go only to the paired runtime, never through generic bridge requests.",
+                  )}
+                </p>
+                <div className="td-auth-grid">
+                  <label className="td-label">
+                    API ID
+                    <input
+                      ref={apiIdRef}
+                      className="td-input"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      dir="ltr"
+                      maxLength={20}
+                    />
+                  </label>
+                  <label className="td-label">
+                    API Hash
+                    <input
+                      ref={apiHashRef}
+                      className="td-input"
+                      type="password"
+                      autoComplete="new-password"
+                      dir="ltr"
+                      maxLength={256}
+                    />
+                  </label>
+                </div>
+                <div className="td-button-row">
+                  <button
+                    type="button"
+                    className="td-button td-button-primary"
+                    disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const apiId = apiIdRef.current?.value.trim() ?? "";
+                      const apiHash = apiHashRef.current?.value ?? "";
+                      if (!/^[0-9]+$/.test(apiId) || !apiHash.trim()) {
+                        setAuthNotice({
+                          kind: "error",
+                          text: localize(
+                            language,
+                            "أدخل API ID رقميًا وAPI Hash.",
+                            "Enter a numeric API ID and API Hash.",
+                          ),
+                        });
+                        return;
+                      }
+                      void submitTelegramAuth("credentials", {
+                        api_id: apiId,
+                        api_hash: apiHash,
+                      });
+                    }}
+                  >
+                    {localize(language, "١. التحقق من API", "1. Verify API")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(language, "رقم الهاتف بكود الدولة", "Phone number with country code")}
+                  <input
+                    ref={phoneRef}
+                    className="td-input"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="off"
+                    dir="ltr"
+                    placeholder="+201xxxxxxxxx"
+                    maxLength={32}
+                  />
+                </label>
+                <div className="td-button-row">
+                  <button
+                    type="button"
+                    className="td-button td-button-secondary"
+                    disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const phone = phoneRef.current?.value.trim() ?? "";
+                      if (!/^\+[1-9][0-9]{6,14}$/.test(phone)) {
+                        setAuthNotice({
+                          kind: "error",
+                          text: localize(
+                            language,
+                            "أدخل رقم الهاتف بالصيغة الدولية.",
+                            "Enter the phone number in international format.",
+                          ),
+                        });
+                        return;
+                      }
+                      void submitTelegramAuth("send_code", { phone });
+                    }}
+                  >
+                    {localize(language, "٢. إرسال كود الدخول", "2. Send login code")}
+                  </button>
+                  <button
+                    type="button"
+                    className="td-button td-button-secondary"
+                    disabled={!live || authPending !== null}
+                    onClick={() => void submitTelegramAuth("resend_code", {})}
+                  >
+                    {localize(language, "إعادة إرسال الكود", "Resend code")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(language, "كود Telegram", "Telegram login code")}
+                  <input
+                    ref={codeRef}
+                    className="td-input"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    dir="ltr"
+                    maxLength={32}
+                  />
+                </label>
+                <div className="td-button-row">
+                  <button
+                    type="button"
+                    className="td-button td-button-primary"
+                    disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const code = codeRef.current?.value.trim() ?? "";
+                      if (!code) {
+                        setAuthNotice({
+                          kind: "error",
+                          text: localize(
+                            language,
+                            "أدخل كود Telegram.",
+                            "Enter the Telegram code.",
+                          ),
+                        });
+                        return;
+                      }
+                      void submitTelegramAuth("verify_code", { code });
+                    }}
+                  >
+                    {localize(language, "٣. تأكيد الكود", "3. Verify code")}
+                  </button>
+                </div>
+                <label className="td-label">
+                  {localize(
+                    language,
+                    "كلمة مرور التحقق بخطوتين (إن طُلبت)",
+                    "Two-step verification password (if requested)",
+                  )}
+                  <input
+                    ref={passwordRef}
+                    className="td-input"
+                    type="password"
+                    autoComplete="new-password"
+                    dir="ltr"
+                    maxLength={512}
+                  />
+                </label>
+                <div className="td-button-row">
+                  <button
+                    type="button"
+                    className="td-button td-button-primary"
+                    disabled={!live || authPending !== null}
+                    onClick={() => {
+                      const password = passwordRef.current?.value ?? "";
+                      if (!password) {
+                        setAuthNotice({
+                          kind: "error",
+                          text: localize(
+                            language,
+                            "أدخل كلمة مرور 2FA إذا طُلبت.",
+                            "Enter the 2FA password if Telegram requested it.",
+                          ),
+                        });
+                        return;
+                      }
+                      void submitTelegramAuth("verify_password", { password });
+                    }}
+                  >
+                    {localize(language, "٤. تأكيد كلمة المرور", "4. Verify password")}
+                  </button>
+                </div>
+                {authPending ? (
+                  <p className="td-auth-help">
+                    {localize(language, "جارٍ تنفيذ الخطوة…", "Working on login step…")}
+                  </p>
+                ) : null}
+                <NoticeBar notice={authNotice} />
+              </div>
+            ) : (
+              <>
+                <div className="td-bridge-blocked">
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  {localize(
+                    language,
+                    "API hash ورقم الهاتف والرمز و2FA تُدخل فقط في عناصر Gradio الآمنة.",
+                    "API hash, phone, code, and 2FA are entered only in the secure Gradio controls.",
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="td-button td-button-secondary td-secure-auth-button"
+                  aria-controls="td-secure-telegram-auth"
+                  onClick={() => openSecureTelegramAuth()}
+                >
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  {localize(language, "فتح تسجيل Telegram الآمن", "Open secure Telegram sign-in")}
+                </button>
+              </>
+            )}
+            <div className="td-button-row">
+              <ActionButton
+                actionId="telegram.status"
+                pendingActions={pendingActions}
+                live={live}
+                onClick={() => void run("telegram.status")}
+              >
+                <RefreshCw size={15} aria-hidden="true" />
+                {localize(language, "تحديث الحالة", "Refresh status")}
+              </ActionButton>
+              <ActionButton
+                actionId="telegram.logout"
+                pendingActions={pendingActions}
+                live={live}
+                className="td-button td-button-danger"
+                onClick={() => void run("telegram.logout")}
+              >
+                <LogOut size={15} aria-hidden="true" />
+                {localize(language, "تسجيل الخروج", "Log out")}
+              </ActionButton>
+            </div>
+          </div>
+        </article>
+
+        <article className="td-panel">
+          <div className="td-conn-head">
+            <Cloud size={18} aria-hidden="true" />
+            <div>
+              <h2>Google Drive</h2>
+              <p>{state?.drive?.status ?? "—"}</p>
+              {state?.drive?.accountLabel ? <small>{state.drive.accountLabel}</small> : null}
+            </div>
+          </div>
+          <div className="td-stack">
+            <div className="td-button-row">
+              <ActionButton
+                actionId="drive.connect"
+                pendingActions={pendingActions}
+                live={live}
+                className="td-button td-button-primary"
+                onClick={() => void run("drive.connect")}
+              >
+                {localize(language, "ربط Drive الأصلي", "Native Drive connect")}
+              </ActionButton>
+              <ActionButton
+                actionId="drive.reconnect"
+                pendingActions={pendingActions}
+                live={live}
+                onClick={() => void run("drive.reconnect")}
+              >
+                {localize(language, "إعادة الربط", "Reconnect")}
+              </ActionButton>
+              <ActionButton
+                actionId="drive.refresh_quota"
+                pendingActions={pendingActions}
+                live={live}
+                onClick={() => void run("drive.refresh_quota")}
+              >
+                {localize(language, "تحديث الحصة", "Refresh quota")}
+              </ActionButton>
+            </div>
+            <div className="td-quota-line">
+              <span>
+                {localize(language, "الاستخدام", "Usage")}:{" "}
+                {formatBytes(state?.drive?.quotaUsed ?? null)}
+              </span>
+              <span>
+                {localize(language, "السعة", "Limit")}:{" "}
+                {formatBytes(state?.drive?.quotaLimit ?? null)}
+              </span>
+            </div>
+            <label className="td-label" htmlFor="td-parent-id">
+              {localize(language, "معرّف المجلد الأب", "Parent folder ID")}
+              <input
+                id="td-parent-id"
+                className="td-input"
+                value={parentId}
+                onChange={(event) => setParentId(event.target.value)}
+              />
+            </label>
+            <ActionButton
+              actionId="drive.list_folders"
+              pendingActions={pendingActions}
+              live={live}
+              disabled={(state?.drive?.status?.toLowerCase?.() ?? "") !== "connected"}
+              onClick={() => void listFolders()}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+              {localize(language, "عرض المجلدات الحقيقية", "List live folders")}
+            </ActionButton>
+            <label className="td-label" htmlFor="td-folder-choice">
+              {localize(language, "مجلد الوجهة", "Destination folder")}
+              <select
+                id="td-folder-choice"
+                className="td-input"
+                value={folderId}
+                onChange={(event) => setFolderId(event.target.value)}
+              >
+                <option value="">—</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ActionButton
+              actionId="drive.select_folder"
+              pendingActions={pendingActions}
+              live={live}
+              disabled={!folderId}
+              onClick={() => void run("drive.select_folder", { folderId })}
+            >
+              <Folder size={15} aria-hidden="true" />
+              {localize(language, "اختيار المجلد", "Select folder")}
+            </ActionButton>
+            <label className="td-label" htmlFor="td-new-folder">
+              {localize(language, "اسم مجلد جديد", "New folder name")}
+              <input
+                id="td-new-folder"
+                className="td-input"
+                value={folderName}
+                onChange={(event) => setFolderName(event.target.value)}
+              />
+            </label>
+            <ActionButton
+              actionId="drive.create_folder"
+              pendingActions={pendingActions}
+              live={live}
+              disabled={!folderName.trim()}
+              onClick={() => void run("drive.create_folder", { name: folderName, parentId })}
+            >
+              {localize(language, "إنشاء واختيار", "Create and select")}
+            </ActionButton>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AnalyzeSection({
+  state,
+  language,
+  live,
+  pendingActions,
+  run,
+  onNavigate,
+  onSettings,
+  onValidationError,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  pendingActions: ReadonlySet<string>;
+  run: RunAction;
+  onNavigate(page: "queue"): void;
+  onSettings(): void;
+  onValidationError(message: string): void;
+}) {
+  const savedSourceLink = state?.analyze?.sourceLink ?? "";
+  const [sourceLink, setSourceLink] = useState(savedSourceLink);
+  const [sourceLinkDirty, setSourceLinkDirty] = useState(false);
+  const [mode, setMode] = useState<ScanMode>("message");
+  const [messageId, setMessageId] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [limit, setLimit] = useState("100");
+  const [selectionFrom, setSelectionFrom] = useState("");
+  const [selectionTo, setSelectionTo] = useState("");
+  const [mediaTypes, setMediaTypes] = useState<MediaType[]>(["all"]);
+  const candidates = state?.candidates ?? [];
+  const selected = selectedVisibleCandidates(candidates);
+  const blockReason = enqueueBlockReason(state, candidates);
+
+  useEffect(() => {
+    if (!sourceLinkDirty) setSourceLink(savedSourceLink);
+  }, [savedSourceLink, sourceLinkDirty]);
+
+  const rememberSourceLink = async () => {
+    const value = sourceLink.trim();
+    if (!value) return;
+    const response = await run("analyze.remember_link", { link: value });
+    if (response?.status === "ok") setSourceLinkDirty(false);
+  };
+
+  const clearRememberedSourceLink = async () => {
+    const response = await run("analyze.clear_remembered_link");
+    if (response?.status === "ok") {
+      setSourceLink("");
+      setSourceLinkDirty(false);
+    }
+  };
+
+  const toggleMedia = (value: MediaType) => {
+    if (value === "all") return setMediaTypes(["all"]);
+    setMediaTypes((current) => {
+      const next = current.filter((item) => item !== "all" && item !== value);
+      if (!current.includes(value)) next.push(value);
+      return next.length ? next : ["all"];
+    });
+  };
+
+  const analyze = async () => {
+    const invalid = validateAnalyzeInput({
+      sourceLink,
+      mode,
+      messageId,
+      rangeFrom,
+      rangeTo,
+      limit,
+    });
+    if (invalid) {
+      const message =
+        invalid === "source"
+          ? localize(
+              language,
+              "ألصق رابط رسالة أو قناة صالحًا.",
+              "Paste a valid message or channel link.",
+            )
+          : invalid === "message"
+            ? localize(
+                language,
+                "وضع الرسالة يحتاج رقم رسالة موجبًا، أو الصق رابط رسالة مباشرًا.",
+                "Message mode needs a positive message id, or paste a direct message link.",
+              )
+            : invalid === "range"
+              ? localize(
+                  language,
+                  "أدخل نطاق رسائل صحيحًا لا يتجاوز 1000 رسالة.",
+                  "Enter a valid message range of no more than 1000 messages.",
+                )
+              : localize(
+                  language,
+                  "أدخل عدد رسائل موجبًا لا يتجاوز 1000.",
+                  "Enter a positive message limit no greater than 1000.",
+                );
+      onValidationError(message);
+      return;
+    }
+    const response = await run("analyze.run", {
+      link: sourceLink,
+      mode,
+      messageId: messageId || null,
+      startId: rangeFrom || null,
+      endId: rangeTo || null,
+      limit,
+      mediaTypes,
+    });
+    if (response?.status === "ok") setSourceLinkDirty(false);
+  };
+
+  const blockText =
+    blockReason === "bridge"
+      ? "Backend bridge unavailable"
+      : blockReason === "folder"
+        ? localize(language, "اختر مجلد Drive حقيقيًا أولًا.", "Choose a live Drive folder first.")
+        : blockReason === "selection"
+          ? localize(
+              language,
+              "حدد ملفًا حقيقيًا واحدًا على الأقل.",
+              "Select at least one live candidate.",
+            )
+          : localize(language, "جاهز للإضافة الصريحة إلى الطابور.", "Ready for explicit enqueue.");
+
+  return (
+    <section className="td-page" aria-labelledby="analyze-title">
+      <SectionTitle
+        titleId="analyze-title"
+        eyebrow="ANALYZE & SELECT"
+        title={pageLabels.analyze[language]}
+        description={localize(
+          language,
+          "التحليل يحدّث المرشحين فقط؛ الإضافة للطابور إجراء مستقل.",
+          "Analyze updates candidates only; enqueue is always a separate action.",
+        )}
+      />
+      <div className="td-destination-banner td-panel">
+        <Folder size={18} aria-hidden="true" />
+        <span>{localize(language, "مجلد حفظ Telegram", "Telegram destination")}:</span>
+        <strong>{state?.folder?.name ?? "—"}</strong>
+        <button type="button" className="td-button td-button-secondary" onClick={onSettings}>
+          {localize(language, "اختيار أو تغيير المجلد", "Choose or change folder")}
+        </button>
+      </div>
+      <div className="td-analysis-line td-panel">
+        <label className="td-label td-grow" htmlFor="td-link">
+          {localize(language, "رابط الرسالة أو القناة", "Message or channel link")}
+          <input
+            id="td-link"
+            className="td-input"
+            value={sourceLink}
+            onChange={(event) => {
+              setSourceLink(event.target.value);
+              setSourceLinkDirty(true);
+            }}
+            onBlur={() => void rememberSourceLink()}
+            placeholder="https://t.me/channel/123"
+          />
+        </label>
+        <label className="td-label" htmlFor="td-scan-mode">
+          {localize(language, "نوع الفحص", "Scan mode")}
+          <select
+            id="td-scan-mode"
+            className="td-input"
+            value={mode}
+            onChange={(event) => setMode(event.target.value as ScanMode)}
+          >
+            {scanModes.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label[language]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ActionButton
+          actionId="analyze.run"
+          pendingActions={pendingActions}
+          live={live}
+          className="td-button td-button-primary td-align-end"
+          onClick={() => void analyze()}
+        >
+          <Search size={16} aria-hidden="true" />
+          {localize(language, "تحليل", "Analyze")}
+        </ActionButton>
+        <ActionButton
+          actionId="analyze.clear_remembered_link"
+          pendingActions={pendingActions}
+          live={live}
+          className="td-button td-button-secondary td-align-end"
+          disabled={!sourceLink}
+          onClick={() => void clearRememberedSourceLink()}
+        >
+          {localize(language, "مسح الرابط المحفوظ", "Clear saved link")}
+        </ActionButton>
+      </div>
+      <div className="td-panel td-mode-panel">
+        <div className="td-mode-fields">
+          {mode === "message" ? (
+            <label className="td-label">
+              {localize(language, "رقم الرسالة", "Message ID")}
+              <input
+                className="td-input"
+                value={messageId}
+                onChange={(event) => setMessageId(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {mode === "range" ? (
+            <>
+              <label className="td-label">
+                {localize(language, "من", "From")}
+                <input
+                  className="td-input"
+                  value={rangeFrom}
+                  onChange={(event) => setRangeFrom(event.target.value)}
+                />
+              </label>
+              <label className="td-label">
+                {localize(language, "إلى", "To")}
+                <input
+                  className="td-input"
+                  value={rangeTo}
+                  onChange={(event) => setRangeTo(event.target.value)}
+                />
+              </label>
+            </>
+          ) : null}
+          {mode === "latest" || mode === "chat" ? (
+            <label className="td-label">
+              {localize(language, "الحد الأقصى", "Limit")}
+              <input
+                className="td-input"
+                type="number"
+                min={1}
+                max={1000}
+                value={limit}
+                onChange={(event) => setLimit(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <span className="td-hint">
+            <Info size={15} aria-hidden="true" />
+            {localize(
+              language,
+              "الفحص محدود بحد أقصى 1000 رسالة.",
+              "The scan is bounded to at most 1,000 messages.",
+            )}
+          </span>
+        </div>
+        <div className="td-media-filter">
+          <span className="td-label-text">{localize(language, "نوع الوسائط", "Media types")}</span>
+          {mediaChoices.map((choice) => (
+            <button
+              type="button"
+              key={choice.value}
+              className={`td-filter ${mediaTypes.includes(choice.value) ? "is-selected" : ""}`}
+              aria-pressed={mediaTypes.includes(choice.value)}
+              onClick={() => toggleMedia(choice.value)}
+            >
+              {choice.label[language]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="td-results-head">
+        <div>
+          <span className="td-eyebrow">LIVE CANDIDATES</span>
+          <h2>
+            {localize(language, "النتائج", "Results")}{" "}
+            <small>
+              · {candidates.length} · {selected.length}
+            </small>
+          </h2>
+        </div>
+        <div className="td-button-row">
+          <ActionButton
+            actionId="analyze.select_all"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("analyze.select_all")}
+          >
+            {localize(language, "تحديد الكل الظاهر", "Select visible")}
+          </ActionButton>
+          <ActionButton
+            actionId="analyze.clear_selection"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("analyze.clear_selection")}
+          >
+            {localize(language, "مسح التحديد", "Clear")}
+          </ActionButton>
+          <ActionButton
+            actionId="analyze.enqueue_selected"
+            pendingActions={pendingActions}
+            live={live}
+            disabled={blockReason !== null}
+            className="td-button td-button-primary"
+            onClick={() =>
+              void run("analyze.enqueue_selected").then((response) => {
+                if (response?.status === "ok") onNavigate("queue");
+              })
+            }
+          >
+            <UploadCloud size={15} aria-hidden="true" />
+            {localize(language, "إضافة للطابور", "Enqueue")}
+          </ActionButton>
+        </div>
+      </div>
+      <p className={`td-control-reason ${blockReason === null ? "is-ready" : ""}`}>{blockText}</p>
+      <div className="td-selection-tools td-panel">
+        <label className="td-label">
+          {localize(language, "تحديد من رسالة", "Select from message")}
+          <input
+            className="td-input"
+            value={selectionFrom}
+            onChange={(event) => setSelectionFrom(event.target.value)}
+          />
+        </label>
+        <label className="td-label">
+          {localize(language, "إلى رسالة", "To message")}
+          <input
+            className="td-input"
+            value={selectionTo}
+            onChange={(event) => setSelectionTo(event.target.value)}
+          />
+        </label>
+        <ActionButton
+          actionId="analyze.select_range"
+          pendingActions={pendingActions}
+          live={live}
+          disabled={!selectionFrom || !selectionTo}
+          onClick={() =>
+            void run("analyze.select_range", { startId: selectionFrom, endId: selectionTo })
+          }
+        >
+          {localize(language, "تحديد النطاق", "Select range")}
+        </ActionButton>
+      </div>
+      {!candidates.length ? (
+        <div className="td-empty-state">
+          {localize(language, "لا توجد مرشحات حية بعد.", "No live candidates yet.")}
+        </div>
+      ) : null}
+      {candidates.length ? (
+        <div className="td-table-wrap">
+          <table className="td-table">
+            <thead>
+              <tr>
+                <th>{localize(language, "اختيار", "Select")}</th>
+                <th>{localize(language, "الملف", "File")}</th>
+                <th>{localize(language, "النوع", "Type")}</th>
+                <th>{localize(language, "الحجم", "Size")}</th>
+                <th>{localize(language, "المجموعة", "Group")}</th>
+                <th>{localize(language, "الحالة", "Status")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.map((candidate) => {
+                const selectable = selectableCandidates([candidate]).length === 1;
+                return (
+                  <tr key={candidate.sourceId}>
+                    <td data-label="Select">
+                      <ActionButton
+                        actionId="analyze.toggle_row"
+                        pendingActions={pendingActions}
+                        live={live}
+                        disabled={!selectable}
+                        className="td-link-button"
+                        onClick={() =>
+                          void run("analyze.toggle_row", { sourceId: candidate.sourceId })
+                        }
+                      >
+                        {candidate.selected ? "☑" : "☐"}
+                      </ActionButton>
+                    </td>
+                    <td data-label="File">
+                      <strong>{candidate.name}</strong>
+                      <small>{candidate.dateLabel ?? "—"}</small>
+                    </td>
+                    <td data-label="Type">{candidate.mediaType}</td>
+                    <td className="td-number" data-label="Size">
+                      {formatBytes(candidate.sizeBytes)}
+                    </td>
+                    <td data-label="Group">{candidate.groupLabel ?? "—"}</td>
+                    <td data-label="Status">
+                      <span
+                        className={`td-status td-status-${(candidate.status ?? "").toLowerCase()}`}
+                      >
+                        {candidate.status ?? "—"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function QueueSection({
+  state,
+  language,
+  live,
+  pendingActions,
+  run,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  pendingActions: ReadonlySet<string>;
+  run: RunAction;
+}) {
+  const [stopConfirm, setStopConfirm] = useState(false);
+  const rows = state?.queue ?? [];
+  const [statusFilter, setStatusFilter] = useState<"active" | "completed" | "paused" | "failed" | "all">("active");
+  const filteredRows = useMemo(() => rows.filter((row) => {
+    const status = row.status.toLowerCase();
+    if (statusFilter === "all") return true;
+    if (statusFilter === "completed") return ["uploaded", "skipped"].includes(status);
+    if (statusFilter === "paused") return ["paused", "stopped"].includes(status);
+    if (statusFilter === "failed") return ["failed", "needsretry"].includes(status);
+    return ["pending", "queued", "downloading", "uploading", "verifying", "downloaded", "uploadedpendingcheck"].includes(status);
+  }), [rows, statusFilter]);
+  // Memoized derivations: re-renders that don't change the queue (notices,
+  // confirm dialogs, per-button pending flips) reuse the same row objects and
+  // session groups instead of rebuilding them each render.
+  const metrics = useMemo(() => queueMetrics(rows), [rows]);
+  const sessions = useMemo(() => groupQueueSessions(filteredRows), [filteredRows]);
+  const stopOnly = () => {
+    setStopConfirm(false);
+    void run("queue.stop");
+  };
+  const stopAndClear = async () => {
+    setStopConfirm(false);
+    await run("queue.stop");
+    await run("queue.clear_incomplete");
+  };
+  return (
+    <section className="td-page" aria-labelledby="queue-title">
+      <SectionTitle
+        titleId="queue-title"
+        eyebrow="LIVE TRANSFERS"
+        title={pageLabels.queue[language]}
+        description={localize(
+          language,
+          "كل الأرقام والصفوف مشتقة من queue وSQLite الحيين.",
+          "Every count and row is derived from the live queue and SQLite state.",
+        )}
+      />
+      <div className="td-metrics">
+        <div>
+          <span>{localize(language, "في الانتظار", "Queued")}</span>
+          <strong>{metrics.queued}</strong>
+        </div>
+        <div>
+          <span>{localize(language, "قيد التنفيذ", "Running")}</span>
+          <strong>
+            {metrics.running}
+            <small> / {state?.concurrency ?? "—"}</small>
+          </strong>
+        </div>
+        <div>
+          <span>{localize(language, "مكتمل", "Completed")}</span>
+          <strong>{metrics.uploaded}</strong>
+        </div>
+        <div>
+          <span>{localize(language, "تم تخطيه", "Skipped")}</span>
+          <strong>{metrics.skipped}</strong>
+        </div>
+        <div>
+          <span>{localize(language, "فشل", "Failed")}</span>
+          <strong>{metrics.failed}</strong>
+        </div>
+        <div>
+          <span>{localize(language, "المنقول", "Transferred")}</span>
+          <strong>{formatBytes(metrics.transferredBytes)}</strong>
+        </div>
+      </div>
+      <div className="td-queue-filters" role="group" aria-label={localize(language, "تصفية مهام Telegram", "Filter Telegram tasks")}>
+        {([
+          ["active", "النشطة", "Active"],
+          ["completed", "المكتملة", "Completed"],
+          ["paused", "المتوقفة", "Paused"],
+          ["failed", "الفاشلة", "Failed"],
+          ["all", "الكل", "All"],
+        ] as const).map(([filter, ar, en]) => (
+          <button type="button" key={filter}
+            className={statusFilter === filter ? "td-filter is-selected" : "td-filter"}
+            aria-pressed={statusFilter === filter}
+            onClick={() => setStatusFilter(filter)}>
+            {language === "ar" ? ar : en}
+          </button>
+        ))}
+      </div>
+      <div className="td-transfer-actions">
+        <div className="td-button-row td-transfer-actions-primary">
+          <ActionButton
+            actionId="queue.start_selected"
+            pendingActions={pendingActions}
+            live={live}
+            className="td-button td-button-primary"
+            onClick={() => void run("queue.start_selected")}
+          >
+            <Play size={15} aria-hidden="true" />
+            {localize(language, "بدء", "Start")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.pause"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("queue.pause")}
+          >
+            <Pause size={15} aria-hidden="true" />
+            {localize(language, "إيقاف مؤقت", "Pause")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.resume"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("queue.resume")}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {localize(language, "استئناف", "Resume")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.stop"
+            pendingActions={pendingActions}
+            live={live}
+            className="td-button td-button-danger"
+            onClick={() => setStopConfirm(true)}
+          >
+            <Square size={15} aria-hidden="true" />
+            {localize(language, "إيقاف", "Stop")}
+          </ActionButton>
+        </div>
+        <div className="td-button-row td-transfer-actions-secondary">
+          <ActionButton
+            actionId="queue.retry_failed"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("queue.retry_failed")}
+          >
+            <RotateCcw size={15} aria-hidden="true" />
+            {localize(language, "إعادة الفاشلة", "Retry failed")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.refresh"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("queue.refresh")}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {localize(language, "تحديث", "Refresh")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.clear_completed"
+            pendingActions={pendingActions}
+            live={live}
+            onClick={() => void run("queue.clear_completed")}
+          >
+            {localize(language, "مسح المكتملة", "Clear completed")}
+          </ActionButton>
+          <ActionButton
+            actionId="queue.clear_incomplete"
+            pendingActions={pendingActions}
+            live={live}
+            className="td-button td-button-danger"
+            onClick={() => void run("queue.clear_incomplete")}
+          >
+            {localize(language, "مسح غير المكتمل", "Clear incomplete")}
+          </ActionButton>
+        </div>
+      </div>
+      {stopConfirm ? (
+        <div className="td-confirm" role="dialog" aria-labelledby="td-stop-title">
+          <p id="td-stop-title">
+            {localize(
+              language,
+              "إيقاف العمال فقط، أم إيقاف ومسح الصفوف غير المكتملة من الطابور؟ ملفات Drive المرفوعة لا تُحذف أبدًا.",
+              "Stop the workers only, or also clear unfinished queue rows? Uploaded Drive files are never deleted.",
+            )}
+          </p>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="queue.stop"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={stopOnly}
+            >
+              {localize(language, "إيقاف فقط", "Stop only")}
+            </ActionButton>
+            <ActionButton
+              actionId="queue.clear_incomplete"
+              pendingActions={pendingActions}
+              live={live}
+              className="td-button td-button-danger"
+              onClick={() => void stopAndClear()}
+            >
+              {localize(language, "إيقاف ومسح غير المكتمل", "Stop and clear incomplete")}
+            </ActionButton>
+            <button
+              type="button"
+              className="td-button td-button-secondary"
+              onClick={() => setStopConfirm(false)}
+            >
+              {localize(language, "إلغاء", "Cancel")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div className="td-destination-banner">
+        <Folder size={15} aria-hidden="true" />
+        {localize(language, "مجلد الوجهة", "Destination")}:{" "}
+        <strong>{state?.folder?.name ?? "—"}</strong>
+      </div>
+      {!filteredRows.length ? (
+        <div className="td-empty-state">
+          {localize(language, "لا توجد مهام في هذا التصنيف.", "No tasks in this filter.")}
+        </div>
+      ) : (
+        <div className="td-session-list">
+          {sessions.map((session) => (
+            <details key={session.key} className="td-session" open>
+              <summary className="td-session-head">
+                <Folder size={16} aria-hidden="true" />
+                <strong>
+                  {session.title} · {session.dateLabel}
+                </strong>
+                <small>
+                  {session.rows.length} {localize(language, "ملف", "files")} ·{" "}
+                  {localize(language, "مكتمل", "uploaded")} {session.uploaded} ·{" "}
+                  {localize(language, "تم تخطيه", "skipped")} {session.skipped} ·{" "}
+                  {localize(language, "فشل", "failed")} {session.failed} ·{" "}
+                  {localize(language, "انتظار", "pending")} {session.pending}
+                </small>
+              </summary>
+              <div className="td-table-wrap">
+                <table className="td-table">
+                  <thead>
+                    <tr>
+                      <th>{localize(language, "الملف", "File")}</th>
+                      <th>{localize(language, "الحالة", "Status")}</th>
+                      <th>{localize(language, "التقدم", "Progress")}</th>
+                      <th>{localize(language, "الحجم", "Size")}</th>
+                      <th>{localize(language, "تحكم", "Controls")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {session.rows.map((row) => (
+                      <tr key={row.id} className="td-queue-row">
+                        <td data-label={localize(language, "الملف", "File")}>
+                          <strong>{row.name}</strong>
+                          <small>{row.id}</small>
+                        </td>
+                        <td data-label={localize(language, "الحالة", "Status")}>
+                          <span
+                            className={`td-status td-status-${(row.status ?? "").toLowerCase()}`}
+                          >
+                            {row.status ?? "—"}
+                          </span>
+                        </td>
+                        <td data-label={localize(language, "التقدم", "Progress")}>
+                          <div className="td-progress">
+                            <span
+                              style={{
+                                width: `${Math.max(0, Math.min(100, Number(row.progress) || 0))}%`,
+                              }}
+                            />
+                          </div>
+                          <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
+                          {row.speedBytes != null && row.speedBytes > 0 ? (
+                            <small>{formatBytes(row.speedBytes)}/s</small>
+                          ) : null}
+                          {row.remainingSeconds != null && row.remainingSeconds > 0 ? (
+                            <small>{localize(language, "المتبقي", "Remaining")}: {Math.ceil(row.remainingSeconds)}s</small>
+                          ) : null}
+                        </td>
+                        <td data-label={localize(language, "الحجم", "Size")}>
+                          {formatBytes(row.sizeBytes)}
+                        </td>
+                        <td data-label={localize(language, "تحكم", "Controls")}>
+                          <div
+                            className="td-button-row"
+                            aria-label={localize(language, "تحكم الملف", "File controls")}
+                          >
+                            <ActionButton
+                              actionId="queue.pause_item"
+                              pendingActions={pendingActions}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.pause_item", { itemId: row.id })}
+                            >
+                              {localize(language, "إيقاف", "Pause")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.resume_item"
+                              pendingActions={pendingActions}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.resume_item", { itemId: row.id })}
+                            >
+                              {localize(language, "استئناف", "Resume")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.stop_item"
+                              pendingActions={pendingActions}
+                              live={live}
+                              className="td-link-button td-item-stop"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    localize(
+                                      language,
+                                      "إيقاف هذه المهمة نهائيًا؟",
+                                      "Permanently stop this item?",
+                                    ),
+                                  )
+                                ) {
+                                  void run("queue.stop_item", { itemId: row.id });
+                                }
+                              }}
+                            >
+                              {localize(language, "إلغاء", "Stop")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.retry_item"
+                              pendingActions={pendingActions}
+                              live={live}
+                              className="td-link-button"
+                              onClick={() => void run("queue.retry_item", { itemId: row.id })}
+                            >
+                              {localize(language, "إعادة", "Retry")}
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LogsSection({
+  language,
+  live,
+  pendingActions,
+  run,
+}: {
+  language: BridgeLanguage;
+  live: boolean;
+  pendingActions: ReadonlySet<string>;
+  run: RunAction;
+}) {
+  const [query, setQuery] = useState("");
+  const [level, setLevel] = useState("ALL");
+  const [logs, setLogs] = useState("");
+  const load = async (actionId: "logs.refresh" | "logs.search") => {
+    const response = await run<{ logs?: string }>(actionId, { query, level });
+    if (response?.status === "ok") setLogs(response.data?.logs ?? "");
+  };
+  return (
+    <section className="td-page" aria-labelledby="logs-title">
+      <SectionTitle
+        titleId="logs-title"
+        eyebrow="REDACTED AUDIT TRAIL"
+        title={pageLabels.logs[language]}
+        description={localize(
+          language,
+          "المحتوى يأتي من LogService ويمر بالتنقيح قبل المتصفح.",
+          "Content comes from LogService and is redacted before reaching the browser.",
+        )}
+      />
+      <div className="td-log-toolbar">
+        <label className="td-label td-grow">
+          {localize(language, "بحث", "Search")}
+          <input
+            className="td-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <label className="td-label">
+          {localize(language, "المستوى", "Level")}
+          <select
+            className="td-input"
+            value={level}
+            onChange={(event) => setLevel(event.target.value)}
+          >
+            {["ALL", "INFO", "WARNING", "ERROR", "RECOVERY"].map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <ActionButton
+          actionId="logs.search"
+          pendingActions={pendingActions}
+          live={live}
+          onClick={() => void load("logs.search")}
+        >
+          <Search size={15} aria-hidden="true" />
+          {localize(language, "بحث", "Search")}
+        </ActionButton>
+        <ActionButton
+          actionId="logs.refresh"
+          pendingActions={pendingActions}
+          live={live}
+          onClick={() => void load("logs.refresh")}
+        >
+          <RefreshCw size={15} aria-hidden="true" />
+          {localize(language, "تحديث", "Refresh")}
+        </ActionButton>
+      </div>
+      <div className="td-log-box">
+        {logs ? (
+          logs.split("\n").map((line, index) => <code key={`${index}-${line}`}>{line}</code>)
+        ) : (
+          <div className="td-empty-state">
+            {localize(language, "لا توجد سجلات حية معروضة.", "No live logs displayed.")}
+          </div>
+        )}
+      </div>
+      <div className="td-inline-note">
+        <ShieldCheck size={15} aria-hidden="true" />
+        {localize(
+          language,
+          "لا يُعرض payload الخام أو المسار المحلي أو بيانات الاعتماد.",
+          "Raw payloads, local paths, and credentials are never displayed.",
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SettingsSection({
+  state,
+  language,
+  live,
+  pendingActions,
+  run,
+}: {
+  state: LiveUiState | null;
+  language: BridgeLanguage;
+  live: boolean;
+  pendingActions: ReadonlySet<string>;
+  run: RunAction;
+}) {
+  const [concurrency, setConcurrency] = useState(state?.concurrency ?? 2);
+  useEffect(() => {
+    if (state?.concurrency != null) setConcurrency(state.concurrency);
+  }, [state]);
+  // Local draft of the persisted heartbeat interval. The snapshot is the
+  // authority after every save, so a rejected value snaps back honestly. Only
+  // a *changed* persisted value overwrites the draft: the 1-second heartbeat
+  // must not revert a selection the owner is about to save.
+  const [autoRefresh, setAutoRefresh] = useState(state?.autoRefreshMs ?? 1000);
+  const persistedAutoRefresh = useRef(state?.autoRefreshMs ?? 1000);
+  useEffect(() => {
+    const next = state?.autoRefreshMs;
+    if (next != null && next !== persistedAutoRefresh.current) {
+      persistedAutoRefresh.current = next;
+      setAutoRefresh(next);
+    }
+  }, [state]);
+  return (
+    <section className="td-page" aria-labelledby="settings-title">
+      <SectionTitle
+        titleId="settings-title"
+        eyebrow="LIVE PREFERENCES"
+        title={pageLabels.settings[language]}
+        description={localize(
+          language,
+          "الإعدادات تُكتب عبر الخدمات الحالية؛ لا تخزين متصفح ولا حالة نجاح محلية.",
+          "Settings are written through existing services; there is no browser storage or optimistic success state.",
+        )}
+      />
+      <div className="td-panel">
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "التحويلات المتزامنة", "Concurrent transfers")}</h2>
+            <p>
+              {localize(
+                language,
+                "النطاق الدستوري 1–100، الافتراضي 2، وتحذير فوق 8.",
+                "Constitutional range 1–100, default 2, with a warning above 8.",
+              )}
+            </p>
+          </div>
+          <div className="td-setting-control">
+            <strong className="td-big-number">{concurrency}</strong>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={concurrency}
+              onChange={(event) => setConcurrency(Number(event.target.value))}
+            />
+            <ActionButton
+              actionId="settings.set_concurrency"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("settings.set_concurrency", { value: concurrency })}
+            >
+              {localize(language, "حفظ في Python", "Save in Python")}
+            </ActionButton>
+            {concurrency > 8 ? (
+              <p className="td-warn-line">
+                {localize(
+                  language,
+                  "تحذير: هذه القيمة غير مثبتة على ذاكرة Colab الحية.",
+                  "Warning: this value is not proven against live Colab memory.",
+                )}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "التحديث التلقائي", "Auto-refresh")}</h2>
+            <p>
+              {localize(
+                language,
+                "يحدّث شريط التقدم أثناء النقل فقط. عند الإيقاف استخدم زر التحديث اليدوي.",
+                "Updates the progress view during a transfer only. When off, use the manual Refresh button.",
+              )}
+            </p>
+          </div>
+          <div className="td-setting-control">
+            <select
+              className="td-select"
+              value={autoRefresh}
+              disabled={!live}
+              aria-label={localize(language, "تحديث التقدم تلقائيًا", "Progress auto-refresh")}
+              onChange={(event) => setAutoRefresh(Number(event.target.value))}
+            >
+              <option value={0}>{localize(language, "إيقاف", "Off")}</option>
+              <option value={1000}>{localize(language, "كل ثانية", "Every second")}</option>
+              <option value={2000}>{localize(language, "كل ثانيتين", "Every 2 seconds")}</option>
+              <option value={5000}>{localize(language, "كل 5 ثوانٍ", "Every 5 seconds")}</option>
+            </select>
+            <ActionButton
+              actionId="settings.set_auto_refresh"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() =>
+                void run("settings.set_auto_refresh", { value: autoRefresh }).then((response) => {
+                  // No optimistic success: a refused save snaps the draft
+                  // back to the value Python actually holds.
+                  if (!response || response.status !== "ok") {
+                    setAutoRefresh(state?.autoRefreshMs ?? 1000);
+                  }
+                })
+              }
+            >
+              {localize(language, "حفظ في Python", "Save in Python")}
+            </ActionButton>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "اللغة", "Language")}</h2>
+            <p>Arabic RTL · English LTR</p>
+          </div>
+          <div className="td-segment">
+            <ActionButton
+              actionId="settings.toggle_language"
+              pendingActions={pendingActions}
+              live={live}
+              className="td-link-button"
+              onClick={() => void run("settings.toggle_language")}
+            >
+              {language === "ar" ? "English" : "العربية"}
+            </ActionButton>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "المظهر", "Theme")}</h2>
+            <p>
+              {localize(
+                language,
+                "اختيارات مظهر React موجودة بالأعلى. هذا التحكم القديم يخص تفضيل Python فقط وهو نهاري حاليًا.",
+                "React appearance is selected above. This legacy control only affects Python's light-only preference.",
+              )}
+            </p>
+          </div>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="settings.set_theme"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("settings.set_theme", { theme: "light" })}
+            >
+              {localize(language, "تطبيق النهاري", "Apply light")}
+            </ActionButton>
+            <button type="button" className="td-button td-button-secondary" disabled>
+              {localize(language, "Python: نهاري فقط", "Python: light only")}
+            </button>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "الاستعادة ونقاط الحفظ", "Recovery & checkpoints")}</h2>
+          </div>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="recovery.restore"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("recovery.restore")}
+            >
+              <RotateCcw size={15} aria-hidden="true" />
+              {localize(language, "استعادة", "Restore")}
+            </ActionButton>
+            <ActionButton
+              actionId="maintenance.checkpoint"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("maintenance.checkpoint")}
+            >
+              <Check size={15} aria-hidden="true" />
+              {localize(language, "حفظ نقطة", "Checkpoint")}
+            </ActionButton>
+          </div>
+        </div>
+        <div className="td-setting-row">
+          <div>
+            <h2>{localize(language, "التصدير", "Export")}</h2>
+          </div>
+          <div className="td-button-row">
+            <ActionButton
+              actionId="export.build_zip"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("export.build_zip")}
+            >
+              <FileArchive size={15} aria-hidden="true" />
+              ZIP
+            </ActionButton>
+            <ActionButton
+              actionId="export.colab_cells"
+              pendingActions={pendingActions}
+              live={live}
+              onClick={() => void run("export.colab_cells")}
+            >
+              <FileText size={15} aria-hidden="true" />
+              Colab
+            </ActionButton>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export type TeleDriveSandboxProps = { bridge?: TeleDriveBridge };
+
+export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDriveSandboxProps) {
+  const [liveState, setLiveState] = useState<LiveUiState | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [page, setPage] = useState<WorkspacePage>("universal");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [appearance, setAppearance] = useState<"system" | "lime" | "violet" | "clean" | "ocean" | "dim">("system");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("teledrive-appearance");
+    if (saved === "lime" || saved === "violet" || saved === "clean" || saved === "ocean" || saved === "dim") setAppearance(saved);
+  }, []);
+  const [prefersDark, setPrefersDark] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setPrefersDark(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const effectiveTheme = appearance === "system" ? (prefersDark ? "dim" : "clean") : appearance;
+  const chooseAppearance = (value: "system" | "lime" | "violet" | "clean" | "ocean" | "dim") => {
+    setAppearance(value);
+    if (typeof window !== "undefined") window.localStorage.setItem("teledrive-appearance", value);
+  };
+  const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(() => new Set());
+  /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
+  const latestRequest = useRef(new Map<string, string>());
+  const live = bridge.isLive();
+  const language = liveState?.language ?? "ar";
+  // Python owns this preference. 0 = the owner switched the heartbeat off;
+  // the manual queue.refresh button remains available either way.
+  const autoRefreshMs = liveState?.autoRefreshMs ?? AUTO_REFRESH_INTERVAL_MS;
+
+  useEffect(() => bridge.subscribe(setLiveState), [bridge]);
+
+  // Quiet auto-refresh: while a transfer is moving, poll the live snapshot so
+  // every panel (chips, folder, queue, candidates) follows Python on its own —
+  // exactly like pressing Refresh, but without flashing notices or busy states.
+  const liveStateRef = useRef<LiveUiState | null>(null);
+  const pollInFlight = useRef(false);
+  /** Mirror of pendingActions for interval callbacks (never a stale closure). */
+  const pendingRef = useRef<ReadonlySet<string>>(pendingActions);
+  /** Timestamp of the last completed control round-trip; gates the next tick. */
+  const lastControlSettledAt = useRef(0);
+  const postRefreshScheduled = useRef(false);
+  const postRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    liveStateRef.current = liveState;
+  }, [liveState]);
+  useEffect(() => {
+    pendingRef.current = pendingActions;
+  }, [pendingActions]);
+
+  /**
+   * One silent verification poll — shared by the heartbeat tick and the
+   * post-action refresh. Silent: never surfaces notices or busy spinners.
+   */
+  const issueSilentRefresh = useCallback(() => {
+    // Background tab: skip; the next visible tick catches up.
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (pollInFlight.current) return;
+    const snapshot = liveStateRef.current;
+    if (!snapshot) return;
+    pollInFlight.current = true;
+    void bridge
+      .request({
+        requestId: newRequestId(),
+        actionId: "queue.refresh",
+        payload: {},
+        language: snapshot.language,
+      })
+      .then((response) => {
+        if (response.state) setLiveState(response.state);
+      })
+      .catch(() => {
+        // Silent heartbeat: a transient bridge failure must not surface as a
+        // user-facing notice or block the next tick.
+      })
+      .finally(() => {
+        pollInFlight.current = false;
+      });
+  }, [bridge]);
+
+  /**
+   * After a successful control action, schedule exactly ONE silent refresh
+   * after the settle window so the panel confirms the action's server-side
+   * effect without waiting for the next tick. Debounced: at most one trailing
+   * poll no matter how many actions complete back-to-back.
+   */
+  const schedulePostActionRefresh = useCallback(() => {
+    if (postRefreshScheduled.current) return;
+    postRefreshScheduled.current = true;
+    postRefreshTimer.current = setTimeout(() => {
+      postRefreshScheduled.current = false;
+      issueSilentRefresh();
+    }, HEARTBEAT_SETTLE_MS);
+  }, [issueSilentRefresh]);
+
+  useEffect(
+    () => () => {
+      if (postRefreshTimer.current !== null) clearTimeout(postRefreshTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // 0 disables the periodic heartbeat completely. One-shot post-action
+    // verification refreshes still run; they are not a background loop.
+    if (!live || autoRefreshMs <= 0) return;
+    const interval = setInterval(() => {
+      // Background tab: skip this tick entirely.
+      if (typeof document !== "undefined" && document.hidden) return;
+      // Never race a control: while any button awaits its real response,
+      // polling would only invite out-of-order snapshots.
+      if (pendingRef.current.size > 0) return;
+      // Let the backend settle right after a control round-trip finished.
+      if (Date.now() - lastControlSettledAt.current < HEARTBEAT_SETTLE_MS) return;
+      const snapshot = liveStateRef.current;
+      if (!snapshot || !hasActiveTransfer(snapshot)) return;
+      issueSilentRefresh();
+    }, autoRefreshMs);
+    return () => clearInterval(interval);
+  }, [live, autoRefreshMs, issueSilentRefresh]);
+
+  const run: RunAction = async <T,>(actionId: string, payload: Record<string, unknown> = {}) => {
+    if (!bridge.isLive()) {
+      setNotice({ kind: "warning", text: "Backend bridge unavailable" });
+      return null;
+    }
+    const requestId = newRequestId();
+    latestRequest.current.set(actionId, requestId);
+    setPendingActions((current) => new Set(current).add(actionId));
+    try {
+      const response = await bridge.request<T>({
+        requestId,
+        actionId,
+        payload,
+        language,
+      });
+      // Stale response: a newer request for the same action already owns the UI.
+      if (latestRequest.current.get(actionId) !== requestId) return null;
+      if (response.state) setLiveState(response.state);
+      if (response.status !== "ok") {
+        setNotice({
+          kind: response.status === "blocked" ? "warning" : "error",
+          text:
+            response.message ??
+            response.errorKey ??
+            localize(language, "فشل الإجراء.", "Action failed."),
+        });
+        return response;
+      }
+      const genericActionCompletion = response.message?.trim() === "Action completed";
+      setNotice({
+        kind: "success",
+        text:
+          actionId === "queue.start_selected" && (!response.message || genericActionCompletion)
+            ? queueStartNotice(language, response.state ?? liveState)
+            : (response.message ??
+              localize(
+                language,
+                "تم تنفيذ الإجراء عبر Python.",
+                "Action completed through Python.",
+              )),
+      });
+      // Success: schedule exactly one silent verification refresh so the UI
+      // confirms the action's persisted effect (never an optimistic invented
+      // success — this poll only replaces state with real server truth).
+      schedulePostActionRefresh();
+      return response;
+    } catch (error) {
+      if (latestRequest.current.get(actionId) !== requestId) return null;
+      setNotice({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : localize(language, "فشل bridge.", "Bridge failed."),
+      });
+      return null;
+    } finally {
+      if (latestRequest.current.get(actionId) === requestId) {
+        setPendingActions((current) => {
+          if (!current.has(actionId)) return current;
+          const next = new Set(current);
+          next.delete(actionId);
+          return next;
+        });
+        lastControlSettledAt.current = Date.now();
+      }
+    }
+  };
+
+  const listFoldersForUniversal = async (parentId: string): Promise<FolderChoice[]> => {
+    const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
+    return response?.status === "ok" ? (response.data?.folders ?? []) : [];
+  };
+
+  const pages: Record<WorkspacePage, ReactNode> = {
+    universal: (
+      <UniversalSection
+        state={liveState}
+        bridge={bridge}
+        onSettings={() => setPage("settings")}
+        onTasks={() => setPage("tasks")}
+        onFolderList={listFoldersForUniversal}
+      />
+    ),
+    telegram: (
+      <AnalyzeSection
+        state={liveState}
+        language={language}
+        live={live}
+        pendingActions={pendingActions}
+        run={run}
+        onNavigate={() => setPage("tasks")}
+        onSettings={() => setPage("settings")}
+        onValidationError={(text) => setNotice({ kind: "error", text })}
+      />
+    ),
+    tasks: (
+      <div className="td-tasks-workspace">
+        <UniversalTasksPanel bridge={bridge} />
+        <QueueSection
+          state={liveState}
+          language={language}
+          live={live}
+          pendingActions={pendingActions}
+          run={run}
+        />
+      </div>
+    ),
+    settings: (
+      <div className="td-settings-workspace">
+        <section className="td-panel td-appearance-panel" aria-label="إعدادات المظهر">
+          <h2>اختر هوية TeleDrive</h2>
+          <p className="td-inline-note">
+            خمس هويات بصرية كاملة مستوحاة من المراجع المختارة؛ تغيير فوري مع حفظ التفضيل على هذا الجهاز.
+          </p>
+          <div className="td-appearance-options" role="group" aria-label="وضع الألوان">
+            {(
+              [
+                ["system", "تلقائي"],
+                ["lime", "Neon Lime"],
+                ["violet", "Violet Pulse"],
+                ["clean", "Clean Light"],
+                ["ocean", "Ocean Glass"],
+                ["dim", "Twitter Dim"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={appearance === value ? "td-filter td-theme-choice is-selected" : "td-filter td-theme-choice"}
+                aria-pressed={appearance === value}
+                onClick={() => chooseAppearance(value)}
+              >
+                <span className={`td-theme-preview td-theme-preview-${value}`} aria-hidden="true"><span/><span/><span/></span>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="td-panel td-fallback-panel">
+          <h2>الواجهات الاحتياطية</h2>
+          <p className="td-inline-note">لو واجهت مشكلة في النسخة التجريبية، تقدر ترجع فورًا للواجهة المعتادة. روابط الواجهات القديمة لم تُحذف أو تُعدل.</p>
+          <div className="td-button-row">
+            <a className="td-button td-button-secondary" href="/connect">واجهة React الأصلية</a>
+            <a className="td-button td-button-secondary" href="https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb" target="_blank" rel="noreferrer">Gradio عبر Colab</a>
+          </div>
+        </section>
+        <SettingsSection
+          state={liveState}
+          language={language}
+          live={live}
+          pendingActions={pendingActions}
+          run={run}
+        />
+        <details className="td-settings-group" open>
+          <summary>
+            <UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive
+          </summary>
+          <ConnectionSection
+            state={liveState}
+            language={language}
+            live={live}
+            pendingActions={pendingActions}
+            run={run}
+            bridge={bridge}
+          />
+        </details>
+        <details className="td-settings-group">
+          <summary>
+            <Terminal size={18} /> السجلات والتشخيص
+          </summary>
+          <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />
+        </details>
+      </div>
+    ),
+  };
+
+  return (
+    <div
+      className="td-app"
+      lang={language}
+      dir={language === "ar" ? "rtl" : "ltr"}
+      data-theme={effectiveTheme}
+      data-sidebar-collapsed={sidebarCollapsed}
+    >
+      <button type="button" className="td-sidebar-toggle"
+        aria-label={sidebarCollapsed ? localize(language, "توسيع الشريط الجانبي", "Expand sidebar") : localize(language, "تصغير الشريط الجانبي", "Collapse sidebar")}
+        aria-expanded={!sidebarCollapsed}
+        onClick={() => setSidebarCollapsed((v) => !v)}>
+        {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
+      </button>
+      <TopBar state={liveState} language={language} live={live} />
+      <div className="td-theme-shortcut">
+        <label htmlFor="td-next-quick-theme">
+          <span>{localize(language, "الشكل", "Theme")}</span>
+          <select
+            id="td-next-quick-theme"
+            value={appearance}
+            onChange={(event) => chooseAppearance(event.target.value as typeof appearance)}
+          >
+            <option value="system">{localize(language, "تلقائي", "Auto")}</option>
+            <option value="lime">Neon Lime</option>
+            <option value="violet">Violet Pulse</option>
+            <option value="clean">Clean Light</option>
+            <option value="ocean">Ocean Glass</option>
+            <option value="dim">Twitter Dim</option>
+          </select>
+        </label>
+      </div>
+      <nav
+        className="td-nav"
+        aria-label={localize(language, "أقسام TeleDrive", "TeleDrive sections")}
+      >
+        {navItems.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={`td-nav-button ${page === item.id ? "is-active" : ""}`}
+            aria-current={page === item.id ? "page" : undefined}
+            onClick={() => setPage(item.id)}
+          >
+            {item.icon}
+            <span className="td-nav-label">{language === "ar" ? item.ar : item.en}</span>
+          </button>
+        ))}
+      </nav>
+      <main className="td-main">
+        {!live || !liveState ? (
+          <div className="td-bridge-blocked" role="alert">
+            <AlertCircle size={16} aria-hidden="true" />
+            <strong>Backend bridge unavailable</strong>
+            <span>
+              {localize(
+                language,
+                "الأفعال الحساسة معطّلة، ولا تُعرض أي حالة نجاح متفائلة.",
+                "Sensitive actions are disabled and no optimistic success state is shown.",
+              )}
+            </span>
+          </div>
+        ) : (
+          <div className="td-demo-banner td-status-live">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <strong>
+              {localize(language, "متصل بـApplicationContext", "Connected to ApplicationContext")}
+            </strong>
+            <span>
+              {localize(
+                language,
+                "كل حالة ونتيجة أدناه من Python الحي.",
+                "Every state and result below comes from live Python.",
+              )}
+            </span>
+          </div>
+        )}
+        <NoticeBar notice={notice} />
+        {navItems.map(({ id }) => (
+          <div key={id} className="td-workspace-pane" hidden={page !== id}>
+            {pages[id]}
+          </div>
+        ))}
+      </main>
+    </div>
+  );
+}
