@@ -172,10 +172,10 @@ function Index() {
             </a>
           </div>
           <a
-            href="/connect-next"
+            href="/teledrive-next"
             className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-primary px-5 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
           >
-            ربط Colab بالواجهة الثالثة
+            فتح TeleDrive Next مباشرة
           </a>
           <p className="mt-3 text-xs leading-6 text-muted-foreground">
             Gradio يُفتح من داخل جلسة Colab كما كان، ولا يتم استبداله أو تغييره من هذا الاختيار.
