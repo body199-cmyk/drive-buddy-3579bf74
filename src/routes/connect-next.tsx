@@ -19,6 +19,7 @@ export const Route = createFileRoute("/connect-next")({
 });
 
 function ConnectNextPage() {
+  const [showManualForm, setShowManualForm] = useState(false);
   const [runtimeUrl, setRuntimeUrl] = useState("");
   const [token, setToken] = useState("");
   const [bridge, setBridge] = useState<RemoteColabBridge | null>(null);
@@ -28,8 +29,18 @@ function ConnectNextPage() {
   const [notice, setNotice] = useState("");
   const handoffHandled = useRef(false);
 
+  // Older Cell 4/5 links may still point to /connect-next. Open the actual
+  // workspace instead; the manual form remains an explicit opt-in fallback.
   useEffect(() => {
-    if (handoffHandled.current) return;
+    if (new URLSearchParams(window.location.search).get("manual") !== "1") {
+      window.location.replace("/teledrive-next" + window.location.hash);
+      return;
+    }
+    setShowManualForm(true);
+  }, []);
+
+  useEffect(() => {
+    if (!showManualForm || handoffHandled.current) return;
     const fragment = window.location.hash;
     if (!fragment) return;
     const params = new URLSearchParams(fragment.slice(1));
@@ -88,7 +99,7 @@ function ConnectNextPage() {
         setBusy(false);
       }
     })();
-  }, []);
+  }, [showManualForm]);
 
   async function connect() {
     setError("");
@@ -121,6 +132,14 @@ function ConnectNextPage() {
       setBridge(null);
       setToken("");
     }
+  }
+
+  if (!showManualForm) {
+    return (
+      <main dir="rtl" role="status" className="min-h-screen bg-background p-6 text-foreground">
+        جاري فتح واجهة TeleDrive Next مباشرة...
+      </main>
+    );
   }
 
   if (bridge) {
