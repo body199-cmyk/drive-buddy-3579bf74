@@ -88,3 +88,9 @@
 - ممنوع تغيير `requirements.lock` أو `bun.lock` في أي بند حالي.
 - كل جلسة تنتهي بتحديث: `AI_HANDOFF.md` + `ACTIVE_TASK.md` + `CHANGELOG.md` + `KNOWN_ISSUES.md` + تقرير مرحلة.
 - الحالات المسموحة: PLANNED, ACTIVE, VERIFIED COMPLETE, PARTIALLY COMPLETE, FAILED, BLOCKED, CANCELLED.
+
+
+## Colab live feedback — Universal Downloader (2026-11-04)
+
+- **UI discoverability — future fix (not implemented):** The Universal Downloader entry is hidden under the lower-left three-dot menu. Make it a visible, first-class navigation destination in both relevant interfaces, without changing existing action bindings. Owner explicitly deferred UI work.
+- **Performance regression — investigate first (not yet resolved):** Owner reports Universal Downloader feels extremely slow during live Colab use, similar to Telegram, whereas earlier internet downloads were fast. The runtime hotpatch was sourced from PR #150 commit `8607aa532679`; PR #150 changes serialize optional dependency installation and handle directory-creation failures, not transfer bandwidth. Diagnose whether slowness occurs during source download (0–~83% progress), media postprocessing (~83%), or Google Drive upload (~85–99%), including shared Drive chunk lock contention, source-specific yt-dlp throttling, and whether concurrent Telegram transfers are active. Capture elapsed times, byte counts, and throughput by phase before altering speed or locking behavior. No live throughput benchmark yet; do not claim fixed.
