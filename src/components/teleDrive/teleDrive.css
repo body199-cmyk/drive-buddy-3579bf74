@@ -1690,3 +1690,33 @@
   color: var(--td-danger);
   border-color: var(--td-danger);
 }
+
+/* Collapsible desktop navigation rail: real compact mode, never scaled content. */
+.td-sidebar-toggle { display: none; }
+@media (min-width: 1024px) {
+  .td-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    z-index: 33;
+    inset-block-start: 18px;
+    inset-inline-start: calc(var(--td-sidebar-width) - 53px);
+    width: 38px;
+    height: 38px;
+    background: var(--td-surface-2);
+    color: var(--td-text);
+    border: 1px solid var(--td-line);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .td-app[data-sidebar-collapsed="true"] { --td-sidebar-width: 76px; }
+  .td-app[data-sidebar-collapsed="true"] .td-nav { padding-inline: 8px; }
+  .td-app[data-sidebar-collapsed="true"] .td-nav::before { content: none; }
+  .td-app[data-sidebar-collapsed="true"] .td-nav-button {
+    justify-content: center;
+    padding-inline: 4px;
+  }
+  .td-app[data-sidebar-collapsed="true"] .td-nav-label { display: none; }
+  .td-app[data-sidebar-collapsed="true"] .td-sidebar-toggle { inset-inline-start: 18px; }
+}
