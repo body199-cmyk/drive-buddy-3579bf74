@@ -68,5 +68,5 @@ def test_next_frontend_opens_directly_and_pairs_without_an_auth_form():
     assert "<TeleDriveNext" in content
     assert '"api/pairing/exchange"' in content
     assert "window.history.replaceState" in content
-    assert 'href="/connect-next"' in content  # Optional manual fallback only.
+    assert 'href="/connect-next?manual=1"' in content  # Optional manual fallback only.
     assert "window.localStorage.setItem" not in content
