@@ -799,16 +799,16 @@ with _td_tempfile.TemporaryDirectory(prefix="teledrive_main_") as _temp:
         raise RuntimeError("Latest main source does not compile")
     _backup = _dest.with_name("teledrive_pre_main_backup")
     if _backup.exists():
-        _td_shutil.rmtree(_backup)
+        _pkg_remove_tree(_backup)
     _td_os.replace(_dest, _backup)
     try:
         _td_shutil.copytree(_src, _dest)
     except BaseException:
         if _dest.exists():
-            _td_shutil.rmtree(_dest)
+            _pkg_remove_tree(_dest)
         _td_os.replace(_backup, _dest)
         raise
-    _td_shutil.rmtree(_backup)
+    _pkg_remove_tree(_backup)
 print("Latest CI-verified main source installed:", _sha)
 '''
 CELL_1 = CELL_1_PACKAGE_UPDATER + CELL_1_RESTORE + CELL_1_LATEST_MAIN
