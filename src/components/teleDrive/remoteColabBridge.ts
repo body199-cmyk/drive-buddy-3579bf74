@@ -5,6 +5,7 @@ import type {
   TeleDriveBridge,
   TelegramAuthResult,
   TelegramAuthStep,
+  UniversalDownloadTask,
 } from "./bridgeTypes";
 import { newRequestId } from "./bridgeTypes";
 
@@ -195,7 +196,7 @@ export class RemoteColabBridge implements TeleDriveBridge {
     if (!this.isLive()) throw new Error("Colab runtime is disconnected.");
     return await this.fetchJson(`api/universal/${path}`,
       path === "tasks" ? {} : { method: "POST", body: JSON.stringify(payload) }
-    ) as {ok: boolean; message?: string; tasks?: Array<any>};
+    ) as {ok: boolean; message?: string; tasks?: UniversalDownloadTask[]};
   }
 
   async revokePairing(): Promise<void> {
