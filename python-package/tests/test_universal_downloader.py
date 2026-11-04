@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import importlib
 import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -55,6 +58,51 @@ def test_ensure_packages_reports_failed_install(monkeypatch):
 
     with pytest.raises(RuntimeError, match="network unavailable"):
         UniversalDownloadManager(ctx=None)._ensure_packages()
+
+
+def test_ensure_packages_serializes_concurrent_updates(monkeypatch):
+    install_calls = []
+
+    def fake_import(module_name):
+        return object()
+
+    def fake_run(args, **kwargs):
+        install_calls.append(args)
+        time.sleep(0.03)
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    manager = UniversalDownloadManager(ctx=None)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: manager._ensure_packages(), range(8)))
+
+    assert len(install_calls) == 1
+    assert "yt-dlp[default]" in install_calls[0]
+
+
+def test_work_directory_creation_failure_marks_task_failed(monkeypatch, tmp_path):
+    import teledrive.universal_downloader as downloader_module
+
+    blocked_parent = tmp_path / "universal_dl"
+    blocked_parent.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setattr(downloader_module, "TEMP_DIR", tmp_path)
+
+    manager = UniversalDownloadManager(ctx=None)
+    task_id = "directory-error"
+    manager._tasks.append({"id": task_id, "status": "queued", "error": ""})
+    manager._cancel_events[task_id] = threading.Event()
+    manager._resume_events[task_id] = threading.Event()
+    manager._resume_events[task_id].set()
+
+    manager._run_task(task_id, "https://example.com/file.mp4", "best", "folder")
+
+    task = manager.list_tasks()[0]
+    assert task["status"] == "failed"
+    assert task["error"]  # Error is surfaced; OS-specific errno wording may differ.
+    assert task_id not in manager._cancel_events
+    assert task_id not in manager._resume_events
 
 
 @pytest.mark.parametrize(
@@ -125,8 +173,8 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
     assert attempts[0]["merge_output_format"] == "mkv"
     assert "ba[language^=ar]+ba[language^=en]" in attempts[0]["format"]
     assert attempts[0]["sleep_interval_requests"] == 1
-    assert attempts[0]["concurrent_fragment_downloads"] == 4
-    assert attempts[1]["concurrent_fragment_downloads"] == 4
+    assert attempts[0]["concurrent_fragment_downloads"] == 8
+    assert attempts[1]["concurrent_fragment_downloads"] == 8
     assert attempts[1]["extractor_args"]["youtube"]["player_client"] == [
         "tv",
         "web_safari",
@@ -192,3 +240,45 @@ def test_ytdlp_keeps_video_links_single_and_playlist_links_expanded(
     assert options_seen[0]["noplaylist"] is expected_noplaylist
     assert "%(playlist_index&{} - |)s" in options_seen[0]["outtmpl"]
     assert "%(id)s" in options_seen[0]["outtmpl"]
+
+
+def test_youtube_progress_updates_are_throttled_but_finish_is_immediate(monkeypatch, tmp_path):
+    import yt_dlp
+    import teledrive.universal_downloader as downloader
+
+    clock = [100.0]
+    updates = []
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            self.options = options
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            hook = self.options["progress_hooks"][0]
+            payload = {"status": "downloading", "downloaded_bytes": 100, "total_bytes": 1000, "speed": 100}
+            hook(payload)
+            clock[0] += 0.1
+            hook(payload)
+            clock[0] += 0.5
+            hook(payload)
+            hook({"status": "finished"})
+            (tmp_path / "sample.mp4").write_bytes(b"video")
+
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(downloader.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_wait_if_paused", lambda task_id: None)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: updates.append(kwargs))
+
+    manager._download_to_dir("test-task", "https://www.youtube.com/watch?v=test", "best", tmp_path)
+
+    download_updates = [u for u in updates if "speed_bps" in u]
+    assert len(download_updates) == 2
+    assert any(u.get("progress") == 83.0 for u in updates)

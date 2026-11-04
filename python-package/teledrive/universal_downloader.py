@@ -219,6 +219,9 @@ class UniversalDownloadManager:
         # no pause control rather than pretending a blocking call is paused.
         self._resume_events: dict[str, threading.Event] = {}
         self._yt_dlp_update_checked = False
+        # Multiple download workers may start together. Serialize pip operations
+        # so they cannot concurrently upgrade/install yt-dlp and gdown.
+        self._package_lock = threading.Lock()
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -478,6 +481,11 @@ class UniversalDownloadManager:
             return True
 
     def _ensure_packages(self) -> None:
+        """Serialize dependency checks/installation across concurrent tasks."""
+        with self._package_lock:
+            self._ensure_packages_locked()
+
+    def _ensure_packages_locked(self) -> None:
         """Ensure both optional downloader backends are importable.
 
         Some Colab sessions already have yt-dlp but not gdown. Checking only
@@ -533,8 +541,10 @@ class UniversalDownloadManager:
 
     def _run_task(self, task_id: str, url: str, quality: str, folder_id: str) -> None:
         work_dir = Path(TEMP_DIR) / "universal_dl" / task_id
-        work_dir.mkdir(parents=True, exist_ok=True)
         try:
+            # Keep directory-creation errors inside the task lifecycle so the
+            # task is marked failed and its control events are always cleaned up.
+            work_dir.mkdir(parents=True, exist_ok=True)
             self._wait_if_paused(task_id)
             self._update(task_id, status="downloading", status_ar="جاري التحضير والتحميل...", progress=2.0)
             self._wait_if_paused(task_id)
@@ -732,6 +742,10 @@ class UniversalDownloadManager:
         if youtube_multi_audio:
             selected_fmt = _youtube_multiaudio_format(quality)
 
+        # Avoid dispatching UI state changes for every tiny network fragment.
+        # The actual yt-dlp transfer remains uninterrupted.
+        last_ui_sample = {"time": 0.0}
+
         def _yt_hook(d: dict[str, Any]) -> None:
             try:
                 self._wait_if_paused(task_id)
@@ -740,6 +754,10 @@ class UniversalDownloadManager:
             if self._is_cancelled(task_id):
                 raise yt_dlp.utils.DownloadError("Download cancelled by user")
             if d.get("status") == "downloading":
+                now = time.monotonic()
+                if now - last_ui_sample["time"] < 0.5:
+                    return
+                last_ui_sample["time"] = now
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
                 downloaded = d.get("downloaded_bytes") or 0
                 info = d.get("info_dict") or {}
@@ -780,9 +798,10 @@ class UniversalDownloadManager:
             # choose its supported defaults and install recommended EJS
             # dependencies through yt-dlp[default].
             # Download HLS/DASH fragments concurrently to improve throughput
-            # when the source supports it. This is not a guarantee against
-            # source-side throttling, and a modest value avoids excess requests.
-            ydl_opts["concurrent_fragment_downloads"] = 4
+            # when the source supports it. Eight workers reduce per-fragment
+            # latency on segmented formats, without altering single-stream
+            # downloads or attempting to bypass source-side throttling.
+            ydl_opts["concurrent_fragment_downloads"] = 8
             ydl_opts["sleep_interval_requests"] = 1
             ydl_opts["extractor_retries"] = 3
             ydl_opts["retries"] = 3
