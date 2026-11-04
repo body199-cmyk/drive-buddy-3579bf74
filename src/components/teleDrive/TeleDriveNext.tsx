@@ -2013,6 +2013,14 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
             ))}
           </div>
         </section>
+        <section className="td-panel td-fallback-panel">
+          <h2>الواجهات الاحتياطية</h2>
+          <p className="td-inline-note">لو واجهت مشكلة في النسخة التجريبية، تقدر ترجع فورًا للواجهة المعتادة. روابط الواجهات القديمة لم تُحذف أو تُعدل.</p>
+          <div className="td-button-row">
+            <a className="td-button td-button-secondary" href="/connect">واجهة React الأصلية</a>
+            <a className="td-button td-button-secondary" href="https://colab.research.google.com/github/body199-cmyk/drive-buddy-3579bf74/blob/main/public/TeleDrive.ipynb" target="_blank" rel="noreferrer">Gradio عبر Colab</a>
+          </div>
+        </section>
         <SettingsSection
           state={liveState}
           language={language}
