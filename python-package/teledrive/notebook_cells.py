@@ -72,8 +72,9 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   `Classic_Gradio_Backup` (port 7860), `Modern_Web_Dashboard` (port 8765)
   and **`TeleDrive_Next`**, the separate React frontend on Vercel.
   `Run_Both_Together` preserves the old dual-interface experience.
-  **`Run_All_Three` (default)** launches the two old local interfaces and
-  shows the TeleDrive Next link. Next reuses the existing Web Dashboard
+  **`Run_All_Three`** launches the two old local interfaces and shows
+  the TeleDrive Next link. `Run_Both_Together` stays the default and also
+  displays a Next shortcut without launching a third server. Next reuses the existing Web Dashboard
   backend (one shared ApplicationContext); it does not launch a second
   download engine or expose Telegram credentials to Vercel.
   Cell 5 opens the selected web frontend using a short-lived pairing handoff.
@@ -938,8 +939,9 @@ ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resu
 #                           FastAPI runtime (port 8765). No new server/engine.
 #   Run_Both_Together     : preserve the original two-interface mode.
 #   Run_All_Three         : launch both local UIs and offer TeleDrive Next.
-#                           This is the default, with the two old fallbacks.
-UI_MODE = "Run_All_Three"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "TeleDrive_Next", "Run_Both_Together", "Run_All_Three"]
+#   Run_Both_Together     : remains the default; the third frontend is also
+#                           linked without launching an extra server.
+UI_MODE = "Run_Both_Together"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "TeleDrive_Next", "Run_Both_Together", "Run_All_Three"]
 WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 
 # share=False: the UI is reachable inside this runtime only. A public link is an
@@ -999,7 +1001,7 @@ if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together", "TeleDrive_Next", "R
                     type(_classic_fallback_exc).__name__, _classic_fallback_exc,
                 )
 
-if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_All_Three"):
+if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_Both_Together", "Run_All_Three"):
     # TeleDrive Next is a remote frontend, not a third backend process.
     # Pair it securely in the next (optional) handoff cell; never put a token
     # in the public URL or print the secret in this cell.
@@ -1116,7 +1118,7 @@ else:
         _targets = (
             [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL),
              ("Original React", VERCEL_CONNECT_URL)]
-            if _mode == "Run_All_Three" else
+            if _mode in ("Run_All_Three", "Run_Both_Together") else
             [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL)]
             if _mode == "TeleDrive_Next" else
             [("Original React", VERCEL_CONNECT_URL)]
