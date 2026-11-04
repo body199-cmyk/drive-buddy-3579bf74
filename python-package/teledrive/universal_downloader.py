@@ -85,6 +85,14 @@ def _youtube_url_flags(url: str) -> tuple[bool, bool, bool]:
     return True, explicit_playlist, video_path and not explicit_playlist
 
 
+def _playlist_output_sort_key(path: Path) -> tuple[int, int, str]:
+    """Sort playlist outputs by their numeric playlist index, then filename."""
+    prefix, separator, _ = path.name.partition(" - ")
+    if separator and prefix.isdigit():
+        return (0, int(prefix), path.name.casefold())
+    return (1, 0, path.name.casefold())
+
+
 def _youtube_multiaudio_format(quality: str) -> str:
     """Prefer Arabic + English YouTube audio tracks, with safe fallbacks.
 
@@ -763,13 +771,29 @@ class UniversalDownloadManager:
                 info = d.get("info_dict") or {}
                 title = info.get("title")
                 pct = (downloaded / total * 80.0) if total else 40.0
+                status_text = f"⬇️ جاري التحميل ({int(pct / 0.8)}%)..."
+                if is_playlist_url:
+                    position = info.get("playlist_index")
+                    count = info.get("playlist_count") or info.get("n_entries")
+                    if position:
+                        try:
+                            position = int(position)
+                            count = int(count) if count else 0
+                            status_text = (
+                                f"📃 القائمة: الفيديو {position}/{count}..."
+                                if count > 0
+                                else f"📃 القائمة: جاري تحميل الفيديو {position}..."
+                            )
+                            title = f"({position}/{count}) {title}" if count > 0 and title else title
+                        except (TypeError, ValueError):
+                            pass
                 self._update(
                     task_id,
                     title=str(title or url)[:70],
                     progress=round(min(pct, 82.0), 1),
                     size_bytes=int(total or downloaded),
                     speed_bps=round(float(d.get("speed") or 0.0), 1),
-                    status_ar=f"⬇️ جاري التحميل ({int(pct / 0.8)}%)...",
+                    status_ar=status_text,
                 )
             elif d.get("status") == "finished":
                 self._update(task_id, progress=83.0, status_ar="🔧 جاري معالجة ودمج الميديا...")
@@ -791,6 +815,11 @@ class UniversalDownloadManager:
         if youtube_multi_audio:
             # Preserve both requested language tracks in one switchable file.
             ydl_opts["audio_multistreams"] = True
+
+        if is_playlist_url:
+            # A private/deleted/region-blocked item must not abort the rest of
+            # an otherwise downloadable playlist. yt-dlp skips failed entries.
+            ydl_opts["ignoreerrors"] = True
 
         if is_youtube:
             # Do not pin a single YouTube player client: YouTube can mark one
@@ -889,7 +918,13 @@ class UniversalDownloadManager:
         if self._is_cancelled(task_id):
             raise RuntimeError("cancelled")
 
-        return [p for p in work_dir.rglob("*") if p.is_file() and not p.name.endswith((".part", ".ytdl"))]
+        downloaded_files = [
+            p for p in work_dir.rglob("*")
+            if p.is_file() and not p.name.endswith((".part", ".ytdl"))
+        ]
+        if is_playlist_url:
+            downloaded_files.sort(key=_playlist_output_sort_key)
+        return downloaded_files
 
 
 def get_universal_downloader(ctx: Any) -> UniversalDownloadManager:
