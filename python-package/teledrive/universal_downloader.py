@@ -742,6 +742,10 @@ class UniversalDownloadManager:
         if youtube_multi_audio:
             selected_fmt = _youtube_multiaudio_format(quality)
 
+        # Avoid dispatching UI state changes for every tiny network fragment.
+        # The actual yt-dlp transfer remains uninterrupted.
+        last_ui_sample = {"time": 0.0}
+
         def _yt_hook(d: dict[str, Any]) -> None:
             try:
                 self._wait_if_paused(task_id)
@@ -750,6 +754,10 @@ class UniversalDownloadManager:
             if self._is_cancelled(task_id):
                 raise yt_dlp.utils.DownloadError("Download cancelled by user")
             if d.get("status") == "downloading":
+                now = time.monotonic()
+                if now - last_ui_sample["time"] < 0.5:
+                    return
+                last_ui_sample["time"] = now
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
                 downloaded = d.get("downloaded_bytes") or 0
                 info = d.get("info_dict") or {}
@@ -790,9 +798,10 @@ class UniversalDownloadManager:
             # choose its supported defaults and install recommended EJS
             # dependencies through yt-dlp[default].
             # Download HLS/DASH fragments concurrently to improve throughput
-            # when the source supports it. This is not a guarantee against
-            # source-side throttling, and a modest value avoids excess requests.
-            ydl_opts["concurrent_fragment_downloads"] = 4
+            # when the source supports it. Eight workers reduce per-fragment
+            # latency on segmented formats, without altering single-stream
+            # downloads or attempting to bypass source-side throttling.
+            ydl_opts["concurrent_fragment_downloads"] = 8
             ydl_opts["sleep_interval_requests"] = 1
             ydl_opts["extractor_retries"] = 3
             ydl_opts["retries"] = 3
