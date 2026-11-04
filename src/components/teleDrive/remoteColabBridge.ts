@@ -188,6 +188,16 @@ export class RemoteColabBridge implements TeleDriveBridge {
     }
   }
 
+  /** Use the already-authenticated runtime routes; never send pairing credentials to logs. */
+  async universalRequest(path: string, payload: Record<string, unknown> = {}) {
+    const allowed = new Set(["tasks", "start", "cancel", "pause", "resume", "retry", "bulk", "clear"]);
+    if (!allowed.has(path)) throw new Error("Unsupported Universal Downloader action.");
+    if (!this.isLive()) throw new Error("Colab runtime is disconnected.");
+    return await this.fetchJson(`api/universal/${path}`,
+      path === "tasks" ? {} : { method: "POST", body: JSON.stringify(payload) }
+    ) as {ok: boolean; message?: string; tasks?: Array<any>};
+  }
+
   async revokePairing(): Promise<void> {
     await this.fetchJson("api/pairing/revoke", {
       method: "POST",
