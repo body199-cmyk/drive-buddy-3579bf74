@@ -801,8 +801,9 @@ class UniversalDownloadManager:
             # when the source supports it. Eight workers reduce per-fragment
             # latency on segmented formats, without altering single-stream
             # downloads or attempting to bypass source-side throttling.
-            ydl_opts["concurrent_fragment_downloads"] = 8
-            ydl_opts["sleep_interval_requests"] = 1
+            ydl_opts["concurrent_fragment_downloads"] = 16
+            # Do not insert a one-second pause between extractor HTTP requests.
+            # It throttles segmented downloads and defeats concurrency.
             ydl_opts["extractor_retries"] = 3
             ydl_opts["retries"] = 3
             ydl_opts["socket_timeout"] = 30
