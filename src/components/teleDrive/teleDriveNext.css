@@ -1948,3 +1948,54 @@
  .td-app .td-universal-layout {grid-template-columns:minmax(0,1fr)}
  .td-app .td-universal-task {padding:13px}
 }
+
+/* Always-available preset picker (settings also offers visual swatches). */
+.td-next-brand {
+  display:inline-block;
+  vertical-align:middle;
+  padding:3px 7px;
+  margin-inline-start:6px;
+  border-radius:7px;
+  font-size:.62rem;
+  letter-spacing:.1em;
+  background:var(--td-primary-soft);
+  color:var(--td-primary-ink);
+}
+.td-theme-shortcut {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  padding:10px 34px 0;
+  margin-inline-start:var(--td-sidebar-width,0px);
+}
+.td-theme-shortcut label {
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  color:var(--td-muted);
+  font-size:.8rem;
+  font-weight:800;
+}
+.td-theme-shortcut select {
+  padding:8px 30px 8px 12px;
+  min-height:40px;
+  min-width:135px;
+  border-radius:12px;
+  border:1px solid var(--td-line);
+  color:var(--td-text);
+  background:var(--td-surface);
+  font:inherit;
+  cursor:pointer;
+}
+.td-theme-shortcut select:focus-visible {outline:3px solid var(--td-primary);outline-offset:2px}
+@media(min-width:1024px){
+ .td-app[data-sidebar-collapsed="true"] .td-theme-shortcut {margin-inline-start:76px}
+}
+@media(max-width:1023px){
+ .td-theme-shortcut {margin-inline-start:0;padding:10px 20px 0}
+}
+@media(max-width:767px){
+ .td-theme-shortcut {padding:9px 14px 0}
+ .td-theme-shortcut label {font-size:.74rem}
+ .td-theme-shortcut select {min-height:44px}
+}
