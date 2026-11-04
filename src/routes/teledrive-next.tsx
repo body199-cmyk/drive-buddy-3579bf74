@@ -141,7 +141,7 @@ function NextDashboardPage() {
           </a>
         ) : null}
       </div>
-      <TeleDriveNext bridge={bridge ?? undefined} />
+      <TeleDriveNext key={bridge ? "live" : "preview"} bridge={bridge ?? undefined} />
     </div>
   );
 }
