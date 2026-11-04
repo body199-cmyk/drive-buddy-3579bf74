@@ -10,7 +10,8 @@ export const Route = createFileRoute("/teledrive-next")({
       { title: "TeleDrive Next — Dashboard" },
       {
         name: "description",
-        content: "Open TeleDrive Next directly; securely pair with your Colab runtime when available.",
+        content:
+          "Open TeleDrive Next directly; securely pair with your Colab runtime when available.",
       },
     ],
     links: [{ rel: "stylesheet", href: sandboxCss }],
@@ -78,9 +79,7 @@ function NextDashboardPage() {
         setBridge(candidate);
       } catch (error) {
         candidate?.disconnect();
-        setConnectionError(
-          error instanceof Error ? error.message : "تعذّر الاتصال بـ Colab.",
-        );
+        setConnectionError(error instanceof Error ? error.message : "تعذّر الاتصال بـ Colab.");
       } finally {
         setConnecting(false);
       }
