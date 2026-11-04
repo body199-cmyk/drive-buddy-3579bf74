@@ -24,7 +24,7 @@ import {
   UploadCloud,
   UserRound,
 } from "lucide-react";
-import UniversalSection from "./UniversalSection";
+import UniversalSection, { UniversalTasksPanel } from "./UniversalSection";
 import {
   newRequestId,
   unavailableBridge,
@@ -1679,6 +1679,25 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<WorkspacePage>("universal");
+  const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">(() => {
+    if (typeof window === "undefined") return "system";
+    const saved = window.localStorage.getItem("teledrive-appearance");
+    return saved === "light" || saved === "dim" || saved === "dark" ? saved : "system";
+  });
+  const [prefersDark, setPrefersDark] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setPrefersDark(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const effectiveTheme = appearance === "system" ? (prefersDark ? "dim" : "light") : appearance;
+  const chooseAppearance = (value: "system" | "light" | "dim" | "dark") => {
+    setAppearance(value);
+    if (typeof window !== "undefined") window.localStorage.setItem("teledrive-appearance", value);
+  };
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
   const latestRequest = useRef(new Map<string, string>());
@@ -1867,11 +1886,23 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       />
     ),
     tasks: (
-      <QueueSection state={liveState} language={language} live={live}
-        pendingActions={pendingActions} run={run} />
+      <div className="td-tasks-workspace">
+        <UniversalTasksPanel bridge={bridge} />
+        <QueueSection state={liveState} language={language} live={live}
+          pendingActions={pendingActions} run={run} />
+      </div>
     ),
     settings: (
       <div className="td-settings-workspace">
+        <section className="td-panel td-appearance-panel" aria-label="إعدادات المظهر">
+          <h2>مظهر TeleDrive</h2>
+          <p className="td-inline-note">اختار الوضع المناسب، أو اتبع إعدادات الهاتف تلقائيًا. اختيارك محفوظ على الجهاز.</p>
+          <div className="td-appearance-options" role="group" aria-label="وضع الألوان">
+            {([["system","تلقائي"],["light","فاتح"],["dim","Twitter Dim"],["dark","داكن"]] as const).map(([value,label]) =>
+              <button key={value} type="button" className={appearance === value ? "td-filter is-selected" : "td-filter"}
+                aria-pressed={appearance===value} onClick={() => chooseAppearance(value)}>{label}</button>)}
+          </div>
+        </section>
         <SettingsSection state={liveState} language={language} live={live} pendingActions={pendingActions} run={run} />
         <details className="td-settings-group" open>
           <summary><UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive</summary>
@@ -1891,7 +1922,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       className="td-app"
       lang={language}
       dir={language === "ar" ? "rtl" : "ltr"}
-      data-theme="light"
+      data-theme={effectiveTheme}
     >
       <TopBar state={liveState} language={language} live={live} />
       <nav
