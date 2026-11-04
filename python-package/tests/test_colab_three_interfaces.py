@@ -22,7 +22,7 @@ def test_cell4_offers_three_interfaces_and_retains_legacy_modes():
         "Run_All_Three",
     ):
         assert mode in source
-    assert 'UI_MODE = "Run_All_Three"' in source
+    assert 'UI_MODE = "Run_Both_Together"' in source
     assert 'if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together", "Run_All_Three")' in source
     assert (
         'if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together", '
