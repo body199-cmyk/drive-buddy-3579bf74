@@ -186,3 +186,68 @@ export default function UniversalSection({ state, bridge, onSettings, onTasks, o
     </section>
   );
 }
+
+/** Complete Universal Downloader queue. Uses only the existing runtime actions. */
+export function UniversalTasksPanel({ bridge }: { bridge: TeleDriveBridge }) {
+  const api = bridge.universalRequest;
+  const [tasks, setTasks] = useState<UniversalTask[]>([]);
+  const [filter, setFilter] = useState<"all" | "active" | "done" | "failed">("all");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const refresh = useCallback(async () => {
+    if (!api || !bridge.isLive()) return;
+    try {
+      const result = await api("tasks");
+      if (result.ok && result.tasks) setTasks(result.tasks);
+    } catch { /* A failed refresh never fabricates task state. */ }
+  }, [api, bridge]);
+  useEffect(() => {
+    void refresh();
+    if (!api) return;
+    const interval = window.setInterval(() => { if (!document.hidden) void refresh(); }, 2500);
+    return () => window.clearInterval(interval);
+  }, [api, refresh]);
+  const execute = async (action: string, payload: Record<string, unknown> = {}) => {
+    if (!api || busy) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const result = await api(action, payload);
+      setNotice(result.message || (result.ok ? "تم تنفيذ الأمر." : "تعذر تنفيذ الأمر."));
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "فشل الاتصال بالمحرك.");
+    } finally { setBusy(false); }
+  };
+  const visible = tasks.filter(t => filter === "all" ||
+    (filter === "active" && ["queued", "downloading", "uploading", "paused", "cancelling"].includes(t.status)) ||
+    (filter === "done" && ["done", "completed", "uploaded"].includes(t.status)) ||
+    (filter === "failed" && ["failed", "cancelled", "canceled"].includes(t.status)));
+  return (
+    <section className="td-panel td-universal-all-tasks" aria-label="مهام التحميل الشامل">
+      <div className="td-results-head"><div><h2>التحميل الشامل</h2><small>الملفات الموجودة في محرك التحميل الخارجي</small></div>
+        <button className="td-button" onClick={() => void refresh()} type="button"><RefreshCw size={16}/> تحديث</button>
+      </div>
+      <div className="td-queue-filters" role="group" aria-label="حالة التحميلات">
+        {([["all","الكل"],["active","النشطة"],["done","المكتملة"],["failed","الفاشلة"]] as const).map(([value, label]) =>
+          <button type="button" key={value} aria-pressed={filter === value} className={filter===value ? "td-filter is-selected" : "td-filter"} onClick={() => setFilter(value)}>{label}</button>)}
+      </div>
+      <div className="td-button-row td-universal-bulk">
+        {([["pause", "إيقاف الكل مؤقتًا"], ["resume", "استئناف الكل"], ["retry_failed", "إعادة الفاشلة"], ["cancel", "إلغاء النشطة"]] as const).map(([action,label]) =>
+          <button className={action==="cancel"?"td-button td-button-danger":"td-button"} type="button" key={action} disabled={!api || busy} onClick={() => {
+            if (action==="cancel" && !window.confirm("هل تريد إلغاء التحميلات النشطة؟")) return;
+            void execute("bulk", {action});
+          }}>{label}</button>)}
+        <button className="td-button" type="button" disabled={!api || busy} onClick={() => void execute("clear")}>مسح المنتهية من القائمة</button>
+      </div>
+      {notice ? <p className="td-notice" role="status">{notice}</p> : null}
+      {!api ? <p className="td-inline-note">محرك التحميل الشامل غير متاح في هذا الاتصال.</p> : null}
+      {visible.length ? <div className="td-universal-task-grid">
+        {visible.map(t => <UniversalTaskCard key={t.id} task={t} busy={busy} onAction={(action,id) => {
+          if (action==="cancel" && !window.confirm("إلغاء هذه المهمة؟")) return;
+          void execute(action, {id});
+        }}/>)}
+      </div> : <p className="td-empty-state">لا توجد مهام في هذا التصنيف.</p>}
+    </section>
+  );
+}
