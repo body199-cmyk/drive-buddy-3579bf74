@@ -30,7 +30,8 @@ def test_cell4_offers_three_interfaces_and_retains_legacy_modes():
     ) in source
     assert "launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)" in source
     assert "launch(ctx, share=False, inline=False, blocking=False)" in source
-    assert "teledrive-next" not in source or "connect-next" in source
+    assert "/teledrive-next" in source
+    assert "/connect-next" not in source
     assert "remote_control_token" not in source
 
 
@@ -38,7 +39,7 @@ def test_cell5_handoff_targets_new_frontend_without_removing_old_one():
     source = notebook_cells.CELL_4B_VERCEL_HANDOFF
     ast.parse(source)
     assert "VERCEL_NEXT_CONNECT_URL" in source
-    assert "/connect-next" in source
+    assert "/teledrive-next" in source
     assert "VERCEL_CONNECT_URL" in source
     assert '"Run_All_Three"' in source
     assert '"TeleDrive_Next"' in source
@@ -57,3 +58,23 @@ def test_notebook_artifacts_generated_from_canonical_source():
         assert '"Run_All_Three"' in cell_four
     exported = json.loads(notebook_cells.CELLS_JSON.read_text(encoding="utf-8"))
     assert '"TeleDrive_Next"' in exported["cells"][3]["code"]
+
+
+def test_next_frontend_opens_directly_and_pairs_without_an_auth_form():
+    path = notebook_cells.REPO_ROOT / "src" / "routes" / "teledrive-next.tsx"
+    content = path.read_text(encoding="utf-8")
+    assert 'createFileRoute("/teledrive-next")' in content
+    assert "component: NextDashboardPage" in content
+    assert "<TeleDriveNext" in content
+    assert '"api/pairing/exchange"' in content
+    assert "window.history.replaceState" in content
+    assert 'href="/connect-next?manual=1"' in content  # Optional manual fallback only.
+    assert "window.localStorage.setItem" not in content
+
+
+def test_old_next_connect_links_redirect_to_dashboard():
+    path = notebook_cells.REPO_ROOT / "src" / "routes" / "connect-next.tsx"
+    content = path.read_text(encoding="utf-8")
+    assert 'window.location.replace("/teledrive-next" + window.location.hash)' in content
+    assert 'get("manual") !== "1"' in content
+    assert "showManualForm" in content
