@@ -32,6 +32,20 @@ export type CandidateRow = {
   status: string;
 };
 
+export type UniversalDownloadTask = {
+  id: string;
+  title?: string;
+  status: string;
+  status_ar?: string;
+  progress?: number;
+  quality?: string;
+  size_bytes?: number;
+  speed_bps?: number;
+  folder_name?: string;
+  pause_supported?: boolean;
+  error?: string;
+};
+
 export type FolderChoice = {
   id: string;
   name: string;
@@ -89,7 +103,7 @@ export type TelegramAuthResult = {
 export interface TeleDriveBridge {
   request<T>(request: BridgeRequest): Promise<BridgeResponse<T>>;
   /** Existing Universal Downloader REST endpoints on the owner-operated runtime. */
-  universalRequest?(path: string, payload?: Record<string, unknown>): Promise<{ok: boolean; message?: string; tasks?: Array<any>}>;
+  universalRequest?(path: string, payload?: Record<string, unknown>): Promise<{ok: boolean; message?: string; tasks?: UniversalDownloadTask[]}>;
   /** Optional dedicated endpoint; auth secrets must never enter BridgeRequest payloads. */
   telegramAuthStep?(
     step: TelegramAuthStep,
