@@ -70,3 +70,11 @@ def test_next_frontend_opens_directly_and_pairs_without_an_auth_form():
     assert "window.history.replaceState" in content
     assert 'href="/connect-next?manual=1"' in content  # Optional manual fallback only.
     assert "window.localStorage.setItem" not in content
+
+
+def test_old_next_connect_links_redirect_to_dashboard():
+    path = notebook_cells.REPO_ROOT / "src" / "routes" / "connect-next.tsx"
+    content = path.read_text(encoding="utf-8")
+    assert 'window.location.replace("/teledrive-next" + window.location.hash)' in content
+    assert 'get("manual") !== "1"' in content
+    assert "showManualForm" in content
