@@ -679,6 +679,7 @@ function AnalyzeSection({
   pendingActions,
   run,
   onNavigate,
+  onSettings,
   onValidationError,
 }: {
   state: LiveUiState | null;
@@ -687,6 +688,7 @@ function AnalyzeSection({
   pendingActions: ReadonlySet<string>;
   run: RunAction;
   onNavigate(page: "queue"): void;
+  onSettings(): void;
   onValidationError(message: string): void;
 }) {
   const savedSourceLink = state?.analyze?.sourceLink ?? "";
@@ -806,6 +808,14 @@ function AnalyzeSection({
           "Analyze updates candidates only; enqueue is always a separate action.",
         )}
       />
+      <div className="td-destination-banner td-panel">
+        <Folder size={18} aria-hidden="true" />
+        <span>{localize(language, "مجلد حفظ Telegram", "Telegram destination")}:</span>
+        <strong>{state?.folder?.name ?? "—"}</strong>
+        <button type="button" className="td-button td-button-secondary" onClick={onSettings}>
+          {localize(language, "اختيار أو تغيير المجلد", "Choose or change folder")}
+        </button>
+      </div>
       <div className="td-analysis-line td-panel">
         <label className="td-label td-grow" htmlFor="td-link">
           {localize(language, "رابط الرسالة أو القناة", "Message or channel link")}
@@ -1336,6 +1346,20 @@ function QueueSection({
                               onClick={() => void run("queue.resume_item", { itemId: row.id })}
                             >
                               {localize(language, "استئناف", "Resume")}
+                            </ActionButton>
+                            <ActionButton
+                              actionId="queue.stop_item"
+                              pendingActions={pendingActions}
+                              live={live}
+                              className="td-link-button td-item-stop"
+                              onClick={() => {
+                                if (window.confirm(localize(language,
+                                  "إيقاف هذه المهمة نهائيًا؟", "Permanently stop this item?"))) {
+                                  void run("queue.stop_item", { itemId: row.id });
+                                }
+                              }}
+                            >
+                              {localize(language, "إلغاء", "Stop")}
                             </ActionButton>
                             <ActionButton
                               actionId="queue.retry_item"
@@ -1882,6 +1906,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
         state={liveState} language={language} live={live}
         pendingActions={pendingActions} run={run}
         onNavigate={() => setPage("tasks")}
+        onSettings={() => setPage("settings")}
         onValidationError={(text) => setNotice({ kind: "error", text })}
       />
     ),
