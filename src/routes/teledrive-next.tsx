@@ -6,7 +6,11 @@ export const Route = createFileRoute("/teledrive-next")({
   head: () => ({
     meta: [
       { title: "TeleDrive Next — UI Preview" },
-      { name: "description", content: "Experimental TeleDrive third workspace. Connect to your own Colab runtime for live actions." },
+      {
+        name: "description",
+        content:
+          "Experimental TeleDrive third workspace. Connect to your own Colab runtime for live actions.",
+      },
     ],
     links: [{ rel: "stylesheet", href: sandboxCss }],
   }),
