@@ -1320,3 +1320,63 @@
     text-decoration: none;
   }
 }
+
+/* Responsive UX redesign / phase 1: true desktop workspace with a persistent
+   navigation rail. All existing pages and bridge actions stay reachable while
+   the new four-destination information architecture is implemented. */
+@media (min-width: 1024px) {
+  .td-app {
+    --td-sidebar-width: 232px;
+  }
+
+  .td-topbar {
+    padding: 14px 30px;
+    min-height: 74px;
+    padding-inline-start: calc(var(--td-sidebar-width) + 30px);
+  }
+
+  .td-nav {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: var(--td-sidebar-width);
+    z-index: 31;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 92px 12px 24px;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-inline-end: 1px solid var(--td-line);
+    background: var(--td-surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .td-nav-button {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 14px;
+    border-bottom: 0;
+    border-inline-start: 3px solid transparent;
+    border-radius: var(--radius-md);
+    justify-content: flex-start;
+    text-align: start;
+    white-space: normal;
+  }
+
+  .td-nav-button.is-active {
+    border-bottom-color: transparent;
+    border-inline-start-color: var(--td-primary);
+    background: var(--td-primary-soft);
+  }
+
+  .td-main {
+    max-width: 1700px;
+    margin-inline-start: var(--td-sidebar-width);
+    padding: 30px 34px 80px;
+  }
+
+  .td-main .td-page {
+    min-width: 0;
+  }
+}
