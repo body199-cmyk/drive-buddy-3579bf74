@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier -- Review-branch layout migration; reformat before merge. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
