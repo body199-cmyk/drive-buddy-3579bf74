@@ -199,6 +199,9 @@ def test_youtube_challenge_uses_legacy_player_only_after_token_and_default_fail(
 
     attempts = []
 
+    download_dir = tmp_path / "download"
+    download_dir.mkdir()
+
     class FakeYoutubeDL:
         def __init__(self, options):
             attempts.append(dict(options))
@@ -212,7 +215,7 @@ def test_youtube_challenge_uses_legacy_player_only_after_token_and_default_fail(
         def download(self, urls):
             if len(attempts) < 3:
                 raise yt_dlp.utils.DownloadError(challenge_text)
-            (tmp_path / "sample.mkv").write_bytes(b"video")
+            (download_dir / "sample.mkv").write_bytes(b"video")
 
     manager = UniversalDownloadManager(ctx=None)
     monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: "http://127.0.0.1:4416")
@@ -224,7 +227,7 @@ def test_youtube_challenge_uses_legacy_player_only_after_token_and_default_fail(
         "test-task",
         "https://www.youtube.com/watch?v=video-id",
         "best",
-        tmp_path,
+        download_dir,
     )
 
     assert len(attempts) == 3
