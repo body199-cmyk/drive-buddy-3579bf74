@@ -219,6 +219,9 @@ class UniversalDownloadManager:
         # no pause control rather than pretending a blocking call is paused.
         self._resume_events: dict[str, threading.Event] = {}
         self._yt_dlp_update_checked = False
+        # Multiple download workers may start together. Serialize pip operations
+        # so they cannot concurrently upgrade/install yt-dlp and gdown.
+        self._package_lock = threading.Lock()
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -478,6 +481,11 @@ class UniversalDownloadManager:
             return True
 
     def _ensure_packages(self) -> None:
+        """Serialize dependency checks/installation across concurrent tasks."""
+        with self._package_lock:
+            self._ensure_packages_locked()
+
+    def _ensure_packages_locked(self) -> None:
         """Ensure both optional downloader backends are importable.
 
         Some Colab sessions already have yt-dlp but not gdown. Checking only
@@ -533,8 +541,10 @@ class UniversalDownloadManager:
 
     def _run_task(self, task_id: str, url: str, quality: str, folder_id: str) -> None:
         work_dir = Path(TEMP_DIR) / "universal_dl" / task_id
-        work_dir.mkdir(parents=True, exist_ok=True)
         try:
+            # Keep directory-creation errors inside the task lifecycle so the
+            # task is marked failed and its control events are always cleaned up.
+            work_dir.mkdir(parents=True, exist_ok=True)
             self._wait_if_paused(task_id)
             self._update(task_id, status="downloading", status_ar="جاري التحضير والتحميل...", progress=2.0)
             self._wait_if_paused(task_id)
