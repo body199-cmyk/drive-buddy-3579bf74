@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import importlib
 import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -55,6 +58,51 @@ def test_ensure_packages_reports_failed_install(monkeypatch):
 
     with pytest.raises(RuntimeError, match="network unavailable"):
         UniversalDownloadManager(ctx=None)._ensure_packages()
+
+
+def test_ensure_packages_serializes_concurrent_updates(monkeypatch):
+    install_calls = []
+
+    def fake_import(module_name):
+        return object()
+
+    def fake_run(args, **kwargs):
+        install_calls.append(args)
+        time.sleep(0.03)
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    manager = UniversalDownloadManager(ctx=None)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: manager._ensure_packages(), range(8)))
+
+    assert len(install_calls) == 1
+    assert "yt-dlp[default]" in install_calls[0]
+
+
+def test_work_directory_creation_failure_marks_task_failed(monkeypatch, tmp_path):
+    import teledrive.universal_downloader as downloader_module
+
+    blocked_parent = tmp_path / "universal_dl"
+    blocked_parent.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setattr(downloader_module, "TEMP_DIR", tmp_path)
+
+    manager = UniversalDownloadManager(ctx=None)
+    task_id = "directory-error"
+    manager._tasks.append({"id": task_id, "status": "queued", "error": ""})
+    manager._cancel_events[task_id] = threading.Event()
+    manager._resume_events[task_id] = threading.Event()
+    manager._resume_events[task_id].set()
+
+    manager._run_task(task_id, "https://example.com/file.mp4", "best", "folder")
+
+    task = manager.list_tasks()[0]
+    assert task["status"] == "failed"
+    assert "FileExistsError" in task["error"] or "not a directory" in task["error"]
+    assert task_id not in manager._cancel_events
+    assert task_id not in manager._resume_events
 
 
 @pytest.mark.parametrize(
