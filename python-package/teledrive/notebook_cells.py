@@ -96,8 +96,10 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 1. شغّل الخلايا 1–4 بالترتيب. بعد تشغيل الواجهة، نفّذ **الخلية 5: الربط التلقائي مع Vercel**.
 2. الخلية 5 تحاول إنشاء نفق HTTPS مؤقت وتعرض زر **Open Vercel Dashboard**. اضغطه لفتح الموقع وربطه تلقائيًا دون نسخ الرمز.
 3. لو فشل النفق أو التحويل، استخدم الربط اليدوي أدناه: انسخ `TeleDrive Web Dashboard URL` ورمز `TeleDrive pairing token` من مخرجات الخلية 4.
-4. للواجهة الثالثة افتح `/connect-next` (أو استخدم زرها في الخلية 5).
-   للواجهة القديمة استخدم `/connect`. لا تشارك رابط الربط أو الرمز.
+4. الواجهة الثالثة تفتح مباشرة على `/teledrive-next` من زر الخلية 4.
+   لتشغيل التحميلات، اضغط زر TeleDrive Next من خلية الربط التلقائي 5؛
+   هتفتح نفس الواجهة ويتصل Colab تلقائيًا بدون استمارة. للواجهة القديمة
+   استخدم `/connect`. لا تشارك رابط الربط أو الرمز.
 
 **تنبيه أمان:** رابط الربط التلقائي يحتوي رمزًا سريًا داخل جزء الرابط (#). لا تشاركه ولا تنشر صورة له. النفق مؤقت ويتوقف إذا انتهت جلسة Colab أو توقفت العملية؛ لا توجد آلية مجانية تضمن بقاء Colab متصلًا دائمًا.
 
@@ -1006,13 +1008,13 @@ if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_Both_Together",
     # Pair it securely in the next (optional) handoff cell; never put a token
     # in the public URL or print the secret in this cell.
     from IPython.display import display, HTML
-    _next_url = "https://teledrive-git-feat-teledrive-third-ui-five-themes-abdullah-74f3.vercel.app/connect-next"
+    _next_url = "https://teledrive-git-main-abdullah-74f3.vercel.app/teledrive-next"
     display(HTML(
         '<div style="border:1px solid #2563eb;border-radius:12px;padding:14px;margin:10px 0">'
         '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong><p>جاهزة للربط. '
-        'شغّل الخلية التالية (الربط التلقائي) ثم اضغط زر TeleDrive Next.</p>'
+        'الواجهة هتفتح فورًا؛ للتشغيل الحي شغّل خلية الربط التلقائي واضغط TeleDrive Next.</p>'
         '<a target="_blank" rel="noopener noreferrer" href="' + _next_url + '">'
-        'فتح TeleDrive Next (ربط يدوي)</a></div>'
+        'فتح TeleDrive Next مباشرة</a></div>'
     ))
 
 if _classic_launched or web_server is not None:
@@ -1030,7 +1032,7 @@ import os, re, time, queue, threading, subprocess, urllib.request, urllib.parse,
 from IPython.display import display, HTML
 
 VERCEL_CONNECT_URL = "https://teledrive-git-feat-auto-colab-tunnel-handoff-abdullah-74f3.vercel.app/connect"
-VERCEL_NEXT_CONNECT_URL = "https://teledrive-git-feat-teledrive-third-ui-five-themes-abdullah-74f3.vercel.app/connect-next"
+VERCEL_NEXT_CONNECT_URL = "https://teledrive-git-main-abdullah-74f3.vercel.app/teledrive-next"
 
 if "web_server" not in globals() or web_server is None:
     print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
