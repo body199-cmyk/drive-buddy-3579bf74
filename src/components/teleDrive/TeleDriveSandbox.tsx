@@ -1720,11 +1720,11 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<WorkspacePage>("universal");
-  const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">(() => {
-    if (typeof window === "undefined") return "system";
+  const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">("system");
+  useEffect(() => {
     const saved = window.localStorage.getItem("teledrive-appearance");
-    return saved === "light" || saved === "dim" || saved === "dark" ? saved : "system";
-  });
+    if (saved === "light" || saved === "dim" || saved === "dark") setAppearance(saved);
+  }, []);
   const [prefersDark, setPrefersDark] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
