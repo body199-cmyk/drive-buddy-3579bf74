@@ -133,7 +133,7 @@ function NextDashboardPage() {
           </button>
         ) : !connecting ? (
           <a
-            href="/connect-next"
+            href="/connect-next?manual=1"
             className="rounded-xl border border-border px-4 py-2 font-semibold hover:bg-muted"
           >
             ربط يدوي (اختياري)
