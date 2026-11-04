@@ -1672,8 +1672,8 @@ function SettingsSection({
             <p>
               {localize(
                 language,
-                "M20 يفرض الوضع النهاري؛ الداكن غير متاح.",
-                "M20 enforces light mode; dark mode is unavailable.",
+                "اختيارات مظهر React موجودة بالأعلى. هذا التحكم القديم يخص تفضيل Python فقط وهو نهاري حاليًا.",
+                "React appearance is selected above. This legacy control only affects Python's light-only preference.",
               )}
             </p>
           </div>
@@ -1687,7 +1687,7 @@ function SettingsSection({
               {localize(language, "تطبيق النهاري", "Apply light")}
             </ActionButton>
             <button type="button" className="td-button td-button-secondary" disabled>
-              {localize(language, "الداكن محظور", "Dark is blocked")}
+              {localize(language, "Python: نهاري فقط", "Python: light only")}
             </button>
           </div>
         </div>
