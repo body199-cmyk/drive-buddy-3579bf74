@@ -274,6 +274,7 @@ def test_youtube_progress_updates_are_throttled_but_finish_is_immediate(monkeypa
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(downloader.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_wait_if_paused", lambda task_id: None)
     monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: updates.append(kwargs))
 
     manager._download_to_dir("test-task", "https://www.youtube.com/watch?v=test", "best", tmp_path)
