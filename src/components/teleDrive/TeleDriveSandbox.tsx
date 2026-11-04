@@ -1,12 +1,6 @@
-/* eslint-disable prettier/prettier -- Review-branch layout migration; reformat before merge. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
-  Download,
-  Send,
-  ListChecks,
-  PanelLeftClose,
-  PanelLeftOpen,
   Check,
   Cloud,
   FileArchive,
@@ -27,7 +21,6 @@ import {
   UploadCloud,
   UserRound,
 } from "lucide-react";
-import UniversalSection, { UniversalTasksPanel } from "./UniversalSection";
 import {
   newRequestId,
   unavailableBridge,
@@ -52,6 +45,7 @@ import {
   selectedVisibleCandidates,
   validateAnalyzeInput,
   type MediaType,
+  type Page,
   type ScanMode,
 } from "./viewModel";
 
@@ -181,22 +175,12 @@ function ActionButton({
   );
 }
 
-type WorkspacePage = "universal" | "telegram" | "tasks" | "settings";
-const navItems: Array<{ id: WorkspacePage; icon: ReactNode; ar: string; en: string }> = [
-  {
-    id: "universal",
-    icon: <Download size={19} aria-hidden="true" />,
-    ar: "التحميل الشامل",
-    en: "Universal",
-  },
-  { id: "telegram", icon: <Send size={19} aria-hidden="true" />, ar: "تيليجرام", en: "Telegram" },
-  { id: "tasks", icon: <ListChecks size={19} aria-hidden="true" />, ar: "المهام", en: "Tasks" },
-  {
-    id: "settings",
-    icon: <Settings size={19} aria-hidden="true" />,
-    ar: "الإعدادات",
-    en: "Settings",
-  },
+const navItems: Array<{ id: Page; icon: ReactNode }> = [
+  { id: "connection", icon: <UserRound size={15} aria-hidden="true" /> },
+  { id: "analyze", icon: <Search size={15} aria-hidden="true" /> },
+  { id: "queue", icon: <UploadCloud size={15} aria-hidden="true" /> },
+  { id: "logs", icon: <Terminal size={15} aria-hidden="true" /> },
+  { id: "settings", icon: <Settings size={15} aria-hidden="true" /> },
 ];
 
 function TopBar({
@@ -692,7 +676,6 @@ function AnalyzeSection({
   pendingActions,
   run,
   onNavigate,
-  onSettings,
   onValidationError,
 }: {
   state: LiveUiState | null;
@@ -700,8 +683,7 @@ function AnalyzeSection({
   live: boolean;
   pendingActions: ReadonlySet<string>;
   run: RunAction;
-  onNavigate(page: "queue"): void;
-  onSettings(): void;
+  onNavigate(page: Page): void;
   onValidationError(message: string): void;
 }) {
   const savedSourceLink = state?.analyze?.sourceLink ?? "";
@@ -821,14 +803,6 @@ function AnalyzeSection({
           "Analyze updates candidates only; enqueue is always a separate action.",
         )}
       />
-      <div className="td-destination-banner td-panel">
-        <Folder size={18} aria-hidden="true" />
-        <span>{localize(language, "مجلد حفظ Telegram", "Telegram destination")}:</span>
-        <strong>{state?.folder?.name ?? "—"}</strong>
-        <button type="button" className="td-button td-button-secondary" onClick={onSettings}>
-          {localize(language, "اختيار أو تغيير المجلد", "Choose or change folder")}
-        </button>
-      </div>
       <div className="td-analysis-line td-panel">
         <label className="td-label td-grow" htmlFor="td-link">
           {localize(language, "رابط الرسالة أو القناة", "Message or channel link")}
@@ -1102,20 +1076,11 @@ function QueueSection({
 }) {
   const [stopConfirm, setStopConfirm] = useState(false);
   const rows = state?.queue ?? [];
-  const [statusFilter, setStatusFilter] = useState<"active" | "completed" | "paused" | "failed" | "all">("active");
-  const filteredRows = useMemo(() => rows.filter((row) => {
-    const status = row.status.toLowerCase();
-    if (statusFilter === "all") return true;
-    if (statusFilter === "completed") return ["uploaded", "skipped"].includes(status);
-    if (statusFilter === "paused") return ["paused", "stopped"].includes(status);
-    if (statusFilter === "failed") return ["failed", "needsretry"].includes(status);
-    return ["pending", "queued", "downloading", "uploading", "verifying", "downloaded", "uploadedpendingcheck"].includes(status);
-  }), [rows, statusFilter]);
   // Memoized derivations: re-renders that don't change the queue (notices,
   // confirm dialogs, per-button pending flips) reuse the same row objects and
   // session groups instead of rebuilding them each render.
   const metrics = useMemo(() => queueMetrics(rows), [rows]);
-  const sessions = useMemo(() => groupQueueSessions(filteredRows), [filteredRows]);
+  const sessions = useMemo(() => groupQueueSessions(rows), [rows]);
   const stopOnly = () => {
     setStopConfirm(false);
     void run("queue.stop");
@@ -1165,22 +1130,6 @@ function QueueSection({
           <span>{localize(language, "المنقول", "Transferred")}</span>
           <strong>{formatBytes(metrics.transferredBytes)}</strong>
         </div>
-      </div>
-      <div className="td-queue-filters" role="group" aria-label={localize(language, "تصفية مهام Telegram", "Filter Telegram tasks")}>
-        {([
-          ["active", "النشطة", "Active"],
-          ["completed", "المكتملة", "Completed"],
-          ["paused", "المتوقفة", "Paused"],
-          ["failed", "الفاشلة", "Failed"],
-          ["all", "الكل", "All"],
-        ] as const).map(([filter, ar, en]) => (
-          <button type="button" key={filter}
-            className={statusFilter === filter ? "td-filter is-selected" : "td-filter"}
-            aria-pressed={statusFilter === filter}
-            onClick={() => setStatusFilter(filter)}>
-            {language === "ar" ? ar : en}
-          </button>
-        ))}
       </div>
       <div className="td-transfer-actions">
         <div className="td-button-row td-transfer-actions-primary">
@@ -1303,9 +1252,9 @@ function QueueSection({
         {localize(language, "مجلد الوجهة", "Destination")}:{" "}
         <strong>{state?.folder?.name ?? "—"}</strong>
       </div>
-      {!filteredRows.length ? (
+      {!rows.length ? (
         <div className="td-empty-state">
-          {localize(language, "لا توجد مهام في هذا التصنيف.", "No tasks in this filter.")}
+          {localize(language, "الطابور الحي فارغ.", "The live queue is empty.")}
         </div>
       ) : (
         <div className="td-session-list">
@@ -1358,12 +1307,6 @@ function QueueSection({
                             />
                           </div>
                           <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
-                          {row.speedBytes != null && row.speedBytes > 0 ? (
-                            <small>{formatBytes(row.speedBytes)}/s</small>
-                          ) : null}
-                          {row.remainingSeconds != null && row.remainingSeconds > 0 ? (
-                            <small>{localize(language, "المتبقي", "Remaining")}: {Math.ceil(row.remainingSeconds)}s</small>
-                          ) : null}
                         </td>
                         <td data-label={localize(language, "الحجم", "Size")}>
                           {formatBytes(row.sizeBytes)}
@@ -1390,27 +1333,6 @@ function QueueSection({
                               onClick={() => void run("queue.resume_item", { itemId: row.id })}
                             >
                               {localize(language, "استئناف", "Resume")}
-                            </ActionButton>
-                            <ActionButton
-                              actionId="queue.stop_item"
-                              pendingActions={pendingActions}
-                              live={live}
-                              className="td-link-button td-item-stop"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    localize(
-                                      language,
-                                      "إيقاف هذه المهمة نهائيًا؟",
-                                      "Permanently stop this item?",
-                                    ),
-                                  )
-                                ) {
-                                  void run("queue.stop_item", { itemId: row.id });
-                                }
-                              }}
-                            >
-                              {localize(language, "إلغاء", "Stop")}
                             </ActionButton>
                             <ActionButton
                               actionId="queue.retry_item"
@@ -1674,8 +1596,8 @@ function SettingsSection({
             <p>
               {localize(
                 language,
-                "اختيارات مظهر React موجودة بالأعلى. هذا التحكم القديم يخص تفضيل Python فقط وهو نهاري حاليًا.",
-                "React appearance is selected above. This legacy control only affects Python's light-only preference.",
+                "M20 يفرض الوضع النهاري؛ الداكن غير متاح.",
+                "M20 enforces light mode; dark mode is unavailable.",
               )}
             </p>
           </div>
@@ -1689,7 +1611,7 @@ function SettingsSection({
               {localize(language, "تطبيق النهاري", "Apply light")}
             </ActionButton>
             <button type="button" className="td-button td-button-secondary" disabled>
-              {localize(language, "Python: نهاري فقط", "Python: light only")}
+              {localize(language, "الداكن محظور", "Dark is blocked")}
             </button>
           </div>
         </div>
@@ -1753,27 +1675,7 @@ export type TeleDriveSandboxProps = { bridge?: TeleDriveBridge };
 export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDriveSandboxProps) {
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const [page, setPage] = useState<WorkspacePage>("universal");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">("system");
-  useEffect(() => {
-    const saved = window.localStorage.getItem("teledrive-appearance");
-    if (saved === "light" || saved === "dim" || saved === "dark") setAppearance(saved);
-  }, []);
-  const [prefersDark, setPrefersDark] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setPrefersDark(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  const effectiveTheme = appearance === "system" ? (prefersDark ? "dim" : "light") : appearance;
-  const chooseAppearance = (value: "system" | "light" | "dim" | "dark") => {
-    setAppearance(value);
-    if (typeof window !== "undefined") window.localStorage.setItem("teledrive-appearance", value);
-  };
+  const [page, setPage] = useState<Page>("connection");
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Latest in-flight requestId per actionId — drops stale responses that would clobber newer state/notices. */
   const latestRequest = useRef(new Map<string, string>());
@@ -1943,100 +1845,46 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
     }
   };
 
-  const listFoldersForUniversal = async (parentId: string): Promise<FolderChoice[]> => {
-    const response = await run<{ folders?: FolderChoice[] }>("drive.list_folders", { parentId });
-    return response?.status === "ok" ? (response.data?.folders ?? []) : [];
-  };
-
-  const pages: Record<WorkspacePage, ReactNode> = {
-    universal: (
-      <UniversalSection
+  const pages: Record<Page, ReactNode> = {
+    connection: (
+      <ConnectionSection
         state={liveState}
+        language={language}
+        live={live}
+        pendingActions={pendingActions}
+        run={run}
         bridge={bridge}
-        onSettings={() => setPage("settings")}
-        onTasks={() => setPage("tasks")}
-        onFolderList={listFoldersForUniversal}
       />
     ),
-    telegram: (
+    analyze: (
       <AnalyzeSection
         state={liveState}
         language={language}
         live={live}
         pendingActions={pendingActions}
         run={run}
-        onNavigate={() => setPage("tasks")}
-        onSettings={() => setPage("settings")}
+        onNavigate={setPage}
         onValidationError={(text) => setNotice({ kind: "error", text })}
       />
     ),
-    tasks: (
-      <div className="td-tasks-workspace">
-        <UniversalTasksPanel bridge={bridge} />
-        <QueueSection
-          state={liveState}
-          language={language}
-          live={live}
-          pendingActions={pendingActions}
-          run={run}
-        />
-      </div>
+    queue: (
+      <QueueSection
+        state={liveState}
+        language={language}
+        live={live}
+        pendingActions={pendingActions}
+        run={run}
+      />
     ),
+    logs: <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />,
     settings: (
-      <div className="td-settings-workspace">
-        <section className="td-panel td-appearance-panel" aria-label="إعدادات المظهر">
-          <h2>مظهر TeleDrive</h2>
-          <p className="td-inline-note">
-            اختار الوضع المناسب، أو اتبع إعدادات الهاتف تلقائيًا. اختيارك محفوظ على الجهاز.
-          </p>
-          <div className="td-appearance-options" role="group" aria-label="وضع الألوان">
-            {(
-              [
-                ["system", "تلقائي"],
-                ["light", "فاتح"],
-                ["dim", "Twitter Dim"],
-                ["dark", "داكن"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={appearance === value ? "td-filter is-selected" : "td-filter"}
-                aria-pressed={appearance === value}
-                onClick={() => chooseAppearance(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </section>
-        <SettingsSection
-          state={liveState}
-          language={language}
-          live={live}
-          pendingActions={pendingActions}
-          run={run}
-        />
-        <details className="td-settings-group" open>
-          <summary>
-            <UserRound size={18} /> الحسابات والاتصالات — Telegram / Google Drive
-          </summary>
-          <ConnectionSection
-            state={liveState}
-            language={language}
-            live={live}
-            pendingActions={pendingActions}
-            run={run}
-            bridge={bridge}
-          />
-        </details>
-        <details className="td-settings-group">
-          <summary>
-            <Terminal size={18} /> السجلات والتشخيص
-          </summary>
-          <LogsSection language={language} live={live} pendingActions={pendingActions} run={run} />
-        </details>
-      </div>
+      <SettingsSection
+        state={liveState}
+        language={language}
+        live={live}
+        pendingActions={pendingActions}
+        run={run}
+      />
     ),
   };
 
@@ -2045,15 +1893,8 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       className="td-app"
       lang={language}
       dir={language === "ar" ? "rtl" : "ltr"}
-      data-theme={effectiveTheme}
-      data-sidebar-collapsed={sidebarCollapsed}
+      data-theme="light"
     >
-      <button type="button" className="td-sidebar-toggle"
-        aria-label={sidebarCollapsed ? localize(language, "توسيع الشريط الجانبي", "Expand sidebar") : localize(language, "تصغير الشريط الجانبي", "Collapse sidebar")}
-        aria-expanded={!sidebarCollapsed}
-        onClick={() => setSidebarCollapsed((v) => !v)}>
-        {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
-      </button>
       <TopBar state={liveState} language={language} live={live} />
       <nav
         className="td-nav"
@@ -2068,7 +1909,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
             onClick={() => setPage(item.id)}
           >
             {item.icon}
-            <span className="td-nav-label">{language === "ar" ? item.ar : item.en}</span>
+            {pageLabels[item.id][language]}
           </button>
         ))}
       </nav>
@@ -2101,11 +1942,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
           </div>
         )}
         <NoticeBar notice={notice} />
-        {navItems.map(({ id }) => (
-          <div key={id} className="td-workspace-pane" hidden={page !== id}>
-            {pages[id]}
-          </div>
-        ))}
+        {pages[page]}
       </main>
     </div>
   );
