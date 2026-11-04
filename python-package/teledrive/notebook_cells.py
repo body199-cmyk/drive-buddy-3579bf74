@@ -68,11 +68,16 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
   restore. Logout / Forget deletes that saved sign-in.
 * Google Drive auth is **native Colab** — usually one click on a new VM.
   No desktop OAuth JSON and no pasted authorization code.
-* Cell 4 has a **UI_MODE** dropdown: `Modern_Web_Dashboard` (FastAPI +
-  AJAX Polling, port 8765), `Classic_Gradio_Backup` (port 7860), or
-  `Run_Both_Together` — the default, so both interfaces (and their two
-  printed URLs) come up together. Telegram login secrets are only ever
-  typed into the Gradio fields, never into the Web Dashboard.
+* Cell 4 has a **UI_MODE** dropdown with three interface choices:
+  `Classic_Gradio_Backup` (port 7860), `Modern_Web_Dashboard` (port 8765)
+  and **`TeleDrive_Next`**, the separate React frontend on Vercel.
+  `Run_Both_Together` preserves the old dual-interface experience.
+  **`Run_All_Three`** launches the two old local interfaces and shows
+  the TeleDrive Next link. `Run_Both_Together` stays the default and also
+  displays a Next shortcut without launching a third server. Next reuses the existing Web Dashboard
+  backend (one shared ApplicationContext); it does not launch a second
+  download engine or expose Telegram credentials to Vercel.
+  Cell 5 opens the selected web frontend using a short-lived pairing handoff.
 * Cell 4 starts the UI; Cell 5 attempts the optional Vercel handoff. Cell 11 is the
   live download monitor: run it after starting downloads (you can run it directly
   after Cell 4 without executing cleanup). Do **not** run Cell 8 until downloads
@@ -91,7 +96,8 @@ A dead runtime wipes `/content` — the last cell alone cannot revive the app.
 1. شغّل الخلايا 1–4 بالترتيب. بعد تشغيل الواجهة، نفّذ **الخلية 5: الربط التلقائي مع Vercel**.
 2. الخلية 5 تحاول إنشاء نفق HTTPS مؤقت وتعرض زر **Open Vercel Dashboard**. اضغطه لفتح الموقع وربطه تلقائيًا دون نسخ الرمز.
 3. لو فشل النفق أو التحويل، استخدم الربط اليدوي أدناه: انسخ `TeleDrive Web Dashboard URL` ورمز `TeleDrive pairing token` من مخرجات الخلية 4.
-4. افتح صفحة `/connect` في Vercel والصق الرابط والرمز في الخانتين.
+4. للواجهة الثالثة افتح `/connect-next` (أو استخدم زرها في الخلية 5).
+   للواجهة القديمة استخدم `/connect`. لا تشارك رابط الربط أو الرمز.
 
 **تنبيه أمان:** رابط الربط التلقائي يحتوي رمزًا سريًا داخل جزء الرابط (#). لا تشاركه ولا تنشر صورة له. النفق مؤقت ويتوقف إذا انتهت جلسة Colab أو توقفت العملية؛ لا توجد آلية مجانية تضمن بقاء Colab متصلًا دائمًا.
 
@@ -926,16 +932,16 @@ else:
 
 ctx.checkpoints.restore_and_reconcile()               # safe state, no auto-resume
 
-# UI_MODE (Cell 4 dropdown): pick the interface — both run on the ONE
-# context / event loop / Telegram client / Drive service created above.
-#   Modern_Web_Dashboard  : FastAPI + AJAX Polling page (port 8765),
-#                           live metrics about once a second, no refresh.
-#   Classic_Gradio_Backup : the original Gradio UI (port 7860).
-#   Run_Both_Together     : both (DEFAULT since M46-T03); secure
-#                           Telegram login fields live in Gradio, so
-#                           the modern-only mode is a dead end until a
-#                           saved session restores as "connected".
-UI_MODE = "Run_Both_Together"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "Run_Both_Together"]
+# UI_MODE: Three DIFFERENT frontends, one ApplicationContext/Telegram/Drive.
+#   Classic_Gradio_Backup : original Gradio UI in Colab (port 7860).
+#   Modern_Web_Dashboard  : original FastAPI UI in Colab (port 8765).
+#   TeleDrive_Next        : new Vercel React interface, paired with the SAME
+#                           FastAPI runtime (port 8765). No new server/engine.
+#   Run_Both_Together     : preserve the original two-interface mode.
+#   Run_All_Three         : launch both local UIs and offer TeleDrive Next.
+#   Run_Both_Together     : remains the default; the third frontend is also
+#                           linked without launching an extra server.
+UI_MODE = "Run_Both_Together"  # @param ["Modern_Web_Dashboard", "Classic_Gradio_Backup", "TeleDrive_Next", "Run_Both_Together", "Run_All_Three"]
 WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 
 # share=False: the UI is reachable inside this runtime only. A public link is an
@@ -956,7 +962,7 @@ WEB_DASHBOARD_PORT = 8765  # @param {type:"integer"}
 # UI is already serving re-prints its URL instead of crashing on the port.
 print("selected UI_MODE:", UI_MODE)
 _classic_launched = False
-if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
+if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together", "Run_All_Three"):
     try:
         launch(ctx, share=False, inline=False, blocking=False)
         _classic_launched = True
@@ -966,7 +972,7 @@ if UI_MODE in ("Classic_Gradio_Backup", "Run_Both_Together"):
         print("⚠️ Classic Gradio unavailable:", type(_classic_exc).__name__, _classic_exc)
 
 web_server = None
-if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
+if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together", "TeleDrive_Next", "Run_All_Three"):
     try:
         from teledrive.web_dashboard import launch_web_dashboard
 
@@ -995,6 +1001,20 @@ if UI_MODE in ("Modern_Web_Dashboard", "Run_Both_Together"):
                     type(_classic_fallback_exc).__name__, _classic_fallback_exc,
                 )
 
+if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_Both_Together", "Run_All_Three"):
+    # TeleDrive Next is a remote frontend, not a third backend process.
+    # Pair it securely in the next (optional) handoff cell; never put a token
+    # in the public URL or print the secret in this cell.
+    from IPython.display import display, HTML
+    _next_url = "https://teledrive-git-feat-teledrive-third-ui-five-themes-abdullah-74f3.vercel.app/connect-next"
+    display(HTML(
+        '<div style="border:1px solid #2563eb;border-radius:12px;padding:14px;margin:10px 0">'
+        '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong><p>جاهزة للربط. '
+        'شغّل الخلية التالية (الربط التلقائي) ثم اضغط زر TeleDrive Next.</p>'
+        '<a target="_blank" rel="noopener noreferrer" href="' + _next_url + '">'
+        'فتح TeleDrive Next (ربط يدوي)</a></div>'
+    ))
+
 if _classic_launched or web_server is not None:
     print("ui running (non-blocking); use optional Cell 9 to start keep-alive and Cell 10 to stop it")
 else:
@@ -1010,6 +1030,7 @@ import os, re, time, queue, threading, subprocess, urllib.request, urllib.parse,
 from IPython.display import display, HTML
 
 VERCEL_CONNECT_URL = "https://teledrive-git-feat-auto-colab-tunnel-handoff-abdullah-74f3.vercel.app/connect"
+VERCEL_NEXT_CONNECT_URL = "https://teledrive-git-feat-teledrive-third-ui-five-themes-abdullah-74f3.vercel.app/connect-next"
 
 if "web_server" not in globals() or web_server is None:
     print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
@@ -1091,20 +1112,39 @@ else:
         _now = time.time()
         _handoffs = getattr(ctx, "remote_handoff_tokens", {})
         _handoffs = {k: v for k, v in _handoffs.items() if float(v) > _now}
-        _handoff_token = secrets.token_urlsafe(32)
-        _handoffs[_handoff_token] = _now + 300
-        setattr(ctx, "remote_handoff_tokens", _handoffs)
-        _handoff = (
-            VERCEL_CONNECT_URL.split("#", 1)[0]
-            + "#url=" + urllib.parse.quote(_tunnel_url, safe="")
-            + "&handoff=" + urllib.parse.quote(_handoff_token, safe="")
+        # Mint a different one-time capability per frontend. Never print
+        # credentials, and do not break the legacy handoff path.
+        _mode = globals().get("UI_MODE", "Run_Both_Together")
+        _targets = (
+            [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL),
+             ("Original React", VERCEL_CONNECT_URL)]
+            if _mode in ("Run_All_Three", "Run_Both_Together") else
+            [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL)]
+            if _mode == "TeleDrive_Next" else
+            [("Original React", VERCEL_CONNECT_URL)]
         )
+        _handoff_buttons = []
+        for _label, _connect_url in _targets:
+            _handoff_token = secrets.token_urlsafe(32)
+            _handoffs[_handoff_token] = _now + 300
+            _handoff = (
+                _connect_url.split("#", 1)[0]
+                + "#url=" + urllib.parse.quote(_tunnel_url, safe="")
+                + "&handoff=" + urllib.parse.quote(_handoff_token, safe="")
+            )
+            _handoff_buttons.append(
+                f'<a href="{html.escape(_handoff, quote=True)}" target="_blank" '
+                'rel="noopener noreferrer" '
+                'style="display:inline-block;margin:4px;background:#15803d;color:white;'
+                'padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700">'
+                + html.escape(_label) + '</a>'
+            )
+        setattr(ctx, "remote_handoff_tokens", _handoffs)
         display(HTML(
             '<div style="border:1px solid #16a34a;border-radius:12px;padding:16px;margin:12px 0">'
             '<strong style="font-size:18px">⚡ Open TeleDrive on Vercel</strong>'
-            '<p>اضغط الزر للرجوع إلى لوحة التحكم. الرابط يحتوي رمزًا سريًا مؤقتًا، لا تشاركه.</p>'
-            f'<a href="{html.escape(_handoff, quote=True)}" target="_blank" rel="noopener noreferrer" '
-            'style="display:inline-block;background:#15803d;color:white;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700">Open Vercel Dashboard</a></div>'
+            '<p>اضغط الواجهة التي تفضلها. الروابط تحتوي رموز ربط مؤقتة؛ لا تشاركها.</p>'
+            + ''.join(_handoff_buttons) + '</div>'
         ))
         print("Tunnel established. It will stop when this Colab runtime/process stops.")
     except Exception as _handoff_exc:
