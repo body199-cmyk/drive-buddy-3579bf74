@@ -1100,11 +1100,20 @@ function QueueSection({
 }) {
   const [stopConfirm, setStopConfirm] = useState(false);
   const rows = state?.queue ?? [];
+  const [statusFilter, setStatusFilter] = useState<"active" | "completed" | "paused" | "failed" | "all">("active");
+  const filteredRows = useMemo(() => rows.filter((row) => {
+    const status = row.status.toLowerCase();
+    if (statusFilter === "all") return true;
+    if (statusFilter === "completed") return ["uploaded", "skipped"].includes(status);
+    if (statusFilter === "paused") return ["paused", "stopped"].includes(status);
+    if (statusFilter === "failed") return ["failed", "needsretry"].includes(status);
+    return ["pending", "queued", "downloading", "uploading", "verifying", "downloaded", "uploadedpendingcheck"].includes(status);
+  }), [rows, statusFilter]);
   // Memoized derivations: re-renders that don't change the queue (notices,
   // confirm dialogs, per-button pending flips) reuse the same row objects and
   // session groups instead of rebuilding them each render.
   const metrics = useMemo(() => queueMetrics(rows), [rows]);
-  const sessions = useMemo(() => groupQueueSessions(rows), [rows]);
+  const sessions = useMemo(() => groupQueueSessions(filteredRows), [filteredRows]);
   const stopOnly = () => {
     setStopConfirm(false);
     void run("queue.stop");
@@ -1154,6 +1163,22 @@ function QueueSection({
           <span>{localize(language, "المنقول", "Transferred")}</span>
           <strong>{formatBytes(metrics.transferredBytes)}</strong>
         </div>
+      </div>
+      <div className="td-queue-filters" role="group" aria-label={localize(language, "تصفية مهام Telegram", "Filter Telegram tasks")}>
+        {([
+          ["active", "النشطة", "Active"],
+          ["completed", "المكتملة", "Completed"],
+          ["paused", "المتوقفة", "Paused"],
+          ["failed", "الفاشلة", "Failed"],
+          ["all", "الكل", "All"],
+        ] as const).map(([filter, ar, en]) => (
+          <button type="button" key={filter}
+            className={statusFilter === filter ? "td-filter is-selected" : "td-filter"}
+            aria-pressed={statusFilter === filter}
+            onClick={() => setStatusFilter(filter)}>
+            {language === "ar" ? ar : en}
+          </button>
+        ))}
       </div>
       <div className="td-transfer-actions">
         <div className="td-button-row td-transfer-actions-primary">
@@ -1276,9 +1301,9 @@ function QueueSection({
         {localize(language, "مجلد الوجهة", "Destination")}:{" "}
         <strong>{state?.folder?.name ?? "—"}</strong>
       </div>
-      {!rows.length ? (
+      {!filteredRows.length ? (
         <div className="td-empty-state">
-          {localize(language, "الطابور الحي فارغ.", "The live queue is empty.")}
+          {localize(language, "لا توجد مهام في هذا التصنيف.", "No tasks in this filter.")}
         </div>
       ) : (
         <div className="td-session-list">
@@ -1331,6 +1356,12 @@ function QueueSection({
                             />
                           </div>
                           <small>{(Number(row.progress) || 0).toFixed(0)}%</small>
+                          {row.speedBytes != null && row.speedBytes > 0 ? (
+                            <small>{formatBytes(row.speedBytes)}/s</small>
+                          ) : null}
+                          {row.remainingSeconds != null && row.remainingSeconds > 0 ? (
+                            <small>{localize(language, "المتبقي", "Remaining")}: {Math.ceil(row.remainingSeconds)}s</small>
+                          ) : null}
                         </td>
                         <td data-label={localize(language, "الحجم", "Size")}>
                           {formatBytes(row.sizeBytes)}
