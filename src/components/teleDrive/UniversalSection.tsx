@@ -1,21 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CloudDownload, Folder, Pause, Play, RefreshCw, RotateCcw, XCircle } from "lucide-react";
-import type { FolderChoice, LiveUiState, TeleDriveBridge } from "./bridgeTypes";
+import type { FolderChoice, LiveUiState, TeleDriveBridge, UniversalDownloadTask } from "./bridgeTypes";
 import { formatBytes } from "./viewModel";
 
-type UniversalTask = {
-  id: string;
-  title?: string;
-  status: string;
-  status_ar?: string;
-  progress?: number;
-  quality?: string;
-  size_bytes?: number;
-  speed_bps?: number;
-  folder_name?: string;
-  pause_supported?: boolean;
-  error?: string;
-};
+type UniversalTask = UniversalDownloadTask;
 type UniversalResult = { ok: boolean; message?: string; tasks?: UniversalTask[] };
 type Props = {
   state: LiveUiState | null;
