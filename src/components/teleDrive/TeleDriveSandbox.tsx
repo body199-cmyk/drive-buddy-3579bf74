@@ -5,6 +5,8 @@ import {
   Download,
   Send,
   ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
   Check,
   Cloud,
   FileArchive,
@@ -1752,6 +1754,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
   const [liveState, setLiveState] = useState<LiveUiState | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [page, setPage] = useState<WorkspacePage>("universal");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [appearance, setAppearance] = useState<"system" | "light" | "dim" | "dark">("system");
   useEffect(() => {
     const saved = window.localStorage.getItem("teledrive-appearance");
@@ -2043,7 +2046,14 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
       lang={language}
       dir={language === "ar" ? "rtl" : "ltr"}
       data-theme={effectiveTheme}
+      data-sidebar-collapsed={sidebarCollapsed}
     >
+      <button type="button" className="td-sidebar-toggle"
+        aria-label={sidebarCollapsed ? localize(language, "توسيع الشريط الجانبي", "Expand sidebar") : localize(language, "تصغير الشريط الجانبي", "Collapse sidebar")}
+        aria-expanded={!sidebarCollapsed}
+        onClick={() => setSidebarCollapsed((v) => !v)}>
+        {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
+      </button>
       <TopBar state={liveState} language={language} live={live} />
       <nav
         className="td-nav"
@@ -2058,7 +2068,7 @@ export default function TeleDriveSandbox({ bridge = unavailableBridge }: TeleDri
             onClick={() => setPage(item.id)}
           >
             {item.icon}
-            {language === "ar" ? item.ar : item.en}
+            <span className="td-nav-label">{language === "ar" ? item.ar : item.en}</span>
           </button>
         ))}
       </nav>
