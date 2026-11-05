@@ -1036,6 +1036,9 @@ VERCEL_NEXT_CONNECT_URL = "https://teledrive-git-main-abdullah-74f3.vercel.app/t
 if "web_server" not in globals() or web_server is None:
     print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
 else:
+    # Reset on EVERY invocation, even when an early validation/download fails.
+    # A previous run's flag must never tear down its still-active tunnel.
+    _tunnel_created_this_run = False
     try:
         _port = int(web_server.config.port)
         _token = str(getattr(ctx, "remote_control_token", "") or "")
