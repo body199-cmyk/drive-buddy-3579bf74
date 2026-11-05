@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import ast
 import json
+import re
+import textwrap
 
 from teledrive import notebook_cells
 
@@ -30,8 +32,8 @@ def test_cell4_offers_three_interfaces_and_retains_legacy_modes():
     ) in source
     assert "launch_web_dashboard(ctx, port=WEB_DASHBOARD_PORT)" in source
     assert "launch(ctx, share=False, inline=False, blocking=False)" in source
-    assert "/teledrive-next" in source
-    assert "/connect-next" not in source
+    assert "شغّل الخلية الخامسة" in source
+    assert "VERCEL_NEXT_CONNECT_URL" not in source
     assert "remote_control_token" not in source
 
 
@@ -46,6 +48,10 @@ def test_cell5_handoff_targets_new_frontend_without_removing_old_one():
     assert "secrets.token_urlsafe(32)" in source
     assert "html.escape(_handoff, quote=True)" in source
     assert "remote_handoff_tokens" in source
+    assert "_reuse_tunnel" in source
+    assert "_teledrive_tunnel_url" in source
+    assert "if _reuse_tunnel:" in source
+    assert 'if _mode in ("TeleDrive_Next", "Run_Both_Together") else' in source
 
 
 def test_notebook_artifacts_generated_from_canonical_source():
@@ -70,6 +76,9 @@ def test_next_frontend_opens_directly_and_pairs_without_an_auth_form():
     assert "window.history.replaceState" in content
     assert 'href="/connect-next?manual=1"' in content  # Optional manual fallback only.
     assert "window.localStorage.setItem" not in content
+    assert "window.sessionStorage.setItem" in content
+    assert "window.sessionStorage.getItem" in content
+    assert "window.sessionStorage.removeItem" in content
 
 
 def test_old_next_connect_links_redirect_to_dashboard():
@@ -78,3 +87,41 @@ def test_old_next_connect_links_redirect_to_dashboard():
     assert 'window.location.replace("/teledrive-next" + window.location.hash)' in content
     assert 'get("manual") !== "1"' in content
     assert "showManualForm" in content
+
+
+
+def test_handoff_cell_rerun_keeps_existing_tunnel_alive():
+    """An existing healthy Cloudflare process must not be killed on rerun."""
+    source = notebook_cells.CELL_4B_VERCEL_HANDOFF
+    start = source.index("        # Keep the same healthy tunnel across handoff-cell reruns.")
+    end = source.index("        _now = time.time()", start)
+    code = textwrap.dedent(source[start:end])
+
+    class FakeProcess:
+        terminated = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+            raise AssertionError("Healthy tunnel must not be terminated")
+
+    process = FakeProcess()
+    context = object()
+    environment = {
+        "_port": 8765,
+        "ctx": context,
+        "_teledrive_tunnel": process,
+        "_teledrive_tunnel_url": "https://my-long-tunnel.trycloudflare.com",
+        "_teledrive_tunnel_port": 8765,
+        "_teledrive_tunnel_ctx_id": id(context),
+        "re": re,
+        "print": lambda *args: None,
+    }
+    exec(compile(code, "<tunnel reuse>", "exec"), environment)
+    assert environment["_reuse_tunnel"] is True
+    assert environment["_tunnel_url"] == "https://my-long-tunnel.trycloudflare.com"
+    assert environment["_teledrive_tunnel"] is process
+    assert environment["_tunnel_created_this_run"] is False
+    assert not process.terminated
