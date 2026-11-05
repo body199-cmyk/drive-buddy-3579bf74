@@ -1008,13 +1008,12 @@ if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_Both_Together",
     # Pair it securely in the next (optional) handoff cell; never put a token
     # in the public URL or print the secret in this cell.
     from IPython.display import display, HTML
-    _next_url = "https://teledrive-git-main-abdullah-74f3.vercel.app/teledrive-next"
     display(HTML(
         '<div style="border:1px solid #2563eb;border-radius:12px;padding:14px;margin:10px 0">'
-        '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong><p>جاهزة للربط. '
-        'الواجهة هتفتح فورًا؛ للتشغيل الحي شغّل خلية الربط التلقائي واضغط TeleDrive Next.</p>'
-        '<a target="_blank" rel="noopener noreferrer" href="' + _next_url + '">'
-        'فتح TeleDrive Next مباشرة</a></div>'
+        '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong>'
+        '<p>لتفتح الواجهة الجديدة وهي متصلة تلقائيًا بـColab، شغّل الخلية الخامسة '
+        'واضغط زر TeleDrive Next فقط. لا تحتاج لفتح الواجهة القديمة أو إدخال رمز.</p>'
+        '</div>'
     ))
 
 if _classic_launched or web_server is not None:
@@ -1077,7 +1076,7 @@ else:
             _old_tunnel is not None
             and _old_tunnel.poll() is None
             and isinstance(_old_url, str)
-            and bool(re.fullmatch(r"https://[a-z0-9-]+\\.trycloudflare\\.com", _old_url, re.I))
+            and bool(re.fullmatch(r"https://[a-z0-9-]+\.trycloudflare\.com", _old_url, re.I))
             and globals().get("_teledrive_tunnel_port") == _port
             and globals().get("_teledrive_tunnel_ctx_id") == id(ctx)
         )
@@ -1121,7 +1120,7 @@ else:
                     _line = _tunnel_log.get(timeout=0.5)
                 except queue.Empty:
                     continue
-                _match = re.search(r"https://[a-z0-9-]+\\.trycloudflare\\.com", _line, re.I)
+                _match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", _line, re.I)
                 if _match:
                     _tunnel_url = _match.group(0)
                     break
@@ -1143,7 +1142,7 @@ else:
              ("Original React", VERCEL_CONNECT_URL)]
             if _mode == "Run_All_Three" else
             [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL)]
-            if _mode == "TeleDrive_Next" else
+            if _mode in ("TeleDrive_Next", "Run_Both_Together") else
             [("Original React", VERCEL_CONNECT_URL)]
         )
         _handoff_buttons = []
