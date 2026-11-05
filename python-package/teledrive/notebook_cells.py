@@ -1008,13 +1008,12 @@ if web_server is not None and UI_MODE in ("TeleDrive_Next", "Run_Both_Together",
     # Pair it securely in the next (optional) handoff cell; never put a token
     # in the public URL or print the secret in this cell.
     from IPython.display import display, HTML
-    _next_url = "https://teledrive-git-main-abdullah-74f3.vercel.app/teledrive-next"
     display(HTML(
         '<div style="border:1px solid #2563eb;border-radius:12px;padding:14px;margin:10px 0">'
-        '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong><p>جاهزة للربط. '
-        'الواجهة هتفتح فورًا؛ للتشغيل الحي شغّل خلية الربط التلقائي واضغط TeleDrive Next.</p>'
-        '<a target="_blank" rel="noopener noreferrer" href="' + _next_url + '">'
-        'فتح TeleDrive Next مباشرة</a></div>'
+        '<strong>✨ TeleDrive Next — الواجهة الثالثة</strong>'
+        '<p>لتفتح الواجهة الجديدة وهي متصلة تلقائيًا بـColab، شغّل الخلية الخامسة '
+        'واضغط زر TeleDrive Next فقط. لا تحتاج لفتح الواجهة القديمة أو إدخال رمز.</p>'
+        '</div>'
     ))
 
 if _classic_launched or web_server is not None:
@@ -1037,6 +1036,9 @@ VERCEL_NEXT_CONNECT_URL = "https://teledrive-git-main-abdullah-74f3.vercel.app/t
 if "web_server" not in globals() or web_server is None:
     print("⚠️ لا توجد واجهة ويب حديثة تعمل. الواجهة المحلية/Gradio تظل متاحة.")
 else:
+    # Reset on EVERY invocation, even when an early validation/download fails.
+    # A previous run's flag must never tear down its still-active tunnel.
+    _tunnel_created_this_run = False
     try:
         _port = int(web_server.config.port)
         _token = str(getattr(ctx, "remote_control_token", "") or "")
@@ -1069,47 +1071,68 @@ else:
                     os.remove(_download_tmp)
         os.chmod(_tunnel_bin, 0o755)
 
-        # Stop the previous process if this cell is run again.
+        # Keep the same healthy tunnel across handoff-cell reruns.
+        # Replacing it on every click broke already-connected React tabs.
         _old_tunnel = globals().get("_teledrive_tunnel")
-        if _old_tunnel is not None and _old_tunnel.poll() is None:
-            _old_tunnel.terminate()
-            try:
-                _old_tunnel.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _old_tunnel.kill()
-                _old_tunnel.wait(timeout=5)
-
-        _tunnel_log = queue.Queue()
-        _teledrive_tunnel = subprocess.Popen(
-            [_tunnel_bin, "tunnel", "--url", f"http://127.0.0.1:{_port}", "--no-autoupdate"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
+        _old_url = globals().get("_teledrive_tunnel_url")
+        _reuse_tunnel = (
+            _old_tunnel is not None
+            and _old_tunnel.poll() is None
+            and isinstance(_old_url, str)
+            and bool(re.fullmatch(r"https://[a-z0-9-]+\.trycloudflare\.com", _old_url, re.I))
+            and globals().get("_teledrive_tunnel_port") == _port
+            and globals().get("_teledrive_tunnel_ctx_id") == id(ctx)
         )
+        _tunnel_created_this_run = False
+        if _reuse_tunnel:
+            _teledrive_tunnel = _old_tunnel
+            _tunnel_url = _old_url
+            print("Reusing existing Colab tunnel; connected dashboard tabs remain valid.")
+        else:
+            # A stale process from a previous Colab context/port cannot be reused.
+            if _old_tunnel is not None and _old_tunnel.poll() is None:
+                _old_tunnel.terminate()
+                try:
+                    _old_tunnel.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    _old_tunnel.kill()
+                    _old_tunnel.wait(timeout=5)
 
-        def _read_tunnel_log():
-            if _teledrive_tunnel.stdout:
-                for _line in _teledrive_tunnel.stdout:
-                    _tunnel_log.put(_line.rstrip())
+            _tunnel_log = queue.Queue()
+            _teledrive_tunnel = subprocess.Popen(
+                [_tunnel_bin, "tunnel", "--url", f"http://127.0.0.1:{_port}", "--no-autoupdate"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            _tunnel_created_this_run = True
 
-        threading.Thread(target=_read_tunnel_log, daemon=True).start()
-        _tunnel_url = None
-        _deadline = time.time() + 60
-        while time.time() < _deadline:
-            if _teledrive_tunnel.poll() is not None:
-                raise RuntimeError("Cloudflare Tunnel exited before returning a URL.")
-            try:
-                _line = _tunnel_log.get(timeout=0.5)
-            except queue.Empty:
-                continue
-            _match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", _line, re.I)
-            if _match:
-                _tunnel_url = _match.group(0)
-                break
+            def _read_tunnel_log():
+                if _teledrive_tunnel.stdout:
+                    for _line in _teledrive_tunnel.stdout:
+                        _tunnel_log.put(_line.rstrip())
 
-        if not _tunnel_url:
-            raise RuntimeError("Timed out waiting for a Cloudflare Quick Tunnel URL.")
+            threading.Thread(target=_read_tunnel_log, daemon=True).start()
+            _tunnel_url = None
+            _deadline = time.time() + 60
+            while time.time() < _deadline:
+                if _teledrive_tunnel.poll() is not None:
+                    raise RuntimeError("Cloudflare Tunnel exited before returning a URL.")
+                try:
+                    _line = _tunnel_log.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+                _match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", _line, re.I)
+                if _match:
+                    _tunnel_url = _match.group(0)
+                    break
+
+            if not _tunnel_url:
+                raise RuntimeError("Timed out waiting for a Cloudflare Quick Tunnel URL.")
+            _teledrive_tunnel_url = _tunnel_url
+            _teledrive_tunnel_port = _port
+            _teledrive_tunnel_ctx_id = id(ctx)
 
         _now = time.time()
         _handoffs = getattr(ctx, "remote_handoff_tokens", {})
@@ -1120,9 +1143,9 @@ else:
         _targets = (
             [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL),
              ("Original React", VERCEL_CONNECT_URL)]
-            if _mode in ("Run_All_Three", "Run_Both_Together") else
+            if _mode == "Run_All_Three" else
             [("TeleDrive Next", VERCEL_NEXT_CONNECT_URL)]
-            if _mode == "TeleDrive_Next" else
+            if _mode in ("TeleDrive_Next", "Run_Both_Together") else
             [("Original React", VERCEL_CONNECT_URL)]
         )
         _handoff_buttons = []
@@ -1148,12 +1171,14 @@ else:
             '<p>اضغط الواجهة التي تفضلها. الروابط تحتوي رموز ربط مؤقتة؛ لا تشاركها.</p>'
             + ''.join(_handoff_buttons) + '</div>'
         ))
-        print("Tunnel established. It will stop when this Colab runtime/process stops.")
+        print("TeleDrive Next link ready. Existing tunnel kept alive between handoff runs.")
     except Exception as _handoff_exc:
         print("⚠️ تعذر الربط التلقائي؛ الواجهة المحلية تظل متاحة ويمكنك استخدام الربط اليدوي.")
         print(type(_handoff_exc).__name__ + ":", str(_handoff_exc))
+        # On a UI/handoff error, never take down a pre-existing healthy
+        # tunnel and disconnect other tabs. Only clean up a new failed start.
         _td_proc = globals().get("_teledrive_tunnel")
-        if _td_proc is not None and _td_proc.poll() is None:
+        if globals().get("_tunnel_created_this_run", False) and _td_proc is not None and _td_proc.poll() is None:
             _td_proc.terminate()
             try:
                 _td_proc.wait(timeout=5)
