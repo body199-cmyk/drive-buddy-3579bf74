@@ -106,16 +106,17 @@ def test_work_directory_creation_failure_marks_task_failed(monkeypatch, tmp_path
 
 
 @pytest.mark.parametrize(
-    "message",
+    ("message", "expected"),
     [
-        "Sign in to confirm you're not a bot",
-        "Sign in to confirm you’re not a bot",
-        "ERROR: HTTP Error 429: Too Many Requests",
-        "LOGIN_REQUIRED",
+        ("Sign in to confirm you're not a bot", "environment_or_ip_block"),
+        ("Sign in to confirm you’re not a bot", "environment_or_ip_block"),
+        ("ERROR: HTTP Error 429: Too Many Requests", "rate_limited"),
+        ("LOGIN_REQUIRED", "session_required"),
+        ("HTTP Error 403: Forbidden", "po_token_or_ip_block"),
     ],
 )
-def test_youtube_environment_failures_are_classified_as_ip_or_bot_blocks(message):
-    assert _classify_youtube_failure(message) == "environment_or_ip_block"
+def test_youtube_failures_are_classified_by_actionable_cause(message, expected):
+    assert _classify_youtube_failure(message) == expected
 
 
 def test_youtube_cookie_prompt_is_classified_as_session_requirement():
@@ -156,6 +157,7 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
     download_dir = tmp_path / "download"
     download_dir.mkdir()
     manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: "http://127.0.0.1:4416")
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
     monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
@@ -168,18 +170,105 @@ def test_youtube_bot_challenge_retries_with_fallback_player(monkeypatch, tmp_pat
     )
 
     assert len(attempts) == 2
-    assert "extractor_args" not in attempts[0]
+    assert attempts[0]["extractor_args"]["youtube"]["player_client"] == ["mweb", "web_safari"]
+    assert attempts[0]["extractor_args"]["youtubepot-bgutilhttp"]["base_url"] == "http://127.0.0.1:4416"
     assert attempts[0]["audio_multistreams"] is True
     assert attempts[0]["merge_output_format"] == "mkv"
     assert "ba[language^=ar]+ba[language^=en]" in attempts[0]["format"]
     assert attempts[0]["sleep_interval_requests"] == 1
     assert attempts[0]["concurrent_fragment_downloads"] == 8
     assert attempts[1]["concurrent_fragment_downloads"] == 8
-    assert attempts[1]["extractor_args"]["youtube"]["player_client"] == [
-        "tv",
-        "web_safari",
-    ]
+    assert attempts[1]["extractor_args"]["youtubepot-bgutilhttp"]["base_url"] == "http://127.0.0.1:4416"
+    assert "youtube" not in attempts[1]["extractor_args"]
     assert [path.name for path in files] == ["sample.mkv"]
+
+
+
+
+@pytest.mark.parametrize(
+    "challenge_text",
+    [
+        "Sign in to confirm you're not a bot",
+        "Sign in to confirm you’re not a bot",
+    ],
+)
+def test_youtube_challenge_uses_legacy_player_only_after_token_and_default_fail(
+    monkeypatch, tmp_path, challenge_text
+):
+    import yt_dlp
+
+    attempts = []
+
+    download_dir = tmp_path / "download"
+    download_dir.mkdir()
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            attempts.append(dict(options))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            if len(attempts) < 3:
+                raise yt_dlp.utils.DownloadError(challenge_text)
+            (download_dir / "sample.mkv").write_bytes(b"video")
+
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: "http://127.0.0.1:4416")
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
+
+    files = manager._download_to_dir(
+        "test-task",
+        "https://www.youtube.com/watch?v=video-id",
+        "best",
+        download_dir,
+    )
+
+    assert len(attempts) == 3
+    assert attempts[2]["extractor_args"]["youtube"]["player_client"] == ["tv", "web_safari"]
+    assert attempts[2]["extractor_args"]["youtubepot-bgutilhttp"]["base_url"] == "http://127.0.0.1:4416"
+    assert [path.name for path in files] == ["sample.mkv"]
+
+
+def test_youtube_rate_limit_stops_without_repeating_player_requests(monkeypatch, tmp_path):
+    import yt_dlp
+
+    attempts = []
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            attempts.append(dict(options))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def download(self, urls):
+            raise yt_dlp.utils.DownloadError("HTTP Error 429: Too Many Requests")
+
+    manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: "http://127.0.0.1:4416")
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
+    monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="HTTP 429"):
+        manager._download_to_dir(
+            "test-task",
+            "https://www.youtube.com/watch?v=video-id",
+            "best",
+            tmp_path,
+        )
+
+    assert len(attempts) == 1
 
 
 def test_youtube_multiaudio_selector_prefers_both_languages_and_falls_back():
@@ -231,6 +320,7 @@ def test_ytdlp_keeps_video_links_single_and_playlist_links_expanded(
     download_dir = tmp_path / "download"
     download_dir.mkdir()
     manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: None)
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
     monkeypatch.setattr(manager, "_update", lambda *args, **kwargs: None)
@@ -283,6 +373,7 @@ def test_youtube_playlist_downloads_all_items_in_order_and_reports_position(
     download_dir = tmp_path / "download"
     download_dir.mkdir()
     manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: None)
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)
     monkeypatch.setattr(manager, "_wait_if_paused", lambda task_id: None)
@@ -333,6 +424,7 @@ def test_youtube_progress_updates_are_throttled_but_finish_is_immediate(monkeypa
             (tmp_path / "sample.mp4").write_bytes(b"video")
 
     manager = UniversalDownloadManager(ctx=None)
+    monkeypatch.setattr(manager, "_ensure_youtube_pot_provider", lambda task_id: None)
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(downloader.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(manager, "_is_cancelled", lambda task_id: False)

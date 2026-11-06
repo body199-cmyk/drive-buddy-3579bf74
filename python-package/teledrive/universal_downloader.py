@@ -35,15 +35,18 @@ def _classify_youtube_failure(message: str) -> str:
     normalized = (message or "").translate(
         str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
     ).casefold()
-    if (
-        "sign in to confirm you're not a bot" in normalized
-        or "login_required" in normalized
-        or "http error 429" in normalized
-        or "too many requests" in normalized
-    ):
+    if "sign in to confirm you're not a bot" in normalized:
         return "environment_or_ip_block"
-    if "use --cookies-from-browser" in normalized or "use --cookies" in normalized:
+    if "http error 429" in normalized or "too many requests" in normalized:
+        return "rate_limited"
+    if (
+        "login_required" in normalized
+        or "use --cookies-from-browser" in normalized
+        or "use --cookies" in normalized
+    ):
         return "session_required"
+    if "http error 403" in normalized:
+        return "po_token_or_ip_block"
     return "other"
 
 
@@ -230,6 +233,13 @@ class UniversalDownloadManager:
         # Multiple download workers may start together. Serialize pip operations
         # so they cannot concurrently upgrade/install yt-dlp and gdown.
         self._package_lock = threading.Lock()
+        # Provision the optional YouTube PO-token provider once per runtime.
+        # Its HTTP server binds to loopback only and is never exposed publicly.
+        self._youtube_provider_lock = threading.Lock()
+        self._youtube_provider_checked = False
+        self._youtube_provider_base_url: str | None = None
+        self._youtube_provider_error = ""
+        self._youtube_provider_process: Any = None
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -547,6 +557,289 @@ class UniversalDownloadManager:
                 + ", ".join(still_missing)
             )
 
+
+    def _ensure_bgutil_node_runtime(self) -> tuple[str, str]:
+        """Return a supported Node.js/npm pair, installing a verified local Node 22 if needed."""
+        import hashlib
+        import platform
+        import re
+        import subprocess
+        import tarfile
+        from pathlib import PurePosixPath
+
+        def _version(command: list[str]) -> tuple[int, ...]:
+            try:
+                result = subprocess.run(
+                    command, check=False, capture_output=True, text=True, timeout=10
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                return ()
+            match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", result.stdout or result.stderr or "")
+            return tuple(int(part) for part in match.groups()) if result.returncode == 0 and match else ()
+
+        system_node = shutil.which("node")
+        system_npm = shutil.which("npm")
+        if system_node and system_npm:
+            if _version([system_node, "--version"]) >= (22, 0, 0) and _version([system_npm, "--version"]) >= (9, 0, 0):
+                return system_node, system_npm
+
+        node_version = "22.23.4"
+        architecture = {"x86_64": "x64", "aarch64": "arm64"}.get(platform.machine().lower())
+        if architecture is None:
+            raise RuntimeError(f"Unsupported architecture for the YouTube token provider: {platform.machine()}")
+
+        runtime_root = Path(TEMP_DIR) / "bgutil-node-runtime"
+        install_root = runtime_root / f"node-v{node_version}-linux-{architecture}"
+        node_path = install_root / "bin" / "node"
+        npm_path = install_root / "bin" / "npm"
+        if not node_path.is_file() or not npm_path.is_file():
+            runtime_root.mkdir(parents=True, exist_ok=True)
+            archive_name = f"node-v{node_version}-linux-{architecture}.tar.xz"
+            base_url = f"https://nodejs.org/dist/v{node_version}"
+            request_headers = {"User-Agent": "TeleDrive-YouTube-PO-Token-Setup"}
+            with urllib.request.urlopen(
+                urllib.request.Request(f"{base_url}/SHASUMS256.txt", headers=request_headers),
+                timeout=30,
+            ) as response:
+                checksum_text = response.read(256 * 1024).decode("utf-8", errors="replace")
+            expected_hash = next(
+                (
+                    line.split()[0]
+                    for line in checksum_text.splitlines()
+                    if len(line.split()) >= 2 and line.split()[-1].lstrip("*") == archive_name
+                ),
+                None,
+            )
+            if not expected_hash or len(expected_hash) != 64:
+                raise RuntimeError("Could not verify the official Node.js archive checksum.")
+
+            archive_path = runtime_root / archive_name
+            partial_path = runtime_root / f"{archive_name}.part"
+            digest = hashlib.sha256()
+            total = 0
+            with urllib.request.urlopen(
+                urllib.request.Request(f"{base_url}/{archive_name}", headers=request_headers),
+                timeout=60,
+            ) as response, partial_path.open("wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > 80 * 1024 * 1024:
+                        raise RuntimeError("Official Node.js archive exceeded the expected size limit.")
+                    digest.update(chunk)
+                    output.write(chunk)
+            if digest.hexdigest().lower() != expected_hash.lower():
+                partial_path.unlink(missing_ok=True)
+                raise RuntimeError("Official Node.js archive failed SHA-256 verification.")
+            os.replace(partial_path, archive_path)
+
+            with tarfile.open(archive_path, "r:xz") as archive:
+                root_resolved = runtime_root.resolve()
+                members = archive.getmembers()
+                for member in members:
+                    relative = PurePosixPath(member.name)
+                    if relative.is_absolute() or ".." in relative.parts or member.isdev():
+                        raise RuntimeError("Unsafe path or device entry in the Node.js archive.")
+                    target = (runtime_root / Path(*relative.parts)).resolve()
+                    if target != root_resolved and root_resolved not in target.parents:
+                        raise RuntimeError("Node.js archive path escaped its installation directory.")
+                    if member.issym() or member.islnk():
+                        link_target = (target.parent / member.linkname).resolve()
+                        if link_target != root_resolved and root_resolved not in link_target.parents:
+                            raise RuntimeError("Node.js archive contains an unsafe symbolic link.")
+                try:
+                    archive.extractall(path=runtime_root, filter="data")
+                except TypeError:
+                    archive.extractall(path=runtime_root)
+            archive_path.unlink(missing_ok=True)
+
+        if not node_path.is_file() or not npm_path.is_file():
+            raise RuntimeError("Node.js 22 installation did not produce node and npm executables.")
+        if _version([str(node_path), "--version"]) < (22, 0, 0):
+            raise RuntimeError("The installed Node.js runtime is older than version 22.")
+        if _version([str(npm_path), "--version"]) < (9, 0, 0):
+            raise RuntimeError("The installed npm runtime is older than version 9.")
+        return str(node_path), str(npm_path)
+
+    def _ensure_youtube_pot_provider(self, task_id: str) -> str | None:
+        """Provision BgUtils once per runtime and return its loopback URL.
+
+        The provider supplies per-video PO tokens for yt-dlp's mweb client.
+        It is not a proxy and cannot guarantee that YouTube will trust a blocked
+        Colab IP. Setup failures are non-fatal: normal yt-dlp fallbacks remain.
+        """
+        with self._youtube_provider_lock:
+            if self._youtube_provider_checked:
+                return self._youtube_provider_base_url
+            self._youtube_provider_checked = True
+            self._update(
+                task_id,
+                status_ar="🔐 تجهيز موفر التحقق الخاص بيوتيوب (مرة واحدة لهذه الجلسة)...",
+            )
+            try:
+                import importlib
+                import importlib.metadata
+                import json
+                import socket
+                import subprocess
+                import sys
+                from urllib.error import URLError
+
+                provider_version = "2.0.2"
+                try:
+                    installed_version = importlib.metadata.version("bgutil-ytdlp-pot-provider")
+                except importlib.metadata.PackageNotFoundError:
+                    installed_version = ""
+                if installed_version != provider_version:
+                    install = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "pip",
+                            "install",
+                            "-q",
+                            "--disable-pip-version-check",
+                            f"bgutil-ytdlp-pot-provider=={provider_version}",
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                    )
+                    if install.returncode != 0:
+                        detail = (install.stderr or install.stdout or "").strip()[-400:]
+                        raise RuntimeError(f"Could not install the pinned PO-token plugin. {detail}")
+                    importlib.invalidate_caches()
+
+                importlib.import_module("yt_dlp_plugins.extractor.getpot_bgutil_http")
+
+                provider_root = Path(TEMP_DIR) / f"bgutil-ytdlp-pot-provider-{provider_version}"
+                server_dir = provider_root / "server"
+                package_json = server_dir / "package.json"
+                if not package_json.is_file() or not (server_dir / "package-lock.json").is_file():
+                    if provider_root.exists():
+                        shutil.rmtree(provider_root)
+                    clone = subprocess.run(
+                        [
+                            "git",
+                            "clone",
+                            "--depth",
+                            "1",
+                            "--single-branch",
+                            "--branch",
+                            provider_version,
+                            "https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git",
+                            str(provider_root),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                    )
+                    if clone.returncode != 0:
+                        detail = (clone.stderr or clone.stdout or "").strip()[-400:]
+                        raise RuntimeError(f"Could not fetch the pinned BgUtils provider source. {detail}")
+
+                package_info = json.loads(package_json.read_text(encoding="utf-8"))
+                if package_info.get("version") != provider_version:
+                    raise RuntimeError("BgUtils server and Python plugin versions do not match.")
+
+                node_path, npm_path = self._ensure_bgutil_node_runtime()
+                environment = os.environ.copy()
+                environment["PATH"] = str(Path(node_path).parent) + os.pathsep + environment.get("PATH", "")
+                npx_path = shutil.which("npx", path=environment["PATH"])
+                if not npx_path:
+                    raise RuntimeError("The supported Node.js runtime does not include npx.")
+
+                install_server = subprocess.run(
+                    [npm_path, "ci", "--no-audit", "--no-fund"],
+                    cwd=str(server_dir),
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                )
+                if install_server.returncode != 0:
+                    detail = (install_server.stderr or install_server.stdout or "").strip()[-500:]
+                    raise RuntimeError(f"Could not install BgUtils server dependencies. {detail}")
+
+                compile_server = subprocess.run(
+                    [npx_path, "tsc", "--pretty", "false"],
+                    cwd=str(server_dir),
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                if compile_server.returncode != 0:
+                    detail = (compile_server.stderr or compile_server.stdout or "").strip()[-500:]
+                    raise RuntimeError(f"Could not compile BgUtils server. {detail}")
+                if not (server_dir / "build" / "main.js").is_file():
+                    raise RuntimeError("BgUtils server build is missing its main entry point.")
+
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                    listener.bind(("127.0.0.1", 0))
+                    port = int(listener.getsockname()[1])
+                base_url = f"http://127.0.0.1:{port}"
+                process = subprocess.Popen(
+                    [
+                        node_path,
+                        str(server_dir / "build" / "main.js"),
+                        "--host",
+                        "127.0.0.1",
+                        "--port",
+                        str(port),
+                    ],
+                    cwd=str(server_dir),
+                    env=environment,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                self._youtube_provider_process = process
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise RuntimeError("BgUtils token server exited during startup.")
+                    try:
+                        with urllib.request.urlopen(f"{base_url}/ping", timeout=1) as response:
+                            status = json.loads(response.read(4096).decode("utf-8"))
+                        if status.get("version") == provider_version:
+                            self._youtube_provider_base_url = base_url
+                            self._update(
+                                task_id,
+                                status_ar="🔐 تم تجهيز موفر PO Token؛ جاري بدء تنزيل يوتيوب...",
+                            )
+                            return base_url
+                        raise RuntimeError("BgUtils token server returned an unexpected version.")
+                    except (URLError, TimeoutError, OSError):
+                        time.sleep(0.25)
+                raise RuntimeError("Timed out while starting the local BgUtils token server.")
+            except Exception as exc:  # noqa: BLE001
+                process = self._youtube_provider_process
+                if process is not None and process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
+                self._youtube_provider_error = redact(str(exc))[:240]
+                _log.warning(
+                    "YouTube PO-token provider unavailable; continuing with yt-dlp fallbacks: %s",
+                    self._youtube_provider_error,
+                )
+                self._update(
+                    task_id,
+                    status_ar="⚠️ تعذر تجهيز PO Token؛ سيتم تجربة طرق yt-dlp البديلة...",
+                )
+                return None
+
     def _run_task(self, task_id: str, url: str, quality: str, folder_id: str) -> None:
         work_dir = Path(TEMP_DIR) / "universal_dl" / task_id
         try:
@@ -861,19 +1154,33 @@ class UniversalDownloadManager:
                 }
             ]
 
+        pot_base_url = self._ensure_youtube_pot_provider(task_id) if is_youtube else None
         attempts = [ydl_opts]
         if is_youtube:
-            # Try the normal current yt-dlp defaults first. Only after YouTube
-            # rejects that attempt as a bot, retry a second supported client
-            # profile; forcing this profile for every video can break videos
-            # that work with the default player.
+            attempts = []
+            if pot_base_url:
+                # yt-dlp currently recommends mweb with a PO-token provider
+                # for GVS requests. The provider URL is loopback-only.
+                token_opts = dict(ydl_opts)
+                token_opts["extractor_args"] = {
+                    "youtube": {"player_client": ["mweb", "web_safari"]},
+                    "youtubepot-bgutilhttp": {"base_url": pot_base_url},
+                }
+                attempts.append(token_opts)
+
+                default_opts = dict(ydl_opts)
+                default_opts["extractor_args"] = {
+                    "youtubepot-bgutilhttp": {"base_url": pot_base_url}
+                }
+                attempts.append(default_opts)
+
             fallback_opts = dict(ydl_opts)
-            fallback_opts["extractor_args"] = {
-                "youtube": {"player_client": ["tv", "web_safari"]}
-            }
+            fallback_args = {"youtube": {"player_client": ["tv", "web_safari"]}}
+            if pot_base_url:
+                fallback_args["youtubepot-bgutilhttp"] = {"base_url": pot_base_url}
+            fallback_opts["extractor_args"] = fallback_args
             attempts.append(fallback_opts)
 
-        last_bot_error = None
         for attempt_index, attempt_opts in enumerate(attempts):
             try:
                 with yt_dlp.YoutubeDL(attempt_opts) as ydl:
@@ -882,39 +1189,66 @@ class UniversalDownloadManager:
             except yt_dlp.utils.DownloadError as exc:
                 message = str(exc)
                 failure_kind = _classify_youtube_failure(message) if is_youtube else "other"
-                is_bot_challenge = failure_kind == "environment_or_ip_block"
-                if not is_bot_challenge:
+                if failure_kind in {"rate_limited", "session_required"}:
+                    if failure_kind == "rate_limited":
+                        explanation = (
+                            "يوتيوب أعاد HTTP 429 (طلبات كثيرة). أوقف TeleDrive إعادة المحاولات "
+                            "حتى لا يزيد التقييد؛ انتظر قليلًا قبل المحاولة التالية."
+                        )
+                    else:
+                        explanation = (
+                            "يوتيوب يطلب جلسة أو تسجيل دخول لهذا الفيديو. قد يكون خاصًا أو مقيّدًا بالعمر "
+                            "أو يحتاج صلاحية حساب. إذا كان لديك حق الوصول، يمكنك استخدام Cookies حديثة "
+                            "من حسابك داخل Colab فقط؛ لا ترسلها لأحد ولا ترفعها إلى GitHub."
+                        )
+                    self._update(task_id, status_ar="❌ يوتيوب يحتاج انتظارًا أو جلسة مصادقة")
+                    raise RuntimeError(explanation) from exc
+
+                retryable = failure_kind in {"environment_or_ip_block", "po_token_or_ip_block"}
+                if not retryable:
                     raise
-                last_bot_error = exc
                 if attempt_index < len(attempts) - 1:
                     _log.warning(
-                        "YouTube default player was challenged; retrying with fallback player profile"
+                        "YouTube rejected player attempt %d/%d (%s); trying the next supported profile",
+                        attempt_index + 1,
+                        len(attempts),
+                        failure_kind,
                     )
                     continue
 
-                cookie_hint = (
-                    " تم العثور على ملف cookies محليًا واستخدامه في المحاولتين؛ "
-                    "إذا استمر الخطأ فصدّر Cookies حديثة من المتصفح."
-                    if ydl_opts.get("cookiefile")
-                    else
-                    " لم يتم العثور على Cookies صالحة. إذا استمر الرفض، صدّر Cookies يوتيوب بصيغة Netscape "
-                    "وارفعها بنفسك إلى جلسة Colab باسم /content/youtube_cookies.txt. "
-                    "لا ترسل الملف لأي شخص ولا ترفعه إلى GitHub لأنه يحتوي بيانات جلسة حسابك."
-                )
-                self._update(
-                    task_id,
-                    status_ar=(
-                        "❌ يوتيوب رفض بيئة Colab (IP/تحقق روبوت)؛ "
-                        "إعادة المحاولة داخل نفس Runtime لن تغيّر العنوان."
-                    ),
-                )
-                raise RuntimeError(
-                    "يوتيوب رفض بيئة التنزيل بعد محاولتين. هذا غالبًا حظر أو عدم ثقة في IP الخاص بـ Colab، "
-                    "وليس عطلًا في الرابط. إعادة المحاولة داخل نفس Runtime لا تغيّر IP. "
-                    "الحل المجاني المحتمل هو إعادة تشغيل Runtime للحصول على بيئة أخرى، أو استخدام مزود مجاني آخر "
-                    "مُعدّ مسبقًا؛ لا يوجد تبديل تلقائي بين البيئات من داخل Colab."
-                    + cookie_hint
-                ) from exc
+                if failure_kind == "environment_or_ip_block":
+                    if pot_base_url:
+                        explanation = (
+                            "يوتيوب رفض اتصال Colab برسالة تحقق روبوت حتى بعد تفعيل PO Token Provider. "
+                            "هذا يرجّح أن عنوان IP الخاص ببيئة Colab أو سمعة اتصال مراكز البيانات غير موثوق؛ "
+                            "ليس عطلًا في الرابط، ولا يمكن ضمان إصلاحه بتكرار المحاولة على نفس الاتصال."
+                        )
+                    else:
+                        provider_detail = (
+                            f" سبب عدم تفعيل PO Token: {self._youtube_provider_error}"
+                            if self._youtube_provider_error
+                            else " لم يتمكن TeleDrive من تفعيل PO Token Provider في هذه الجلسة."
+                        )
+                        explanation = (
+                            "يوتيوب رفض بيئة Colab برسالة تحقق روبوت. "
+                            "لم يتم تفعيل موفر PO Token، لذلك جُرّبت طرق yt-dlp البديلة فقط."
+                            + provider_detail
+                        )
+                else:
+                    if pot_base_url:
+                        explanation = (
+                            "يوتيوب أعاد HTTP 403 حتى بعد تجهيز PO Token Provider. قد يكون السبب تقييد IP، "
+                            "أو قيود الفيديو/المنطقة، أو رفض صيغة البث؛ لا يمكن الجزم بأنه حظر IP من 403 وحده."
+                        )
+                    else:
+                        explanation = (
+                            "يوتيوب أعاد HTTP 403 ولم يتوفر PO Token Provider في هذه الجلسة. "
+                            "قد يكون السبب نقص PO Token أو تقييد IP أو قيود الفيديو/المنطقة."
+                        )
+                if ydl_opts.get("cookiefile"):
+                    explanation += " تم العثور على ملف Cookies محلي واستخدامه؛ لا تشارك هذا الملف."
+                self._update(task_id, status_ar="❌ يوتيوب رفض كل طرق الاتصال المتاحة")
+                raise RuntimeError(explanation) from exc
         if self._is_cancelled(task_id):
             raise RuntimeError("cancelled")
 
